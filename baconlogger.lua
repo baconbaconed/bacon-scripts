@@ -1,4 +1,4 @@
--- feel free to edit, whatever you do with this is not my responsibility
+--this is the only script ill ever leave unobfuscated, because velocity is a little bitch about obfuscating
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
@@ -10,6 +10,8 @@ while not player do
 	wait()
 	player = Players.LocalPlayer
 end
+
+local connections = {}
 
 local animCounts = {}
 local animFrames = {}
@@ -100,31 +102,31 @@ local function update(input)
 	mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 end
 
-mainFrame.InputBegan:Connect(function(input)
+table.insert(connections, mainFrame.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
 		dragStart = input.Position
 		startPos = mainFrame.Position
 
-		input.Changed:Connect(function()
+		table.insert(connections, input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				dragging = false
 			end
-		end)
+		end))
 	end
-end)
+end))
 
-mainFrame.InputChanged:Connect(function(input)
+table.insert(connections, mainFrame.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 		dragInput = input
 	end
-end)
+end))
 
-UserInputService.InputChanged:Connect(function(input)
+table.insert(connections, UserInputService.InputChanged:Connect(function(input)
 	if input == dragInput and dragging then
 		update(input)
 	end
-end)
+end))
 
 local top = Instance.new("Frame")
 top.Name = "TopBar"
@@ -144,13 +146,24 @@ title.Font = Enum.Font.Code
 title.ZIndex = 3
 title.Parent = top
 
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 25, 1, 0)
+closeButton.Position = UDim2.new(1, -25, 0, 0)
+closeButton.Text = "X"
+closeButton.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.BorderSizePixel = 0
+closeButton.ZIndex = 3
+closeButton.Parent = top
+
 local minimize = Instance.new("TextButton")
 minimize.Name = "MinimizeButton"
-minimize.Size = UDim2.new(0,25,1,0)
-minimize.Position = UDim2.new(1,-25,0,0)
+minimize.Size = UDim2.new(0, 25, 1, 0)
+minimize.Position = UDim2.new(1, -50, 0, 0)
 minimize.Text = "-"
 minimize.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
-minimize.TextColor3 = Color3.new(1,1,1)
+minimize.TextColor3 = Color3.new(1, 1, 1)
 minimize.BorderSizePixel = 0
 minimize.ZIndex = 3
 minimize.Parent = top
@@ -174,9 +187,9 @@ local layout = Instance.new("UIListLayout")
 layout.Padding = UDim.new(0,2)
 layout.Parent = list
 
-layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+table.insert(connections, layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	list.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y)
-end)
+end))
 
 local controls = Instance.new("Frame")
 controls.Name = "Controls"
@@ -192,7 +205,7 @@ controls.Parent = mainFrame
 
 local minimized = false
 
-minimize.MouseButton1Click:Connect(function()
+table.insert(connections, minimize.MouseButton1Click:Connect(function()
 	minimized = not minimized
 	if minimized then
 		mainFrame.Size = UDim2.new(0,600,0,25)
@@ -205,6 +218,13 @@ minimize.MouseButton1Click:Connect(function()
 		controls.Visible = true
 		minimize.Text = "-"
 	end
+end))
+
+closeButton.MouseButton1Click:Connect(function()
+	for _, connection in pairs(connections) do
+		connection:Disconnect()
+	end
+	gui:Destroy()
 end)
 
 local function makeLabel(text,y)
@@ -263,12 +283,12 @@ loopToggle.Parent = controls
 
 local looped = false
 
-loopToggle.MouseButton1Click:Connect(function()
+table.insert(connections, loopToggle.MouseButton1Click:Connect(function()
 	looped = not looped
 	loopToggle.Text = "Loop: "..(looped and "ON" or "OFF")
 	loopToggle.BackgroundColor3 = looped and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
 	loopToggle.BorderColor3 = looped and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
-end)
+end))
 
 local function button(text,y,callback)
 
@@ -284,7 +304,7 @@ local function button(text,y,callback)
 	b.Visible = true
 	b.Parent = controls
 
-	b.MouseButton1Click:Connect(callback)
+	table.insert(connections, b.MouseButton1Click:Connect(callback))
 
 end
 
@@ -374,14 +394,14 @@ local function createEntry(id,name)
 	copyBtn.Visible = true
 	copyBtn.Parent = entryFrame
 
-	entry.MouseButton1Click:Connect(function()
+	table.insert(connections, entry.MouseButton1Click:Connect(function()
 		selectedId = id
 		idBox.Text = id
-	end)
+	end))
 
-	copyBtn.MouseButton1Click:Connect(function()
+	table.insert(connections, copyBtn.MouseButton1Click:Connect(function()
 		copyClipboard(id)
-	end)
+	end))
 
 	animFrames[id] = entry
 
@@ -425,17 +445,17 @@ end
 local function connectAnimator()
 	local animator = getAnimator()
 	if animator then
-		animator.AnimationPlayed:Connect(registerTrack)
+		table.insert(connections, animator.AnimationPlayed:Connect(registerTrack))
 		for _,track in pairs(animator:GetPlayingAnimationTracks()) do
 			registerTrack(track)
 		end
 	end
 end
 
-player.CharacterAdded:Connect(function()
+table.insert(connections, player.CharacterAdded:Connect(function()
 	wait(1)
 	connectAnimator()
-end)
+end))
 
 connectAnimator()
 
