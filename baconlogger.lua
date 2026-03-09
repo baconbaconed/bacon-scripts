@@ -1,1 +1,455 @@
-local v0=game:GetService("Players");local v1=game:GetService("UserInputService");local v2=(task and task.wait) or wait ;local v3=(task and task.spawn) or spawn ;local v4=v0.LocalPlayer;while  not v4 do local v135=0;while true do if (v135==(0 -0)) then v2();v4=v0.LocalPlayer;break;end end end local v5={};local v6={};local v7={};local v8={};local v9=nil;local function v10(v136) local v137=0;local v138;while true do if ((1081 -(1020 + 60))==v137) then return v138:match("%d+");end if (v137==0) then if  not v136 then return nil;end v138=tostring(v136);v137=1424 -(630 + 793) ;end end end local function v11(v139) local v140=0;local v141;while true do if (v140==(0 -0)) then v141=setclipboard or toclipboard or (Clipboard and Clipboard.set) or print ;pcall(function() v141(v139);end);break;end end end local function v12() local v142=0 -0 ;local v143;local v144;while true do if (v142==(1 + 0)) then v144=v143:FindFirstChildOfClass("Humanoid");if  not v144 then return nil;end v142=6 -4 ;end if (v142==(1749 -(760 + 987))) then return v144:FindFirstChildOfClass("Animator") or v144 ;end if (v142==(1913 -(1789 + 124))) then v143=v4.Character;if  not v143 then return nil;end v142=767 -(745 + 21) ;end end end local function v13(v145,v146,v147) local v148=0 + 0 ;local v149;local v150;local v151;while true do if (v148==(7 -4)) then v151:Play();if v146 then v151:AdjustSpeed(v146);end break;end if ((0 -0)==v148) then v149=v12();if ( not v149 or  not v145 or (v145=="")) then return;end v148=1 + 0 ;end if (v148==(1 + 0)) then v150=Instance.new("Animation");v150.AnimationId="rbxassetid://"   .. v145 ;v148=1057 -(87 + 968) ;end if (v148==(8 -6)) then v151=v149:LoadAnimation(v150);v151.Looped=v147 or false ;v148=3 + 0 ;end end end local function v14(v152) local v153=0 -0 ;local v154;while true do if (v153==(1413 -(447 + 966))) then v154=v12();if  not v154 then return;end v153=1;end if (v153==1) then for v262,v263 in pairs(v154:GetPlayingAnimationTracks()) do local v264=v10(v263.Animation.AnimationId);if (v264==v152) then v263:Stop();end end break;end end end local v15=Instance.new("ScreenGui");v15.Name="BaconLoggerGui";v15.ResetOnSpawn=false;v15.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;local v20,v21=pcall(function() return game:GetService("CoreGui");end);if (v20 and v21) then v15.Parent=v21;else v15.Parent=v4:WaitForChild("PlayerGui");end local v22=Instance.new("Frame");v22.Name="MainFrame";v22.Size=UDim2.new(0 -0 ,2417 -(1703 + 114) ,701 -(376 + 325) ,688 -268 );v22.Position=UDim2.new(0 -0 ,15 + 35 ,0,110 -60 );v22.BackgroundColor3=Color3.fromRGB(29 -(9 + 5) ,391 -(85 + 291) ,15);v22.BorderSizePixel=1;v22.BorderColor3=Color3.fromRGB(1265 -(243 + 1022) ,304 -224 ,66 + 14 );v22.Active=true;v22.Draggable=false;v22.ClipsDescendants=false;v22.ZIndex=1181 -(1123 + 57) ;v22.Parent=v15;local v34;local v35;local v36;local v37;local function v38(v155) local v156=v155.Position-v36 ;v22.Position=UDim2.new(v37.X.Scale,v37.X.Offset + v156.X ,v37.Y.Scale,v37.Y.Offset + v156.Y );end v22.InputBegan:Connect(function(v158) if ((v158.UserInputType==Enum.UserInputType.MouseButton1) or (v158.UserInputType==Enum.UserInputType.Touch)) then local v208=0;while true do if (v208==(0 + 0)) then v34=true;v36=v158.Position;v208=1;end if (v208==(255 -(163 + 91))) then v37=v22.Position;v158.Changed:Connect(function() if (v158.UserInputState==Enum.UserInputState.End) then v34=false;end end);break;end end end end);v22.InputChanged:Connect(function(v159) if ((v159.UserInputType==Enum.UserInputType.MouseMovement) or (v159.UserInputType==Enum.UserInputType.Touch)) then v35=v159;end end);v1.InputChanged:Connect(function(v160) if ((v160==v35) and v34) then v38(v160);end end);local v39=Instance.new("Frame");v39.Name="TopBar";v39.Size=UDim2.new(1,0,1930 -(1869 + 61) ,7 + 18 );v39.BackgroundColor3=Color3.fromRGB(0,140 -100 ,40);v39.BorderSizePixel=0;v39.ZIndex=2 -0 ;v39.Parent=v22;local v46=Instance.new("TextLabel");v46.Name="Title";v46.Text="bacon logger";v46.Size=UDim2.new(1 + 0 , -(41 -11),1 + 0 ,1474 -(1329 + 145) );v46.BackgroundTransparency=972 -(140 + 831) ;v46.TextColor3=Color3.fromRGB(1850 -(1409 + 441) ,973 -(15 + 703) ,93 + 107 );v46.Font=Enum.Font.Code;v46.ZIndex=441 -(262 + 176) ;v46.Parent=v39;local v56=Instance.new("TextButton");v56.Name="MinimizeButton";v56.Size=UDim2.new(1721 -(345 + 1376) ,713 -(198 + 490) ,4 -3 ,0);v56.Position=UDim2.new(2 -1 , -25,1206 -(696 + 510) ,0 -0 );v56.Text="-";v56.BackgroundColor3=Color3.fromRGB(0,1322 -(1091 + 171) ,60);v56.TextColor3=Color3.new(1 + 0 ,1,3 -2 );v56.BorderSizePixel=0;v56.ZIndex=3;v56.Parent=v39;local v66=Instance.new("ScrollingFrame");v66.Name="AnimList";v66.Position=UDim2.new(0 -0 ,379 -(123 + 251) ,0 -0 ,728 -(208 + 490) );v66.Size=UDim2.new(0.55, -(1 + 9),1 + 0 , -(871 -(660 + 176)));v66.BackgroundColor3=Color3.fromRGB(10,10,2 + 8 );v66.BorderSizePixel=203 -(14 + 188) ;v66.BorderColor3=Color3.fromRGB(675 -(534 + 141) ,25 + 35 ,54 + 6 );v66.ScrollBarThickness=4 + 0 ;v66.ScrollBarImageColor3=Color3.fromRGB(0 -0 ,317 -117 ,420 -270 );v66.CanvasSize=UDim2.new(0,0 + 0 ,0 + 0 ,396 -(115 + 281) );v66.ClipsDescendants=true;v66.ZIndex=4 -2 ;v66.Visible=true;v66.Parent=v22;local v80=Instance.new("UIListLayout");v80.Padding=UDim.new(0 + 0 ,2);v80.Parent=v66;v80:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() v66.CanvasSize=UDim2.new(0,0 -0 ,0 -0 ,v80.AbsoluteContentSize.Y);end);local v83=Instance.new("Frame");v83.Name="Controls";v83.Position=UDim2.new(0.55,872 -(550 + 317) ,0,43 -13 );v83.Size=UDim2.new(0.45 -0 , -(27 -17),286 -(134 + 151) , -(1700 -(970 + 695)));v83.BackgroundColor3=Color3.fromRGB(38 -18 ,20,20);v83.BorderSizePixel=1991 -(582 + 1408) ;v83.BorderColor3=Color3.fromRGB(0 -0 ,75 -15 ,60);v83.ClipsDescendants=false;v83.ZIndex=2;v83.Visible=true;v83.Parent=v22;local v94=false;v56.MouseButton1Click:Connect(function() local v162=0 -0 ;while true do if (v162==(1824 -(1195 + 629))) then v94= not v94;if v94 then v22.Size=UDim2.new(0 -0 ,600,241 -(187 + 54) ,25);v66.Visible=false;v83.Visible=false;v56.Text="+";else local v272=780 -(162 + 618) ;while true do if (v272==(0 + 0)) then v22.Size=UDim2.new(0,400 + 200 ,0 -0 ,420);v66.Visible=true;v272=1 -0 ;end if (v272==1) then v83.Visible=true;v56.Text="-";break;end end end break;end end end);local function v95(v163,v164) local v165=Instance.new("TextLabel");v165.Text=v163;v165.Position=UDim2.new(0,1 + 9 ,1636 -(1373 + 263) ,v164);v165.Size=UDim2.new(1001 -(451 + 549) , -(7 + 13),0,20);v165.BackgroundTransparency=1 -0 ;v165.TextColor3=Color3.fromRGB(0 -0 ,200,1534 -(746 + 638) );v165.TextXAlignment=Enum.TextXAlignment.Left;v165.Font=Enum.Font.Code;v165.ZIndex=3;v165.Visible=true;v165.Parent=v83;end v95("Animation ID",4 + 6 );local v96=Instance.new("TextBox");v96.Position=UDim2.new(0,15 -5 ,341 -(218 + 123) ,1611 -(1535 + 46) );v96.Size=UDim2.new(1, -20,0,25 + 0 );v96.BackgroundColor3=Color3.fromRGB(2 + 8 ,10,10);v96.TextColor3=Color3.new(561 -(306 + 254) ,1 + 0 ,1);v96.PlaceholderColor3=Color3.fromRGB(0 -0 ,100,80);v96.BorderSizePixel=1468 -(899 + 568) ;v96.BorderColor3=Color3.fromRGB(0 + 0 ,290 -170 ,703 -(268 + 335) );v96.ZIndex=3;v96.Visible=true;v96.Parent=v83;v95("Speed",355 -(60 + 230) );local v107=Instance.new("TextBox");v107.Text="1";v107.Position=UDim2.new(572 -(426 + 146) ,2 + 8 ,1456 -(282 + 1174) ,896 -(569 + 242) );v107.Size=UDim2.new(2 -1 , -20,0 + 0 ,25);v107.BackgroundColor3=Color3.fromRGB(1034 -(706 + 318) ,1261 -(721 + 530) ,10);v107.TextColor3=Color3.new(1272 -(945 + 326) ,2 -1 ,1 + 0 );v107.BorderSizePixel=701 -(271 + 429) ;v107.BorderColor3=Color3.fromRGB(0 + 0 ,120,1600 -(1408 + 92) );v107.ZIndex=1089 -(461 + 625) ;v107.Visible=true;v107.Parent=v83;local v118=Instance.new("TextButton");v118.Text="Loop: OFF";v118.Position=UDim2.new(0,1298 -(993 + 295) ,0 + 0 ,120);v118.Size=UDim2.new(1, -20,1171 -(418 + 753) ,10 + 15 );v118.BackgroundColor3=Color3.fromRGB(7 + 53 ,0 + 0 ,0 + 0 );v118.TextColor3=Color3.new(1,530 -(406 + 123) ,1770 -(1749 + 20) );v118.BorderSizePixel=1 + 0 ;v118.BorderColor3=Color3.fromRGB(120,1322 -(1249 + 73) ,0 + 0 );v118.ZIndex=1148 -(466 + 679) ;v118.Visible=true;v118.Parent=v83;local v129=false;v118.MouseButton1Click:Connect(function() local v178=0 -0 ;while true do if ((2 -1)==v178) then v118.BackgroundColor3=(v129 and Color3.fromRGB(0,1960 -(106 + 1794) ,0 + 0 )) or Color3.fromRGB(60,0,0 + 0 ) ;v118.BorderColor3=(v129 and Color3.fromRGB(0,354 -234 ,0)) or Color3.fromRGB(120,0 -0 ,114 -(4 + 110) ) ;break;end if (v178==(584 -(57 + 527))) then v129= not v129;v118.Text="Loop: "   .. ((v129 and "ON") or "OFF") ;v178=1428 -(41 + 1386) ;end end end);local function v130(v179,v180,v181) local v182=103 -(17 + 86) ;local v183;while true do if (v182==(0 + 0)) then v183=Instance.new("TextButton");v183.Text=v179;v183.Position=UDim2.new(0,10,0,v180);v182=1 -0 ;end if (v182==3) then v183.Visible=true;v183.Parent=v83;v183.MouseButton1Click:Connect(v181);break;end if (v182==(5 -3)) then v183.BorderSizePixel=1;v183.BorderColor3=Color3.fromRGB(166 -(122 + 44) ,207 -87 ,100);v183.ZIndex=3;v182=9 -6 ;end if (v182==(1 + 0)) then v183.Size=UDim2.new(1 + 0 , -20,0 -0 ,90 -(30 + 35) );v183.BackgroundColor3=Color3.fromRGB(0 + 0 ,60,60);v183.TextColor3=Color3.new(1258 -(1043 + 214) ,3 -2 ,1213 -(323 + 889) );v182=5 -3 ;end end end v130("Play",740 -(361 + 219) ,function() local v184=v96.Text;local v185=tonumber(v107.Text) or (321 -(53 + 267)) ;v13(v184,v185,v129);end);v130("Stop",45 + 150 ,function() v14(v96.Text);end);v130("Ban",643 -(15 + 398) ,function() local v186=982 -(18 + 964) ;while true do if (v186==(0 -0)) then v7[v96.Text]=true;v14(v96.Text);break;end end end);v130("Unban",154 + 111 ,function() v7[v96.Text]=nil;end);v130("Copy ID",190 + 110 ,function() v11(v96.Text);end);v130("Clear List",1185 -(20 + 830) ,function() for v204,v205 in pairs(v6) do if (v205.Parent and v205.Parent:IsA("Frame")) then v205.Parent:Destroy();else v205:Destroy();end end v5={};v6={};v8={};end);local function v131(v188,v189) local v190=0;local v191;local v192;local v193;while true do if ((6 + 1)==v190) then v193.ZIndex=4;v193.Visible=true;v193.Parent=v191;v192.MouseButton1Click:Connect(function() local v265=126 -(116 + 10) ;while true do if (v265==0) then v9=v188;v96.Text=v188;break;end end end);v190=8;end if (v190==0) then v191=Instance.new("Frame");v191.Name=v188;v191.Size=UDim2.new(1 + 0 , -(743 -(542 + 196)),0,25);v191.BackgroundTransparency=1 -0 ;v190=1 + 0 ;end if (v190==3) then v192.BorderSizePixel=1 + 0 ;v192.BorderColor3=Color3.fromRGB(0 + 0 ,263 -163 ,256 -156 );v192.Font=Enum.Font.Code;v192.ZIndex=1555 -(1126 + 425) ;v190=4;end if (v190==5) then v193.Size=UDim2.new(405 -(118 + 287) ,176 -131 ,1,1121 -(118 + 1003) );v193.Position=UDim2.new(2 -1 , -45,377 -(142 + 235) ,0);v193.BackgroundColor3=Color3.fromRGB(0 -0 ,60,14 + 46 );v193.TextColor3=Color3.new(978 -(553 + 424) ,1,1 -0 );v190=6 + 0 ;end if (v190==(1 + 0)) then v191.ZIndex=2 + 1 ;v191.Parent=v66;v192=Instance.new("TextButton");v192.Size=UDim2.new(1 + 0 , -(29 + 21),2 -1 ,0 -0 );v190=4 -2 ;end if (v190==(1 + 1)) then v192.BackgroundColor3=Color3.fromRGB(15,15,72 -57 );v192.TextColor3=Color3.fromRGB(753 -(239 + 514) ,255,200);v192.TextXAlignment=Enum.TextXAlignment.Left;v192.Text="(1) "   .. v188   .. " | "   .. v189 ;v190=2 + 1 ;end if (v190==(1337 -(797 + 532))) then v193.MouseButton1Click:Connect(function() v11(v188);end);v6[v188]=v192;break;end if (v190==(5 + 1)) then v193.Text="Copy";v193.BorderSizePixel=1 + 0 ;v193.BorderColor3=Color3.fromRGB(0 -0 ,1322 -(373 + 829) ,100);v193.Font=Enum.Font.Code;v190=7;end if (v190==(735 -(476 + 255))) then v192.Visible=true;v192.Parent=v191;v193=Instance.new("TextButton");v193.Name="Copy";v190=5;end end end local function v132(v194,v195) local v196=1130 -(369 + 761) ;while true do if (v196==(0 + 0)) then if v7[v194] then return;end if  not v5[v194] then local v273=0 -0 ;while true do if (v273==(0 -0)) then v5[v194]=1;v131(v194,v195);break;end end else local v274=0;local v275;while true do if (v274==1) then v275.Text="("   .. v5[v194]   .. ") "   .. v194   .. " | "   .. v195 ;break;end if (v274==(238 -(64 + 174))) then v5[v194]+=1 v275=v6[v194];v274=1 + 0 ;end end end break;end end end local function v133(v197) local v198=0 -0 ;local v199;local v200;while true do if (v198==(339 -(144 + 192))) then v132(v200,v199.Name or "Unknown" );if v7[v200] then v197:Stop();end break;end if (v198==0) then if v8[v197] then return;end v8[v197]=true;v198=217 -(42 + 174) ;end if (v198==(2 + 0)) then v200=v10(v199.AnimationId);if  not v200 then return;end v198=3 + 0 ;end if (v198==(1 + 0)) then v199=v197.Animation;if  not v199 then return;end v198=1506 -(363 + 1141) ;end end end local function v134() local v201=v12();if v201 then local v209=1580 -(1183 + 397) ;while true do if (v209==0) then v201.AnimationPlayed:Connect(v133);for v276,v277 in pairs(v201:GetPlayingAnimationTracks()) do v133(v277);end break;end end end end v4.CharacterAdded:Connect(function() v2(2 -1 );v134();end);v134();v3(function() while true do local v206=0;local v207;while true do if (v206==(1 + 0)) then v2(0.25 + 0 );break;end if ((1975 -(1913 + 62))==v206) then v207=v12();if v207 then for v279,v280 in pairs(v207:GetPlayingAnimationTracks()) do v133(v280);end end v206=1 + 0 ;end end end end);
+-- feel free to edit, whatever you do with this is not my responsibility
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local wait = task and task.wait or wait
+local spawn = task and task.spawn or spawn
+
+local player = Players.LocalPlayer
+while not player do
+	wait()
+	player = Players.LocalPlayer
+end
+
+local animCounts = {}
+local animFrames = {}
+local banned = {}
+local seenTracks = {}
+
+local selectedId = nil
+
+local function getId(raw)
+	if not raw then return nil end
+	local s = tostring(raw)
+	return s:match("%d+")
+end
+
+local function copyClipboard(text)
+	local func = setclipboard or toclipboard or (Clipboard and Clipboard.set) or print
+	pcall(function() func(text) end)
+end
+
+local function getAnimator()
+	local char = player.Character
+	if not char then return nil end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum then return nil end
+	return hum:FindFirstChildOfClass("Animator") or hum
+end
+
+local function playAnim(id,speed,loop)
+	local animator = getAnimator()
+	if not animator or not id or id == "" then return end
+	
+	local anim = Instance.new("Animation")
+	anim.AnimationId = "rbxassetid://"..id
+
+	local track = animator:LoadAnimation(anim)
+	track.Looped = loop or false
+	track:Play()
+
+	if speed then
+		track:AdjustSpeed(speed)
+	end
+end
+
+local function stopAnim(id)
+	local animator = getAnimator()
+	if not animator then return end
+	
+	for _,track in pairs(animator:GetPlayingAnimationTracks()) do
+		local tid = getId(track.Animation.AnimationId)
+		if tid == id then
+			track:Stop()
+		end
+	end
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "BaconLoggerGui"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local success, parent = pcall(function() return game:GetService("CoreGui") end)
+if success and parent then
+	gui.Parent = parent
+else
+	gui.Parent = player:WaitForChild("PlayerGui")
+end
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0,600,0,420)
+mainFrame.Position = UDim2.new(0,50,0,50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.BorderSizePixel = 1
+mainFrame.BorderColor3 = Color3.fromRGB(0, 80, 80)
+mainFrame.Active = true
+mainFrame.Draggable = false
+mainFrame.ClipsDescendants = false
+mainFrame.ZIndex = 1
+mainFrame.Parent = gui
+
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+	local delta = input.Position - dragStart
+	mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+mainFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		update(input)
+	end
+end)
+
+local top = Instance.new("Frame")
+top.Name = "TopBar"
+top.Size = UDim2.new(1,0,0,25)
+top.BackgroundColor3 = Color3.fromRGB(0, 40, 40)
+top.BorderSizePixel = 0
+top.ZIndex = 2
+top.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Text = "bacon logger"
+title.Size = UDim2.new(1,-30,1,0)
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.fromRGB(0, 255, 200)
+title.Font = Enum.Font.Code
+title.ZIndex = 3
+title.Parent = top
+
+local minimize = Instance.new("TextButton")
+minimize.Name = "MinimizeButton"
+minimize.Size = UDim2.new(0,25,1,0)
+minimize.Position = UDim2.new(1,-25,0,0)
+minimize.Text = "-"
+minimize.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+minimize.TextColor3 = Color3.new(1,1,1)
+minimize.BorderSizePixel = 0
+minimize.ZIndex = 3
+minimize.Parent = top
+
+local list = Instance.new("ScrollingFrame")
+list.Name = "AnimList"
+list.Position = UDim2.new(0,5,0,30)
+list.Size = UDim2.new(0.55,-10,1,-35)
+list.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+list.BorderSizePixel = 1
+list.BorderColor3 = Color3.fromRGB(0, 60, 60)
+list.ScrollBarThickness = 4
+list.ScrollBarImageColor3 = Color3.fromRGB(0, 200, 150)
+list.CanvasSize = UDim2.new(0,0,0,0)
+list.ClipsDescendants = true
+list.ZIndex = 2
+list.Visible = true
+list.Parent = mainFrame
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0,2)
+layout.Parent = list
+
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	list.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y)
+end)
+
+local controls = Instance.new("Frame")
+controls.Name = "Controls"
+controls.Position = UDim2.new(0.55,5,0,30)
+controls.Size = UDim2.new(0.45,-10,1,-35)
+controls.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+controls.BorderSizePixel = 1
+controls.BorderColor3 = Color3.fromRGB(0, 60, 60)
+controls.ClipsDescendants = false
+controls.ZIndex = 2
+controls.Visible = true
+controls.Parent = mainFrame
+
+local minimized = false
+
+minimize.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	if minimized then
+		mainFrame.Size = UDim2.new(0,600,0,25)
+		list.Visible = false
+		controls.Visible = false
+		minimize.Text = "+"
+	else
+		mainFrame.Size = UDim2.new(0,600,0,420)
+		list.Visible = true
+		controls.Visible = true
+		minimize.Text = "-"
+	end
+end)
+
+local function makeLabel(text,y)
+	local l = Instance.new("TextLabel")
+	l.Text = text
+	l.Position = UDim2.new(0,10,0,y)
+	l.Size = UDim2.new(1,-20,0,20)
+	l.BackgroundTransparency = 1
+	l.TextColor3 = Color3.fromRGB(0, 200, 150)
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.Font = Enum.Font.Code
+	l.ZIndex = 3
+	l.Visible = true
+	l.Parent = controls
+end
+
+makeLabel("Animation ID",10)
+
+local idBox = Instance.new("TextBox")
+idBox.Position = UDim2.new(0,10,0,30)
+idBox.Size = UDim2.new(1,-20,0,25)
+idBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+idBox.TextColor3 = Color3.new(1,1,1)
+idBox.PlaceholderColor3 = Color3.fromRGB(0, 100, 80)
+idBox.BorderSizePixel = 1
+idBox.BorderColor3 = Color3.fromRGB(0, 120, 100)
+idBox.ZIndex = 3
+idBox.Visible = true
+idBox.Parent = controls
+
+makeLabel("Speed",65)
+
+local speedBox = Instance.new("TextBox")
+speedBox.Text = "1"
+speedBox.Position = UDim2.new(0,10,0,85)
+speedBox.Size = UDim2.new(1,-20,0,25)
+speedBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+speedBox.TextColor3 = Color3.new(1,1,1)
+speedBox.BorderSizePixel = 1
+speedBox.BorderColor3 = Color3.fromRGB(0, 120, 100)
+speedBox.ZIndex = 3
+speedBox.Visible = true
+speedBox.Parent = controls
+
+local loopToggle = Instance.new("TextButton")
+loopToggle.Text = "Loop: OFF"
+loopToggle.Position = UDim2.new(0,10,0,120)
+loopToggle.Size = UDim2.new(1,-20,0,25)
+loopToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
+loopToggle.TextColor3 = Color3.new(1,1,1)
+loopToggle.BorderSizePixel = 1
+loopToggle.BorderColor3 = Color3.fromRGB(120, 0, 0)
+loopToggle.ZIndex = 3
+loopToggle.Visible = true
+loopToggle.Parent = controls
+
+local looped = false
+
+loopToggle.MouseButton1Click:Connect(function()
+	looped = not looped
+	loopToggle.Text = "Loop: "..(looped and "ON" or "OFF")
+	loopToggle.BackgroundColor3 = looped and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
+	loopToggle.BorderColor3 = looped and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+end)
+
+local function button(text,y,callback)
+
+	local b = Instance.new("TextButton")
+	b.Text = text
+	b.Position = UDim2.new(0,10,0,y)
+	b.Size = UDim2.new(1,-20,0,25)
+	b.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+	b.TextColor3 = Color3.new(1,1,1)
+	b.BorderSizePixel = 1
+	b.BorderColor3 = Color3.fromRGB(0, 120, 100)
+	b.ZIndex = 3
+	b.Visible = true
+	b.Parent = controls
+
+	b.MouseButton1Click:Connect(callback)
+
+end
+
+button("Play",160,function()
+
+	local id = idBox.Text
+	local speed = tonumber(speedBox.Text) or 1
+
+	playAnim(id,speed,looped)
+
+end)
+
+button("Stop",195,function()
+
+	stopAnim(idBox.Text)
+
+end)
+
+button("Ban",230,function()
+
+	banned[idBox.Text] = true
+	stopAnim(idBox.Text)
+
+end)
+
+button("Unban",265,function()
+
+	banned[idBox.Text] = nil
+
+end)
+
+button("Copy ID",300,function()
+
+	copyClipboard(idBox.Text)
+
+end)
+
+button("Clear List",335,function()
+
+	for id,entry in pairs(animFrames) do
+		if entry.Parent and entry.Parent:IsA("Frame") then
+			entry.Parent:Destroy()
+		else
+			entry:Destroy()
+		end
+	end
+	
+	animCounts = {}
+	animFrames = {}
+	seenTracks = {}
+
+end)
+
+local function createEntry(id,name)
+
+	local entryFrame = Instance.new("Frame")
+	entryFrame.Name = id
+	entryFrame.Size = UDim2.new(1, -5, 0, 25)
+	entryFrame.BackgroundTransparency = 1
+	entryFrame.ZIndex = 3
+	entryFrame.Parent = list
+
+	local entry = Instance.new("TextButton")
+	entry.Size = UDim2.new(1, -50, 1, 0)
+	entry.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+	entry.TextColor3 = Color3.fromRGB(0, 255, 200)
+	entry.TextXAlignment = Enum.TextXAlignment.Left
+	entry.Text = "(1) " .. id .. " | " .. name
+	entry.BorderSizePixel = 1
+	entry.BorderColor3 = Color3.fromRGB(0, 100, 100)
+	entry.Font = Enum.Font.Code
+	entry.ZIndex = 4
+	entry.Visible = true
+	entry.Parent = entryFrame
+
+	local copyBtn = Instance.new("TextButton")
+	copyBtn.Name = "Copy"
+	copyBtn.Size = UDim2.new(0, 45, 1, 0)
+	copyBtn.Position = UDim2.new(1, -45, 0, 0)
+	copyBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+	copyBtn.TextColor3 = Color3.new(1, 1, 1)
+	copyBtn.Text = "Copy"
+	copyBtn.BorderSizePixel = 1
+	copyBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
+	copyBtn.Font = Enum.Font.Code
+	copyBtn.ZIndex = 4
+	copyBtn.Visible = true
+	copyBtn.Parent = entryFrame
+
+	entry.MouseButton1Click:Connect(function()
+		selectedId = id
+		idBox.Text = id
+	end)
+
+	copyBtn.MouseButton1Click:Connect(function()
+		copyClipboard(id)
+	end)
+
+	animFrames[id] = entry
+
+end
+
+local function logAnim(id,name)
+
+	if banned[id] then return end
+
+	if not animCounts[id] then
+		animCounts[id] = 1
+		createEntry(id,name)
+	else
+		animCounts[id] += 1
+
+		local entryFrame = animFrames[id]
+		entryFrame.Text = "("..animCounts[id]..") "..id.." | "..name
+	end
+
+end
+
+local function registerTrack(track)
+
+	if seenTracks[track] then return end
+	seenTracks[track] = true
+
+	local anim = track.Animation
+	if not anim then return end
+
+	local id = getId(anim.AnimationId)
+	if not id then return end
+
+	logAnim(id,anim.Name or "Unknown")
+
+	if banned[id] then
+		track:Stop()
+	end
+
+end
+
+local function connectAnimator()
+	local animator = getAnimator()
+	if animator then
+		animator.AnimationPlayed:Connect(registerTrack)
+		for _,track in pairs(animator:GetPlayingAnimationTracks()) do
+			registerTrack(track)
+		end
+	end
+end
+
+player.CharacterAdded:Connect(function()
+	wait(1)
+	connectAnimator()
+end)
+
+connectAnimator()
+
+spawn(function()
+
+	while true do
+		local animator = getAnimator()
+		if animator then
+			for _,track in pairs(animator:GetPlayingAnimationTracks()) do
+				registerTrack(track)
+			end
+		end
+
+		wait(0.25)
+	end
+
+end)
