@@ -2,7 +2,6 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-
 local HttpService = game:GetService("HttpService")
 
 local wait = task and task.wait or wait
@@ -15,14 +14,45 @@ while not player do
 end
 
 local connections = {}
-
 local animCounts = {}
 local animFrames = {}
 local banned = {}
 local seenTracks = {}
 local scriptTracks = {}
+local keybinds = {}
 
-local selectedId = nil
+local looped = false
+local globalLogging = false
+
+local configFile = "bacon_logger_config.json"
+local keybindFile = "bacon_logger_binds.json"
+
+local function saveConfig()
+	local data = {
+		looped = looped,
+		globalLogging = globalLogging,
+		banned = banned
+	}
+	if writefile then
+		writefile(configFile, HttpService:JSONEncode(data))
+	end
+end
+
+local function saveBinds()
+	local data = {}
+	for _, bind in pairs(keybinds) do
+		table.insert(data, {
+			id = bind.id,
+			key = bind.key and bind.key.Name or nil,
+			hold = bind.hold or false,
+			speed = bind.speed or 1,
+			loop = bind.loop or false
+		})
+	end
+	if writefile then
+		writefile(keybindFile, HttpService:JSONEncode(data))
+	end
+end
 
 local function getId(raw)
 	if not raw then return nil end
@@ -105,25 +135,6 @@ mainFrame.Draggable = false
 mainFrame.ClipsDescendants = false
 mainFrame.ZIndex = 1
 mainFrame.Parent = gui
-
-local keybinds = {}
-local keybindFile = "bacon_logger_binds.json"
-
-local function saveBinds()
-	local data = {}
-	for _, bind in pairs(keybinds) do
-		table.insert(data, {
-			id = bind.id,
-			key = bind.key and bind.key.Name or nil,
-			hold = bind.hold,
-			speed = bind.speed,
-			loop = bind.loop
-		})
-	end
-	if writefile then
-		writefile(keybindFile, HttpService:JSONEncode(data))
-	end
-end
 
 local sideFrame = Instance.new("Frame")
 sideFrame.Name = "SideFrame"
@@ -387,13 +398,12 @@ loopToggle.ZIndex = 3
 loopToggle.Visible = true
 loopToggle.Parent = controls
 
-local looped = false
-
 table.insert(connections, loopToggle.MouseButton1Click:Connect(function()
 	looped = not looped
 	loopToggle.Text = "Loop: "..(looped and "ON" or "OFF")
 	loopToggle.BackgroundColor3 = looped and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
 	loopToggle.BorderColor3 = looped and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+	saveConfig()
 end))
 
 local function button(text,y,callback)
@@ -445,12 +455,14 @@ button("Ban",265,function()
 
 	banned[idBox.Text] = true
 	stopAnim(idBox.Text)
+	saveConfig()
 
 end)
 
 button("Unban",300,function()
 
 	banned[idBox.Text] = nil
+	saveConfig()
 
 end)
 
@@ -476,7 +488,6 @@ button("Clear List",370,function()
 
 end)
 
-local globalLogging = false
 local globalToggle = Instance.new("TextButton")
 globalToggle.Text = "Global Log: OFF"
 globalToggle.Position = UDim2.new(0,10,0,405)
@@ -494,6 +505,7 @@ table.insert(connections, globalToggle.MouseButton1Click:Connect(function()
 	globalToggle.Text = "Global Log: "..(globalLogging and "ON" or "OFF")
 	globalToggle.BackgroundColor3 = globalLogging and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
 	globalToggle.BorderColor3 = globalLogging and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+	saveConfig()
 end))
 
 local openSide = Instance.new("TextButton")
@@ -715,9 +727,9 @@ local function loadBinds()
 				local nb = {
 					id = b.id,
 					key = b.key and Enum.KeyCode[b.key] or nil,
-					hold = b.hold,
-					speed = b.speed,
-					loop = b.loop,
+					hold = b.hold or false,
+					speed = b.speed or 1,
+					loop = b.loop or false,
 					active = false,
 					tracks = {}
 				}
@@ -728,6 +740,26 @@ local function loadBinds()
 	end
 end
 
+local function loadConfig()
+	if readfile and isfile and isfile(configFile) then
+		local ok, data = pcall(function() return HttpService:JSONDecode(readfile(configFile)) end)
+		if ok and type(data) == "table" then
+			looped = data.looped or false
+			globalLogging = data.globalLogging or false
+			banned = data.banned or {}
+			
+			loopToggle.Text = "Loop: "..(looped and "ON" or "OFF")
+			loopToggle.BackgroundColor3 = looped and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
+			loopToggle.BorderColor3 = looped and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+			
+			globalToggle.Text = "Global Log: "..(globalLogging and "ON" or "OFF")
+			globalToggle.BackgroundColor3 = globalLogging and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
+			globalToggle.BorderColor3 = globalLogging and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+		end
+	end
+end
+
+loadConfig()
 loadBinds()
 
 task.spawn(function()
@@ -820,7 +852,6 @@ local function createEntry(id,name,key)
 	copyBtn.Parent = entryFrame
 
 	table.insert(connections, entry.MouseButton1Click:Connect(function()
-		selectedId = id
 		idBox.Text = id
 	end))
 
@@ -866,9 +897,10 @@ local function updateColors()
 	end
 
 	for id, entry in pairs(animFrames) do
-		if banned[id] then
+		local pureId = id:match("^([%d]+)")
+		if banned[pureId] then
 			entry.TextColor3 = Color3.fromRGB(255, 50, 50)
-		elseif playingIds[id] then
+		elseif playingIds[pureId] then
 			entry.TextColor3 = Color3.fromRGB(50, 255, 50)
 		else
 			entry.TextColor3 = Color3.fromRGB(0, 255, 200)
@@ -895,6 +927,10 @@ local function registerTrack(track,playerName)
 		track:AdjustWeight(0, 0)
 		track:AdjustSpeed(0)
 		track:Stop(0)
+		return
+	end
+
+	if playerName ~= player.Name and not globalLogging then
 		return
 	end
 
