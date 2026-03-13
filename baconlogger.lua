@@ -20,6 +20,7 @@ local banned = {}
 local seenTracks = {}
 local scriptTracks = {}
 local keybinds = {}
+local replacements = {}
 
 local looped = false
 local globalLogging = false
@@ -31,7 +32,8 @@ local function saveConfig()
 	local data = {
 		looped = looped,
 		globalLogging = globalLogging,
-		banned = banned
+		banned = banned,
+		replacements = replacements
 	}
 	if writefile then
 		writefile(configFile, HttpService:JSONEncode(data))
@@ -551,13 +553,107 @@ table.insert(connections, sideLayout:GetPropertyChangedSignal("AbsoluteContentSi
 end))
 
 local addB = Instance.new("TextButton")
-addB.Size = UDim2.new(1, -10, 0, 25)
+addB.Size = UDim2.new(0.5, -10, 0, 25)
 addB.Position = UDim2.new(0, 5, 1, -30)
 addB.Text = "Add Bind"
 addB.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
 addB.TextColor3 = Color3.new(1, 1, 1)
 addB.ZIndex = 3
 addB.Parent = sideFrame
+
+local addR = Instance.new("TextButton")
+addR.Size = UDim2.new(0.5, -10, 0, 25)
+addR.Position = UDim2.new(0.5, 5, 1, -30)
+addR.Text = "Add Repl"
+addR.BackgroundColor3 = Color3.fromRGB(60, 60, 0)
+addR.TextColor3 = Color3.new(1, 1, 1)
+addR.ZIndex = 3
+addR.Parent = sideFrame
+
+local function addReplaceUI(id, targetId, speed, loop)
+	local rFrame = Instance.new("Frame")
+	rFrame.Size = UDim2.new(1, 0, 0, 120)
+	rFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 20)
+	rFrame.BorderSizePixel = 1
+	rFrame.BorderColor3 = Color3.fromRGB(80, 80, 0)
+	rFrame.ZIndex = 3
+	rFrame.Parent = sideList
+
+	local replaceL = Instance.new("TextBox")
+	replaceL.Size = UDim2.new(1, -10, 0, 20)
+	replaceL.Position = UDim2.new(0, 5, 0, 5)
+	replaceL.Text = id or "Replace ID"
+	replaceL.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+	replaceL.TextColor3 = Color3.new(1, 1, 1)
+	replaceL.Font = Enum.Font.Code
+	replaceL.ZIndex = 4
+	replaceL.Parent = rFrame
+
+	local targetL = Instance.new("TextBox")
+	targetL.Size = UDim2.new(1, -10, 0, 20)
+	targetL.Position = UDim2.new(0, 5, 0, 30)
+	targetL.Text = targetId or "Target ID"
+	targetL.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+	targetL.TextColor3 = Color3.new(1, 1, 1)
+	targetL.Font = Enum.Font.Code
+	targetL.ZIndex = 4
+	targetL.Parent = rFrame
+
+	local speedL = Instance.new("TextBox")
+	speedL.Size = UDim2.new(0.5, -10, 0, 20)
+	speedL.Position = UDim2.new(0, 5, 0, 55)
+	speedL.Text = tostring(speed or 1)
+	speedL.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+	speedL.TextColor3 = Color3.new(1, 1, 1)
+	speedL.ZIndex = 4
+	speedL.Parent = rFrame
+
+	local loopT = Instance.new("TextButton")
+	loopT.Size = UDim2.new(0.5, -10, 0, 20)
+	loopT.Position = UDim2.new(0.5, 5, 0, 55)
+	loopT.Text = "Loop: " .. (loop and "ON" or "OFF")
+	loopT.BackgroundColor3 = loop and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
+	loopT.TextColor3 = Color3.new(1, 1, 1)
+	loopT.ZIndex = 4
+	loopT.Parent = rFrame
+
+	local del = Instance.new("TextButton")
+	del.Size = UDim2.new(1, -10, 0, 20)
+	del.Position = UDim2.new(0, 5, 0, 80)
+	del.Text = "Delete Replacement"
+	del.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+	del.TextColor3 = Color3.new(1, 1, 1)
+	del.ZIndex = 5
+	del.Parent = rFrame
+
+	local function updateRep()
+		local oldId = id
+		id = replaceL.Text
+		if oldId and oldId ~= id then replacements[oldId] = nil end
+		replacements[id] = {targetId = targetL.Text, speed = tonumber(speedL.Text) or 1, loop = loop}
+		saveConfig()
+	end
+
+	table.insert(connections, replaceL:GetPropertyChangedSignal("Text"):Connect(updateRep))
+	table.insert(connections, targetL:GetPropertyChangedSignal("Text"):Connect(updateRep))
+	table.insert(connections, speedL:GetPropertyChangedSignal("Text"):Connect(updateRep))
+	table.insert(connections, loopT.MouseButton1Click:Connect(function()
+		loop = not loop
+		loopT.Text = "Loop: " .. (loop and "ON" or "OFF")
+		loopT.BackgroundColor3 = loop and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
+		updateRep()
+	end))
+
+	table.insert(connections, del.MouseButton1Click:Connect(function()
+		replacements[id] = nil
+		rFrame:Destroy()
+		saveConfig()
+	end))
+end
+
+table.insert(connections, addR.MouseButton1Click:Connect(function()
+	addReplaceUI("", "", 1, false)
+end))
 
 local function addBindUI(bindData)
 	local bFrame = Instance.new("Frame")
@@ -747,6 +843,7 @@ local function loadConfig()
 			looped = data.looped or false
 			globalLogging = data.globalLogging or false
 			banned = data.banned or {}
+			replacements = data.replacements or {}
 			
 			loopToggle.Text = "Loop: "..(looped and "ON" or "OFF")
 			loopToggle.BackgroundColor3 = looped and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
@@ -755,6 +852,10 @@ local function loadConfig()
 			globalToggle.Text = "Global Log: "..(globalLogging and "ON" or "OFF")
 			globalToggle.BackgroundColor3 = globalLogging and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
 			globalToggle.BorderColor3 = globalLogging and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+
+			for id, rep in pairs(replacements) do
+				addReplaceUI(id, rep.targetId, rep.speed, rep.loop)
+			end
 		end
 	end
 end
@@ -927,6 +1028,15 @@ local function registerTrack(track,playerName)
 		track:AdjustWeight(0, 0)
 		track:AdjustSpeed(0)
 		track:Stop(0)
+		return
+	end
+
+	if replacements[id] and playerName == player.Name and not scriptTracks[track] then
+		local rep = replacements[id]
+		track:AdjustWeight(0, 0)
+		track:AdjustSpeed(0)
+		track:Stop(0)
+		playAnim(rep.targetId, rep.speed, rep.loop)
 		return
 	end
 
