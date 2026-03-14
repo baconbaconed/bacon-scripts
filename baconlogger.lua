@@ -14,6 +14,7 @@ local connections = {}
 local animCounts = {}
 local animFrames = {}
 local banned = {}
+local trueBanned = {}
 local seenTracks = {}
 local scriptTracks = {}
 local keybinds = {}
@@ -36,6 +37,7 @@ local function dumpCfg()
 		looped = looped,
 		globalLogging = globalLogging,
 		banned = banned,
+		trueBanned = trueBanned,
 		replacements = replacements,
 		favorites = favorites,
 		customNames = customNames,
@@ -93,9 +95,18 @@ local function fireAnim(id, speed, loop)
 		local intentional = not scriptTracks[track]
 		scriptTracks[track] = nil
 		if loop and not banned[id] and not intentional then
-			task.defer(function()
-				fireAnim(id, speed, loop)
-			end)
+			local holdBindOwns = false
+			for _, bind in pairs(keybinds) do
+				if grabId(tostring(bind.id)) == id and bind.hold then
+					holdBindOwns = true
+					break
+				end
+			end
+			if not holdBindOwns then
+				task.defer(function()
+					fireAnim(id, speed, loop)
+				end)
+			end
 		end
 	end))
 	return track
@@ -366,7 +377,7 @@ mkStroke(priorityFilterBox, Color3.fromRGB(80, 80, 0), 1)
 local logTabBtn = Instance.new("TextButton")
 logTabBtn.Text = "[ Log ]"
 logTabBtn.Position = UDim2.new(0, 5, 0, 78)
-logTabBtn.Size = UDim2.new(0.30, -5, 0, 18)
+logTabBtn.Size = UDim2.new(0.20, -4, 0, 18)
 logTabBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 70)
 logTabBtn.TextColor3 = Color3.fromRGB(0, 220, 170)
 logTabBtn.Font = Enum.Font.Code
@@ -377,8 +388,8 @@ logTabBtn.Parent = mainFrame
 mkCorner(logTabBtn, 4)
 local favsTabBtn = Instance.new("TextButton")
 favsTabBtn.Text = "[ Favs ]"
-favsTabBtn.Position = UDim2.new(0.30, 5, 0, 78)
-favsTabBtn.Size = UDim2.new(0.30, -10, 0, 18)
+favsTabBtn.Position = UDim2.new(0.20, 2, 0, 78)
+favsTabBtn.Size = UDim2.new(0.20, -4, 0, 18)
 favsTabBtn.BackgroundColor3 = Color3.fromRGB(40, 38, 0)
 favsTabBtn.TextColor3 = Color3.fromRGB(220, 210, 0)
 favsTabBtn.Font = Enum.Font.Code
@@ -387,6 +398,18 @@ favsTabBtn.BorderSizePixel = 0
 favsTabBtn.ZIndex = 2
 favsTabBtn.Parent = mainFrame
 mkCorner(favsTabBtn, 4)
+local bannedTabBtn = Instance.new("TextButton")
+bannedTabBtn.Text = "[ Banned ]"
+bannedTabBtn.Position = UDim2.new(0.40, 2, 0, 78)
+bannedTabBtn.Size = UDim2.new(0.20, -6, 0, 18)
+bannedTabBtn.BackgroundColor3 = Color3.fromRGB(50, 10, 10)
+bannedTabBtn.TextColor3 = Color3.fromRGB(255, 120, 100)
+bannedTabBtn.Font = Enum.Font.Code
+bannedTabBtn.TextSize = 12
+bannedTabBtn.BorderSizePixel = 0
+bannedTabBtn.ZIndex = 2
+bannedTabBtn.Parent = mainFrame
+mkCorner(bannedTabBtn, 4)
 
 local logCountLabel = Instance.new("TextLabel")
 logCountLabel.Text = "0 logged"
@@ -441,16 +464,105 @@ favsLayout.Parent = favsList
 table.insert(connections, favsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	favsList.CanvasSize = UDim2.new(0, 0, 0, favsLayout.AbsoluteContentSize.Y)
 end))
+local bannedList = Instance.new("ScrollingFrame")
+bannedList.Name = "BannedList"
+bannedList.Position = UDim2.new(0, 5, 0, 100)
+bannedList.Size = UDim2.new(0.60, -10, 1, -105)
+bannedList.BackgroundColor3 = Color3.fromRGB(18, 10, 10)
+bannedList.BorderSizePixel = 0
+bannedList.ScrollBarThickness = 4
+bannedList.ScrollBarImageColor3 = Color3.fromRGB(200, 80, 80)
+bannedList.CanvasSize = UDim2.new(0, 0, 0, 0)
+bannedList.ClipsDescendants = true
+bannedList.ZIndex = 2
+bannedList.Visible = false
+bannedList.Parent = mainFrame
+mkCorner(bannedList, 4)
+mkStroke(bannedList, Color3.fromRGB(100, 30, 30), 1)
+local bannedLayout = Instance.new("UIListLayout")
+bannedLayout.Padding = UDim.new(0, 2)
+bannedLayout.Parent = bannedList
+table.insert(connections, bannedLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	bannedList.CanvasSize = UDim2.new(0, 0, 0, bannedLayout.AbsoluteContentSize.Y)
+end))
+local idBox
+local function rebuildBannedList()
+	for _, child in ipairs(bannedList:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+	for id, isBanned in pairs(banned) do
+		if isBanned then
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, -5, 0, 22)
+			row.BackgroundTransparency = 1
+			row.ZIndex = 3
+			row.Parent = bannedList
+			local label = Instance.new("TextButton")
+			label.Size = UDim2.new(1, -80, 1, 0)
+			label.BackgroundColor3 = Color3.fromRGB(30, 12, 12)
+			label.TextColor3 = Color3.fromRGB(255, 100, 80)
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.Text = (trueBanned[id] and "⬛ " or "") .. id
+			label.Font = Enum.Font.Code
+			label.TextSize = 11
+			label.BorderSizePixel = 0
+			label.ZIndex = 4
+			label.TextTruncate = Enum.TextTruncate.AtEnd
+			label.Parent = row
+			mkCorner(label, 3)
+			local copyBtn = Instance.new("TextButton")
+			copyBtn.Size = UDim2.new(0, 46, 1, 0)
+			copyBtn.Position = UDim2.new(1, -80, 0, 0)
+			copyBtn.BackgroundColor3 = Color3.fromRGB(0, 45, 55)
+			copyBtn.TextColor3 = Color3.new(1, 1, 1)
+			copyBtn.Text = "Copy"
+			copyBtn.Font = Enum.Font.Code
+			copyBtn.TextSize = 10
+			copyBtn.BorderSizePixel = 0
+			copyBtn.ZIndex = 4
+			copyBtn.Parent = row
+			mkCorner(copyBtn, 3)
+			local unbanBtn = Instance.new("TextButton")
+			unbanBtn.Size = UDim2.new(0, 46, 1, 0)
+			unbanBtn.Position = UDim2.new(1, -30, 0, 0)
+			unbanBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 0)
+			unbanBtn.TextColor3 = Color3.fromRGB(255, 180, 80)
+			unbanBtn.Text = "Unban"
+			unbanBtn.Font = Enum.Font.Code
+			unbanBtn.TextSize = 9
+			unbanBtn.BorderSizePixel = 0
+			unbanBtn.ZIndex = 4
+			unbanBtn.Parent = row
+			mkCorner(unbanBtn, 3)
+			table.insert(connections, label.MouseButton1Click:Connect(function()
+				idBox.Text = id
+			end))
+			table.insert(connections, copyBtn.MouseButton1Click:Connect(function()
+				yoink(id)
+			end))
+			table.insert(connections, unbanBtn.MouseButton1Click:Connect(function()
+				banned[id] = nil
+				trueBanned[id] = nil
+				dumpCfg()
+				row:Destroy()
+			end))
+		end
+	end
+end
 local currentTab = "log"
 local function switchTab(tab)
 	currentTab = tab
 	list.Visible = (tab == "log")
 	favsList.Visible = (tab == "favs")
+	bannedList.Visible = (tab == "banned")
+	if tab == "banned" then rebuildBannedList() end
 	logTabBtn.BackgroundColor3 = (tab == "log") and Color3.fromRGB(0, 80, 90) or Color3.fromRGB(0, 35, 40)
 	favsTabBtn.BackgroundColor3 = (tab == "favs") and Color3.fromRGB(80, 76, 0) or Color3.fromRGB(35, 33, 0)
+	bannedTabBtn.BackgroundColor3 = (tab == "banned") and Color3.fromRGB(100, 20, 20) or Color3.fromRGB(50, 10, 10)
 end
 table.insert(connections, logTabBtn.MouseButton1Click:Connect(function() switchTab("log") end))
 table.insert(connections, favsTabBtn.MouseButton1Click:Connect(function() switchTab("favs") end))
+table.insert(connections, bannedTabBtn.MouseButton1Click:Connect(function() switchTab("banned") end))
 local controls = Instance.new("ScrollingFrame")
 controls.Name = "Controls"
 controls.Position = UDim2.new(0.60, 5, 0, 30)
@@ -460,7 +572,7 @@ controls.BorderSizePixel = 0
 controls.ClipsDescendants = true
 controls.ScrollBarThickness = 3
 controls.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 130)
-controls.CanvasSize = UDim2.new(0, 0, 0, 680)
+controls.CanvasSize = UDim2.new(0, 0, 0, 715)
 controls.ZIndex = 2
 controls.Visible = true
 controls.Parent = mainFrame
@@ -480,7 +592,7 @@ local function mkLabel(text, y)
 	l.Parent = controls
 end
 mkLabel("Animation ID", 10)
-local idBox = Instance.new("TextBox")
+idBox = Instance.new("TextBox")
 idBox.Text = ""
 idBox.Position = UDim2.new(0, 10, 0, 30)
 idBox.Size = UDim2.new(1, -20, 0, 25)
@@ -679,11 +791,23 @@ button("Ban", 360, function()
 	killAnim(idBox.Text)
 	dumpCfg()
 end, Color3.fromRGB(80, 20, 20), Color3.fromRGB(160, 40, 40))
-button("Unban", 395, function()
-	banned[idBox.Text] = nil
+button("True Ban", 395, function()
+	local id = idBox.Text
+	if id == "" then return end
+	trueBanned[id] = true
+	banned[id] = true
+	killAnim(id)
 	dumpCfg()
+	refreshColors()
+end, Color3.fromRGB(100, 0, 0), Color3.fromRGB(200, 0, 0))
+button("Unban", 430, function()
+	local id = idBox.Text
+	banned[id] = nil
+	trueBanned[id] = nil
+	dumpCfg()
+	refreshColors()
 end, Color3.fromRGB(70, 45, 0), Color3.fromRGB(140, 90, 0))
-button("Copy ID", 430, function()
+button("Copy ID", 465, function()
 	yoink(idBox.Text)
 end, Color3.fromRGB(0, 40, 80), Color3.fromRGB(0, 80, 160))
 local function nukeList()
@@ -699,10 +823,10 @@ local function nukeList()
 	seenTracks = {}
 	logCountLabel.Text = "0 logged"
 end
-button("Clear List", 460, nukeList)
+button("Clear List", 500, nukeList)
 local globalToggle = Instance.new("TextButton")
 globalToggle.Text = "Global Log: OFF"
-globalToggle.Position = UDim2.new(0, 10, 0, 492)
+globalToggle.Position = UDim2.new(0, 10, 0, 527)
 globalToggle.Size = UDim2.new(1, -20, 0, 25)
 globalToggle.BackgroundColor3 = Color3.fromRGB(55, 0, 0)
 globalToggle.TextColor3 = Color3.fromRGB(255, 180, 160)
@@ -723,7 +847,7 @@ table.insert(connections, globalToggle.MouseButton1Click:Connect(function()
 end))
 local autoCopyToggle = Instance.new("TextButton")
 autoCopyToggle.Text = "Auto-Copy: OFF"
-autoCopyToggle.Position = UDim2.new(0, 10, 0, 520)
+autoCopyToggle.Position = UDim2.new(0, 10, 0, 555)
 autoCopyToggle.Size = UDim2.new(1, -20, 0, 22)
 autoCopyToggle.BackgroundColor3 = Color3.fromRGB(55, 0, 0)
 autoCopyToggle.TextColor3 = Color3.fromRGB(255, 180, 160)
@@ -744,7 +868,7 @@ table.insert(connections, autoCopyToggle.MouseButton1Click:Connect(function()
 end))
 local exportBtn = Instance.new("TextButton")
 exportBtn.Text = "Export Log"
-exportBtn.Position = UDim2.new(0, 10, 0, 546)
+exportBtn.Position = UDim2.new(0, 10, 0, 581)
 exportBtn.Size = UDim2.new(1, -20, 0, 22)
 exportBtn.BackgroundColor3 = Color3.fromRGB(0, 38, 75)
 exportBtn.TextColor3 = Color3.fromRGB(160, 200, 255)
@@ -831,12 +955,14 @@ table.insert(connections, minimize.MouseButton1Click:Connect(function()
 		mainFrame.Size = UDim2.new(0, 460, 0, 28)
 		list.Visible = false
 		favsList.Visible = false
+		bannedList.Visible = false
 		controls.Visible = false
 		searchBox.Visible = false
 		playerFilterBox.Visible = false
 		priorityFilterBox.Visible = false
 		logTabBtn.Visible = false
 		favsTabBtn.Visible = false
+		bannedTabBtn.Visible = false
 		logCountLabel.Visible = false
 		resizeHandle.Visible = false
 		discordBtn.Visible = false
@@ -845,12 +971,14 @@ table.insert(connections, minimize.MouseButton1Click:Connect(function()
 		mainFrame.Size = UDim2.new(0, 820, 0, 630)
 		list.Visible = (currentTab == "log")
 		favsList.Visible = (currentTab == "favs")
+		bannedList.Visible = (currentTab == "banned")
 		controls.Visible = true
 		searchBox.Visible = true
 		playerFilterBox.Visible = true
 		priorityFilterBox.Visible = true
 		logTabBtn.Visible = true
 		favsTabBtn.Visible = true
+		bannedTabBtn.Visible = true
 		logCountLabel.Visible = true
 		resizeHandle.Visible = true
 		discordBtn.Visible = true
@@ -891,6 +1019,7 @@ sideFrame.Position = UDim2.new(0, 655, 0, 50)
 sideFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
 sideFrame.BorderSizePixel = 0
 sideFrame.Active = true
+sideFrame.ClipsDescendants = true
 sideFrame.ZIndex = 1
 sideFrame.Visible = false
 sideFrame.Parent = gui
@@ -926,16 +1055,19 @@ table.insert(connections, openSide.MouseButton1Click:Connect(function()
 	sideFrame.Visible = not sideFrame.Visible
 end))
 local sideTitle = Instance.new("TextLabel")
-sideTitle.Size = UDim2.new(1, 0, 0, 25)
+sideTitle.Size = UDim2.new(1, 0, 0, 28)
 sideTitle.BackgroundColor3 = Color3.fromRGB(8, 28, 32)
-sideTitle.Text = "keybinds"
-sideTitle.TextColor3 = Color3.fromRGB(0, 255, 200)
+sideTitle.Text = "  keybinds"
+sideTitle.TextColor3 = Color3.fromRGB(0, 220, 170)
 sideTitle.Font = Enum.Font.Code
+sideTitle.TextSize = 13
+sideTitle.TextXAlignment = Enum.TextXAlignment.Left
 sideTitle.ZIndex = 2
 sideTitle.Parent = sideFrame
+do local g = Instance.new("UIGradient"); g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 55, 65)), ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 25, 30))}); g.Rotation = 90; g.Parent = sideTitle end
 local sideList = Instance.new("ScrollingFrame")
-sideList.Position = UDim2.new(0, 5, 0, 30)
-sideList.Size = UDim2.new(1, -10, 1, -65)
+sideList.Position = UDim2.new(0, 5, 0, 33)
+sideList.Size = UDim2.new(1, -10, 1, -68)
 sideList.BackgroundColor3 = Color3.fromRGB(14, 17, 22)
 sideList.BorderSizePixel = 0
 sideList.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -969,38 +1101,47 @@ addR.Parent = sideFrame
 mkCorner(addR, 4)
 mkStroke(addR, Color3.fromRGB(120, 110, 0), 1)
 local sideClose = Instance.new("TextButton")
-sideClose.Size = UDim2.new(0, 20, 0, 20)
-sideClose.Position = UDim2.new(1, -20, 0, 0)
+sideClose.Size = UDim2.new(0, 22, 0, 20)
+sideClose.Position = UDim2.new(1, -24, 0, 4)
 sideClose.Text = "X"
-sideClose.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+sideClose.BackgroundColor3 = Color3.fromRGB(140, 20, 20)
 sideClose.TextColor3 = Color3.new(1, 1, 1)
+sideClose.Font = Enum.Font.Code
+sideClose.TextSize = 11
 sideClose.ZIndex = 3
 sideClose.Parent = sideFrame
+mkCorner(sideClose, 4)
 local sideMinimize = Instance.new("TextButton")
-sideMinimize.Size = UDim2.new(0, 20, 0, 20)
-sideMinimize.Position = UDim2.new(1, -45, 0, 0)
+sideMinimize.Size = UDim2.new(0, 22, 0, 20)
+sideMinimize.Position = UDim2.new(1, -48, 0, 4)
 sideMinimize.Text = "-"
-sideMinimize.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+sideMinimize.BackgroundColor3 = Color3.fromRGB(0, 55, 65)
 sideMinimize.TextColor3 = Color3.new(1, 1, 1)
+sideMinimize.Font = Enum.Font.Code
+sideMinimize.TextSize = 11
 sideMinimize.ZIndex = 3
 sideMinimize.Parent = sideFrame
+mkCorner(sideMinimize, 4)
 local cmdsBtn = Instance.new("TextButton")
-cmdsBtn.Size = UDim2.new(0, 40, 0, 20)
-cmdsBtn.Position = UDim2.new(1, -200, 0, 0)
+cmdsBtn.Size = UDim2.new(0, 44, 0, 20)
+cmdsBtn.Position = UDim2.new(1, -94, 0, 4)
 cmdsBtn.Text = "cmds"
-cmdsBtn.BackgroundColor3 = Color3.fromRGB(0, 80, 80)
-cmdsBtn.TextColor3 = Color3.new(1, 1, 1)
+cmdsBtn.BackgroundColor3 = Color3.fromRGB(0, 65, 75)
+cmdsBtn.TextColor3 = Color3.fromRGB(0, 220, 170)
 cmdsBtn.Font = Enum.Font.Code
+cmdsBtn.TextSize = 11
 cmdsBtn.ZIndex = 3
 cmdsBtn.Parent = sideFrame
+mkCorner(cmdsBtn, 4)
+mkStroke(cmdsBtn, Color3.fromRGB(0, 90, 100), 1)
 local cmdsTooltip = Instance.new("Frame")
-cmdsTooltip.Size = UDim2.new(1, 0, 0, 260)
-cmdsTooltip.Position = UDim2.new(0, 0, 0, 25)
+cmdsTooltip.Size = UDim2.new(0, 220, 0, 260)
+cmdsTooltip.Position = UDim2.new(0, -225, 0, 0)
 cmdsTooltip.BackgroundColor3 = Color3.fromRGB(14, 18, 24)
 cmdsTooltip.BorderSizePixel = 0
-cmdsTooltip.ZIndex = 10
+cmdsTooltip.ZIndex = 20
 cmdsTooltip.Visible = false
-cmdsTooltip.Parent = sideFrame
+cmdsTooltip.Parent = cmdsBtn
 mkCorner(cmdsTooltip, 4)
 mkStroke(cmdsTooltip, Color3.fromRGB(0, 180, 150), 1)
 local tooltipLabel = Instance.new("TextLabel")
@@ -1034,12 +1175,11 @@ local sideMinimized = false
 table.insert(connections, sideMinimize.MouseButton1Click:Connect(function()
 	sideMinimized = not sideMinimized
 	if sideMinimized then
-		sideFrame.Size = UDim2.new(0, 100, 0, 25)
+		sideFrame.Size = UDim2.new(0, 200, 0, 28)
 		sideList.Visible = false
 		addB.Visible = false
 		addR.Visible = false
 		cmdsBtn.Visible = false
-		cmdsTooltip.Visible = false
 		sideMinimize.Text = "+"
 	else
 		sideFrame.Size = UDim2.new(0, 200, 0, 480)
@@ -1060,7 +1200,7 @@ viewportWin.Position = UDim2.new(0, 670, 0, 380)
 viewportWin.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
 viewportWin.BorderSizePixel = 0
 viewportWin.Active = true
-viewportWin.ClipsDescendants = false
+viewportWin.ClipsDescendants = true
 viewportWin.ZIndex = 5
 viewportWin.Visible = false
 viewportWin.Parent = gui
@@ -1098,11 +1238,12 @@ vpTop.BackgroundColor3 = Color3.fromRGB(8, 28, 32)
 vpTop.BorderSizePixel = 0
 vpTop.ZIndex = 6
 vpTop.Parent = viewportWin
+do local g = Instance.new("UIGradient"); g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 55, 65)), ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 25, 30))}); g.Rotation = 90; g.Parent = vpTop end
 local vpTitle = Instance.new("TextLabel")
 vpTitle.Text = "preview"
 vpTitle.Size = UDim2.new(1, -120, 1, 0)
 vpTitle.BackgroundTransparency = 1
-vpTitle.TextColor3 = Color3.fromRGB(0, 255, 200)
+vpTitle.TextColor3 = Color3.fromRGB(0, 220, 170)
 vpTitle.Font = Enum.Font.Code
 vpTitle.TextSize = 13
 vpTitle.ZIndex = 7
@@ -1168,8 +1309,8 @@ local vpIdGoBtn = Instance.new("TextButton")
 vpIdGoBtn.Text = "▶"
 vpIdGoBtn.Position = UDim2.new(1, -47, 0, 30)
 vpIdGoBtn.Size = UDim2.new(0, 42, 0, 24)
-vpIdGoBtn.BackgroundColor3 = Color3.fromRGB(0, 75, 60)
-vpIdGoBtn.TextColor3 = Color3.new(1, 1, 1)
+vpIdGoBtn.BackgroundColor3 = Color3.fromRGB(0, 70, 75)
+vpIdGoBtn.TextColor3 = Color3.fromRGB(0, 220, 170)
 vpIdGoBtn.BorderSizePixel = 0
 vpIdGoBtn.Font = Enum.Font.Code
 vpIdGoBtn.TextSize = 13
@@ -1197,7 +1338,7 @@ vpIdLabel.Text = "no animation selected"
 vpIdLabel.Position = UDim2.new(0, 5, 0, 284)
 vpIdLabel.Size = UDim2.new(1, -10, 0, 14)
 vpIdLabel.BackgroundTransparency = 1
-vpIdLabel.TextColor3 = Color3.fromRGB(0, 180, 130)
+vpIdLabel.TextColor3 = Color3.fromRGB(80, 130, 120)
 vpIdLabel.Font = Enum.Font.Code
 vpIdLabel.TextSize = 11
 vpIdLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1274,10 +1415,9 @@ local vpPauseBtn = Instance.new("TextButton")
 vpPauseBtn.Text = "⏸ Pause"
 vpPauseBtn.Position = UDim2.new(0, 5, 0, 328)
 vpPauseBtn.Size = UDim2.new(1, -10, 0, 20)
-vpPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 60)
+vpPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 65)
 vpPauseBtn.TextColor3 = Color3.new(1, 1, 1)
-vpPauseBtn.BorderSizePixel = 1
-vpPauseBtn.BorderColor3 = Color3.fromRGB(0, 100, 120)
+vpPauseBtn.BorderSizePixel = 0
 vpPauseBtn.Font = Enum.Font.Code
 vpPauseBtn.TextSize = 11
 vpPauseBtn.ZIndex = 6
@@ -1365,7 +1505,7 @@ vpSpeedLabel.Text = "Speed"
 vpSpeedLabel.Position = UDim2.new(0, 5, 0, 353)
 vpSpeedLabel.Size = UDim2.new(0, 40, 0, 20)
 vpSpeedLabel.BackgroundTransparency = 1
-vpSpeedLabel.TextColor3 = Color3.fromRGB(0, 200, 150)
+vpSpeedLabel.TextColor3 = Color3.fromRGB(0, 180, 140)
 vpSpeedLabel.Font = Enum.Font.Code
 vpSpeedLabel.TextSize = 12
 vpSpeedLabel.ZIndex = 6
@@ -1375,22 +1515,22 @@ vpSpeedBox.Text = "1"
 vpSpeedBox.PlaceholderText = "speed"
 vpSpeedBox.Position = UDim2.new(0, 50, 0, 353)
 vpSpeedBox.Size = UDim2.new(0, 55, 0, 20)
-vpSpeedBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpSpeedBox.BackgroundColor3 = Color3.fromRGB(12, 16, 22)
 vpSpeedBox.TextColor3 = Color3.new(1, 1, 1)
-vpSpeedBox.BorderSizePixel = 1
-vpSpeedBox.BorderColor3 = Color3.fromRGB(0, 100, 80)
+vpSpeedBox.BorderSizePixel = 0
 vpSpeedBox.Font = Enum.Font.Code
 vpSpeedBox.TextSize = 12
 vpSpeedBox.ZIndex = 6
 vpSpeedBox.Parent = viewportWin
+mkCorner(vpSpeedBox, 3)
+mkStroke(vpSpeedBox, Color3.fromRGB(0, 80, 90), 1)
 local vpLoopToggle = Instance.new("TextButton")
 vpLoopToggle.Text = "Loop: OFF"
 vpLoopToggle.Position = UDim2.new(0, 113, 0, 353)
 vpLoopToggle.Size = UDim2.new(0, 80, 0, 20)
-vpLoopToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-vpLoopToggle.TextColor3 = Color3.new(1, 1, 1)
-vpLoopToggle.BorderSizePixel = 1
-vpLoopToggle.BorderColor3 = Color3.fromRGB(120, 0, 0)
+vpLoopToggle.BackgroundColor3 = Color3.fromRGB(55, 0, 0)
+vpLoopToggle.TextColor3 = Color3.fromRGB(255, 180, 160)
+vpLoopToggle.BorderSizePixel = 0
 vpLoopToggle.Font = Enum.Font.Code
 vpLoopToggle.TextSize = 11
 vpLoopToggle.ZIndex = 6
@@ -1401,7 +1541,7 @@ vpTimeLabel.Text = "Time"
 vpTimeLabel.Position = UDim2.new(0, 200, 0, 353)
 vpTimeLabel.Size = UDim2.new(0, 35, 0, 20)
 vpTimeLabel.BackgroundTransparency = 1
-vpTimeLabel.TextColor3 = Color3.fromRGB(0, 200, 150)
+vpTimeLabel.TextColor3 = Color3.fromRGB(0, 180, 140)
 vpTimeLabel.Font = Enum.Font.Code
 vpTimeLabel.TextSize = 12
 vpTimeLabel.ZIndex = 6
@@ -1411,22 +1551,22 @@ vpTimeBox.Text = "0"
 vpTimeBox.PlaceholderText = "time"
 vpTimeBox.Position = UDim2.new(0, 238, 0, 353)
 vpTimeBox.Size = UDim2.new(0, 52, 0, 20)
-vpTimeBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpTimeBox.BackgroundColor3 = Color3.fromRGB(12, 16, 22)
 vpTimeBox.TextColor3 = Color3.new(1, 1, 1)
-vpTimeBox.BorderSizePixel = 1
-vpTimeBox.BorderColor3 = Color3.fromRGB(0, 100, 80)
+vpTimeBox.BorderSizePixel = 0
 vpTimeBox.Font = Enum.Font.Code
 vpTimeBox.TextSize = 12
 vpTimeBox.ZIndex = 6
 vpTimeBox.Parent = viewportWin
+mkCorner(vpTimeBox, 3)
+mkStroke(vpTimeBox, Color3.fromRGB(0, 80, 90), 1)
 local vpPlayBtn = Instance.new("TextButton")
 vpPlayBtn.Text = "▶ Play Preview"
 vpPlayBtn.Position = UDim2.new(0, 5, 0, 378)
 vpPlayBtn.Size = UDim2.new(0.5, -8, 0, 25)
-vpPlayBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
-vpPlayBtn.TextColor3 = Color3.new(1, 1, 1)
-vpPlayBtn.BorderSizePixel = 1
-vpPlayBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
+vpPlayBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 70)
+vpPlayBtn.TextColor3 = Color3.fromRGB(0, 220, 170)
+vpPlayBtn.BorderSizePixel = 0
 vpPlayBtn.Font = Enum.Font.Code
 vpPlayBtn.ZIndex = 6
 vpPlayBtn.Parent = viewportWin
@@ -1435,10 +1575,9 @@ local vpStopBtn = Instance.new("TextButton")
 vpStopBtn.Text = "■ Stop Preview"
 vpStopBtn.Position = UDim2.new(0.5, 3, 0, 378)
 vpStopBtn.Size = UDim2.new(0.5, -8, 0, 25)
-vpStopBtn.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-vpStopBtn.TextColor3 = Color3.new(1, 1, 1)
-vpStopBtn.BorderSizePixel = 1
-vpStopBtn.BorderColor3 = Color3.fromRGB(120, 0, 0)
+vpStopBtn.BackgroundColor3 = Color3.fromRGB(80, 15, 15)
+vpStopBtn.TextColor3 = Color3.fromRGB(255, 160, 140)
+vpStopBtn.BorderSizePixel = 0
 vpStopBtn.Font = Enum.Font.Code
 vpStopBtn.ZIndex = 6
 vpStopBtn.Parent = viewportWin
@@ -1447,10 +1586,9 @@ local vpPlaySelfBtn = Instance.new("TextButton")
 vpPlaySelfBtn.Text = "★ Play on Self"
 vpPlaySelfBtn.Position = UDim2.new(0, 5, 0, 408)
 vpPlaySelfBtn.Size = UDim2.new(1, -10, 0, 22)
-vpPlaySelfBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 80)
-vpPlaySelfBtn.TextColor3 = Color3.new(1, 1, 1)
-vpPlaySelfBtn.BorderSizePixel = 1
-vpPlaySelfBtn.BorderColor3 = Color3.fromRGB(0, 100, 160)
+vpPlaySelfBtn.BackgroundColor3 = Color3.fromRGB(0, 45, 75)
+vpPlaySelfBtn.TextColor3 = Color3.fromRGB(140, 190, 255)
+vpPlaySelfBtn.BorderSizePixel = 0
 vpPlaySelfBtn.Font = Enum.Font.Code
 vpPlaySelfBtn.ZIndex = 6
 vpPlaySelfBtn.Parent = viewportWin
@@ -1459,10 +1597,9 @@ local vpRotateCCW = Instance.new("TextButton")
 vpRotateCCW.Text = "◄"
 vpRotateCCW.Position = UDim2.new(0, 5, 0, 435)
 vpRotateCCW.Size = UDim2.new(0.22, -4, 0, 20)
-vpRotateCCW.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-vpRotateCCW.TextColor3 = Color3.new(1, 1, 1)
-vpRotateCCW.BorderSizePixel = 1
-vpRotateCCW.BorderColor3 = Color3.fromRGB(60, 60, 120)
+vpRotateCCW.BackgroundColor3 = Color3.fromRGB(20, 22, 38)
+vpRotateCCW.TextColor3 = Color3.fromRGB(160, 170, 255)
+vpRotateCCW.BorderSizePixel = 0
 vpRotateCCW.Font = Enum.Font.Code
 vpRotateCCW.TextSize = 13
 vpRotateCCW.ZIndex = 6
@@ -1472,10 +1609,9 @@ local vpRotateCW = Instance.new("TextButton")
 vpRotateCW.Text = "►"
 vpRotateCW.Position = UDim2.new(0.78, 3, 0, 435)
 vpRotateCW.Size = UDim2.new(0.22, -8, 0, 20)
-vpRotateCW.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-vpRotateCW.TextColor3 = Color3.new(1, 1, 1)
-vpRotateCW.BorderSizePixel = 1
-vpRotateCW.BorderColor3 = Color3.fromRGB(60, 60, 120)
+vpRotateCW.BackgroundColor3 = Color3.fromRGB(20, 22, 38)
+vpRotateCW.TextColor3 = Color3.fromRGB(160, 170, 255)
+vpRotateCW.BorderSizePixel = 0
 vpRotateCW.Font = Enum.Font.Code
 vpRotateCW.TextSize = 13
 vpRotateCW.ZIndex = 6
@@ -1486,23 +1622,23 @@ vpPrecisionBox.Text = "90"
 vpPrecisionBox.PlaceholderText = "step"
 vpPrecisionBox.Position = UDim2.new(0.22, 2, 0, 435)
 vpPrecisionBox.Size = UDim2.new(0.56, -4, 0, 20)
-vpPrecisionBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpPrecisionBox.BackgroundColor3 = Color3.fromRGB(12, 16, 22)
 vpPrecisionBox.TextColor3 = Color3.new(1, 1, 1)
-vpPrecisionBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
-vpPrecisionBox.BorderSizePixel = 1
-vpPrecisionBox.BorderColor3 = Color3.fromRGB(60, 60, 120)
+vpPrecisionBox.PlaceholderColor3 = Color3.fromRGB(60, 65, 100)
+vpPrecisionBox.BorderSizePixel = 0
 vpPrecisionBox.Font = Enum.Font.Code
 vpPrecisionBox.TextSize = 11
 vpPrecisionBox.ZIndex = 6
 vpPrecisionBox.Parent = viewportWin
+mkCorner(vpPrecisionBox, 3)
+mkStroke(vpPrecisionBox, Color3.fromRGB(60, 65, 120), 1)
 local vpZoomIn = Instance.new("TextButton")
 vpZoomIn.Text = "+ Zoom"
 vpZoomIn.Position = UDim2.new(0, 5, 0, 460)
 vpZoomIn.Size = UDim2.new(0.5, -8, 0, 20)
-vpZoomIn.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
-vpZoomIn.TextColor3 = Color3.new(1, 1, 1)
-vpZoomIn.BorderSizePixel = 1
-vpZoomIn.BorderColor3 = Color3.fromRGB(0, 100, 0)
+vpZoomIn.BackgroundColor3 = Color3.fromRGB(15, 40, 22)
+vpZoomIn.TextColor3 = Color3.fromRGB(140, 230, 160)
+vpZoomIn.BorderSizePixel = 0
 vpZoomIn.Font = Enum.Font.Code
 vpZoomIn.TextSize = 11
 vpZoomIn.ZIndex = 6
@@ -1512,10 +1648,9 @@ local vpZoomOut = Instance.new("TextButton")
 vpZoomOut.Text = "- Zoom"
 vpZoomOut.Position = UDim2.new(0.5, 3, 0, 460)
 vpZoomOut.Size = UDim2.new(0.5, -8, 0, 20)
-vpZoomOut.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
-vpZoomOut.TextColor3 = Color3.new(1, 1, 1)
-vpZoomOut.BorderSizePixel = 1
-vpZoomOut.BorderColor3 = Color3.fromRGB(100, 0, 0)
+vpZoomOut.BackgroundColor3 = Color3.fromRGB(40, 15, 15)
+vpZoomOut.TextColor3 = Color3.fromRGB(255, 160, 140)
+vpZoomOut.BorderSizePixel = 0
 vpZoomOut.Font = Enum.Font.Code
 vpZoomOut.TextSize = 11
 vpZoomOut.ZIndex = 6
@@ -1886,7 +2021,7 @@ local function addReplUI(id, targetId, speed, loop)
 	del.Size = UDim2.new(1, -10, 0, 20)
 	del.Position = UDim2.new(0, 5, 0, 80)
 	del.Text = "Delete Replacement"
-	del.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+	del.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
 	del.TextColor3 = Color3.new(1, 1, 1)
 	del.ZIndex = 5
 	del.Parent = rFrame
@@ -1948,52 +2083,60 @@ local function addBind(bindData)
 	idL.Position = UDim2.new(0, 5, 0, 25)
 	idL.Text = bindData.id or ""
 	idL.PlaceholderText = "id or macro..."
-	idL.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+	idL.BackgroundColor3 = Color3.fromRGB(12, 16, 22)
 	idL.TextColor3 = Color3.new(1, 1, 1)
 	idL.Font = Enum.Font.Code
 	idL.TextSize = 12
 	idL.ZIndex = 4
 	idL.Parent = bFrame
+	mkCorner(idL, 3)
+	mkStroke(idL, Color3.fromRGB(0, 70, 80), 1)
 	local keyB = Instance.new("TextButton")
 	keyB.Size = UDim2.new(1, -10, 0, 22)
 	keyB.Position = UDim2.new(0, 5, 0, 52)
 	keyB.Text = "Key: " .. (bindData.key and bindData.key.Name or "None")
-	keyB.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	keyB.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
 	keyB.TextColor3 = Color3.new(1, 1, 1)
 	keyB.Font = Enum.Font.Code
 	keyB.TextSize = 12
 	keyB.ZIndex = 4
 	keyB.Parent = bFrame
+	mkCorner(keyB, 3)
+	mkStroke(keyB, Color3.fromRGB(0, 60, 70), 1)
 	local holdT = Instance.new("TextButton")
 	holdT.Size = UDim2.new(1, -10, 0, 20)
 	holdT.Position = UDim2.new(0, 5, 0, 78)
 	holdT.Text = "Hold: " .. (bindData.hold and "ON" or "OFF")
-	holdT.BackgroundColor3 = bindData.hold and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
+	holdT.BackgroundColor3 = bindData.hold and Color3.fromRGB(0, 55, 0) or Color3.fromRGB(60, 0, 0)
 	holdT.TextColor3 = Color3.new(1, 1, 1)
 	holdT.Font = Enum.Font.Code
 	holdT.TextSize = 12
 	holdT.ZIndex = 4
 	holdT.Parent = bFrame
+	mkCorner(holdT, 3)
 	local speedB = Instance.new("TextBox")
 	speedB.Size = UDim2.new(1, -10, 0, 20)
 	speedB.Position = UDim2.new(0, 5, 0, 103)
 	speedB.Text = "Speed: " .. (bindData.speed or 1)
-	speedB.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+	speedB.BackgroundColor3 = Color3.fromRGB(12, 16, 22)
 	speedB.TextColor3 = Color3.new(1, 1, 1)
 	speedB.Font = Enum.Font.Code
 	speedB.TextSize = 12
 	speedB.ZIndex = 4
 	speedB.Parent = bFrame
+	mkCorner(speedB, 3)
+	mkStroke(speedB, Color3.fromRGB(0, 70, 80), 1)
 	local loopT = Instance.new("TextButton")
 	loopT.Size = UDim2.new(1, -10, 0, 20)
 	loopT.Position = UDim2.new(0, 5, 0, 128)
 	loopT.Text = "Loop: " .. (bindData.loop and "ON" or "OFF")
-	loopT.BackgroundColor3 = bindData.loop and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
+	loopT.BackgroundColor3 = bindData.loop and Color3.fromRGB(0, 55, 0) or Color3.fromRGB(60, 0, 0)
 	loopT.TextColor3 = Color3.new(1, 1, 1)
 	loopT.Font = Enum.Font.Code
 	loopT.TextSize = 12
 	loopT.ZIndex = 4
 	loopT.Parent = bFrame
+	mkCorner(loopT, 3)
 	local lastFiredLabel = Instance.new("TextLabel")
 	lastFiredLabel.Size = UDim2.new(1, -10, 0, 14)
 	lastFiredLabel.Position = UDim2.new(0, 5, 0, 153)
@@ -2013,6 +2156,7 @@ local function addBind(bindData)
 	del.TextColor3 = Color3.new(1, 1, 1)
 	del.ZIndex = 5
 	del.Parent = bFrame
+	mkCorner(del, 3)
 	bindData._activeBar = activeBar
 	bindData._lastFiredLabel = lastFiredLabel
 	table.insert(bindIndicators, bindData)
@@ -2062,7 +2206,7 @@ local function addBind(bindData)
 	end))
 end
 table.insert(connections, addB.MouseButton1Click:Connect(function()
-	local nb = {id = "", key = nil, hold = false, speed = 1, loop = false, active = false, tracks = {}}
+	local nb = {id = "", key = nil, hold = false, speed = 1, loop = false, active = false, tracks = {}, token = 0}
 	table.insert(keybinds, nb)
 	addBind(nb)
 end))
@@ -2283,6 +2427,7 @@ local function fixPriority(raw)
 end
 local function logIt(id, name, playerName, priority)
 	if banned[id] then return end
+	if trueBanned[id] then return end
 	local entryName = name
 	local key = id
 	if playerName then
@@ -2318,7 +2463,9 @@ local function refreshColors()
 	end
 	for id, entry in pairs(animFrames) do
 		local pureId = id:match("^([%d]+)")
-		if banned[pureId] then
+		if trueBanned[pureId] then
+			entry.TextColor3 = Color3.fromRGB(180, 0, 0)
+		elseif banned[pureId] then
 			entry.TextColor3 = Color3.fromRGB(255, 50, 50)
 		elseif playingIds[pureId] then
 			entry.TextColor3 = Color3.fromRGB(50, 255, 50)
@@ -2346,6 +2493,12 @@ local function trackSeen(track, playerName)
 	local id = grabId(anim.AnimationId)
 	if not id then return end
 	if banned[id] then
+		track:AdjustWeight(0, 0)
+		track:AdjustSpeed(0)
+		track:Stop(0)
+		return
+	end
+	if trueBanned[id] then
 		track:AdjustWeight(0, 0)
 		track:AdjustSpeed(0)
 		track:Stop(0)
@@ -2422,7 +2575,7 @@ end
 task.spawn(function()
 	while running do
 		for _, bind in pairs(keybinds) do
-			if bind.active and not banned[bind.id] then
+			if bind.active and bind.hold and not banned[bind.id] then
 				local isMacroCheck = tostring(bind.id):find(";") or tostring(bind.id):lower():match("^play%s")
 				if not isMacroCheck then
 					local isPlaying = false
@@ -2436,7 +2589,24 @@ task.spawn(function()
 							end
 						end
 					end
-					if not isPlaying and (bind.loop or bind.hold) then
+					if not isPlaying then
+						fireAnim(bind.id, bind.speed, bind.loop)
+					end
+				end
+			elseif bind.active and not bind.hold and not banned[bind.id] then
+				local isMacroCheck = tostring(bind.id):find(";") or tostring(bind.id):lower():match("^play%s")
+				if not isMacroCheck and bind.loop then
+					local isPlaying = false
+					local animator = grabAnimator()
+					if animator then
+						for _, t in pairs(animator:GetPlayingAnimationTracks()) do
+							if grabId(t.Animation.AnimationId) == bind.id and t.IsPlaying then
+								isPlaying = true
+								break
+							end
+						end
+					end
+					if not isPlaying then
 						fireAnim(bind.id, bind.speed, bind.loop)
 					end
 				end
@@ -2618,7 +2788,13 @@ table.insert(connections, UserInputService.InputEnded:Connect(function(input)
 			else
 				if bind.hold then
 					bind.active = false
-					killAnim(bind.id)
+					bind.token = (bind.token or 0) + 1
+					for t in pairs(scriptTracks) do
+						if grabId(t.Animation.AnimationId) == bind.id then
+							scriptTracks[t] = nil
+							pcall(function() t:Stop(0) end)
+						end
+					end
 				end
 			end
 		end
@@ -2636,7 +2812,8 @@ local function loadSavedBinds()
 					speed = b.speed or 1,
 					loop = b.loop or false,
 					active = false,
-					tracks = {}
+					tracks = {},
+					token = 0
 				}
 				table.insert(keybinds, nb)
 				addBind(nb)
@@ -2652,6 +2829,7 @@ local function loadCfg()
 			globalLogging = data.globalLogging or false
 			autoCopy = data.autoCopy or false
 			banned = data.banned or {}
+			trueBanned = data.trueBanned or {}
 			replacements = data.replacements or {}
 			favorites = data.favorites or {}
 			customNames = data.customNames or {}
@@ -2685,7 +2863,7 @@ local function tickLoop()
 			end
 			for _, track in pairs(animator:GetPlayingAnimationTracks()) do
 				local tid = grabId(track.Animation.AnimationId)
-				if tid and banned[tid] then
+				if tid and (banned[tid] or trueBanned[tid]) then
 					track:AdjustWeight(0, 0)
 					track:AdjustSpeed(0)
 					track:Stop(0)
