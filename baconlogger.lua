@@ -41,7 +41,8 @@ local function dumpCfg()
 		replacements = replacements,
 		favorites = favorites,
 		customNames = customNames,
-		autoCopy = autoCopy
+		autoCopy = autoCopy,
+		toggleKey = toggleKey and toggleKey.Name or "RightControl"
 	}
 	if writefile then
 		writefile(configFile, HttpService:JSONEncode(data))
@@ -133,8 +134,9 @@ if success and coreGui then
 else
 	gui.Parent = player:WaitForChild("PlayerGui")
 end
+local toggleKey = Enum.KeyCode.RightControl
 table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
-	if not processed and input.KeyCode == Enum.KeyCode.RightControl then
+	if not processed and input.KeyCode == toggleKey then
 		gui.Enabled = not gui.Enabled
 	end
 end))
@@ -572,7 +574,7 @@ controls.BorderSizePixel = 0
 controls.ClipsDescendants = true
 controls.ScrollBarThickness = 3
 controls.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 130)
-controls.CanvasSize = UDim2.new(0, 0, 0, 715)
+controls.CanvasSize = UDim2.new(0, 0, 0, 750)
 controls.ZIndex = 2
 controls.Visible = true
 controls.Parent = mainFrame
@@ -878,6 +880,39 @@ exportBtn.Visible = true
 exportBtn.Parent = controls
 mkCorner(exportBtn, 4)
 mkStroke(exportBtn, Color3.fromRGB(0, 75, 150), 1)
+
+local toggleKeyBtn = Instance.new("TextButton")
+toggleKeyBtn.Text = "Hide Key: " .. toggleKey.Name
+toggleKeyBtn.Position = UDim2.new(0, 10, 0, 616)
+toggleKeyBtn.Size = UDim2.new(1, -20, 0, 26)
+toggleKeyBtn.BackgroundColor3 = Color3.fromRGB(30, 20, 50)
+toggleKeyBtn.TextColor3 = Color3.fromRGB(180, 150, 255)
+toggleKeyBtn.BorderSizePixel = 0
+toggleKeyBtn.Font = Enum.Font.Code
+toggleKeyBtn.TextSize = 12
+toggleKeyBtn.ZIndex = 3
+toggleKeyBtn.Visible = true
+toggleKeyBtn.Parent = controls
+mkCorner(toggleKeyBtn, 4)
+mkStroke(toggleKeyBtn, Color3.fromRGB(90, 60, 180), 1)
+local settingToggleKey = false
+table.insert(connections, toggleKeyBtn.MouseButton1Click:Connect(function()
+	if settingToggleKey then return end
+	settingToggleKey = true
+	toggleKeyBtn.Text = "Press any key..."
+	toggleKeyBtn.TextColor3 = Color3.fromRGB(255, 220, 100)
+	local conn
+	conn = UserInputService.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			conn:Disconnect()
+			settingToggleKey = false
+			toggleKey = input.KeyCode
+			toggleKeyBtn.Text = "Hide Key: " .. toggleKey.Name
+			toggleKeyBtn.TextColor3 = Color3.fromRGB(180, 150, 255)
+			dumpCfg()
+		end
+	end)
+end))
 table.insert(connections, exportBtn.MouseButton1Click:Connect(function()
 	local out = {}
 	for key, entry in pairs(animFrames) do
@@ -1135,25 +1170,34 @@ cmdsBtn.Parent = sideFrame
 mkCorner(cmdsBtn, 4)
 mkStroke(cmdsBtn, Color3.fromRGB(0, 90, 100), 1)
 local cmdsTooltip = Instance.new("Frame")
-cmdsTooltip.Size = UDim2.new(0, 220, 0, 260)
-cmdsTooltip.Position = UDim2.new(0, -225, 0, 0)
+cmdsTooltip.Size = UDim2.new(0, 250, 0, 295)
 cmdsTooltip.BackgroundColor3 = Color3.fromRGB(14, 18, 24)
 cmdsTooltip.BorderSizePixel = 0
-cmdsTooltip.ZIndex = 20
+cmdsTooltip.ClipsDescendants = true
+cmdsTooltip.ZIndex = 30
 cmdsTooltip.Visible = false
-cmdsTooltip.Parent = cmdsBtn
+cmdsTooltip.Parent = gui
 mkCorner(cmdsTooltip, 4)
 mkStroke(cmdsTooltip, Color3.fromRGB(0, 180, 150), 1)
+table.insert(connections, cmdsBtn.MouseEnter:Connect(function()
+	local abs = cmdsBtn.AbsolutePosition
+	cmdsTooltip.Position = UDim2.new(0, abs.X - 255, 0, abs.Y)
+	cmdsTooltip.Visible = true
+end))
+table.insert(connections, cmdsBtn.MouseLeave:Connect(function()
+	cmdsTooltip.Visible = false
+end))
 local tooltipLabel = Instance.new("TextLabel")
 tooltipLabel.Size = UDim2.new(1, -10, 1, -10)
 tooltipLabel.Position = UDim2.new(0, 5, 0, 5)
 tooltipLabel.BackgroundTransparency = 1
-tooltipLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+tooltipLabel.TextColor3 = Color3.fromRGB(0, 220, 170)
 tooltipLabel.TextXAlignment = Enum.TextXAlignment.Left
 tooltipLabel.TextYAlignment = Enum.TextYAlignment.Top
+tooltipLabel.TextWrapped = true
 tooltipLabel.Font = Enum.Font.Code
 tooltipLabel.TextSize = 11
-tooltipLabel.ZIndex = 11
+tooltipLabel.ZIndex = 31
 tooltipLabel.Text = [[COMMANDS (ID box):
 pause/freeze, speed [n], ban [id]
 unban [id], stop [id], step [n]
@@ -1165,12 +1209,10 @@ stop [id] (or stop for all)
 speed [n]
 EXAMPLE:
 play 111; wait 0.5; play 222 2 true; wait 1; stop 111
-Tip: Use 'Hold: ON' for temp freeze.
+Tip: Use Hold: ON for temp freeze.
 Speed/loop in viewport are separate
 from your main playback settings.]]
 tooltipLabel.Parent = cmdsTooltip
-table.insert(connections, cmdsBtn.MouseEnter:Connect(function() cmdsTooltip.Visible = true end))
-table.insert(connections, cmdsBtn.MouseLeave:Connect(function() cmdsTooltip.Visible = false end))
 local sideMinimized = false
 table.insert(connections, sideMinimize.MouseButton1Click:Connect(function()
 	sideMinimized = not sideMinimized
@@ -2830,6 +2872,9 @@ local function loadCfg()
 			autoCopy = data.autoCopy or false
 			banned = data.banned or {}
 			trueBanned = data.trueBanned or {}
+			if data.toggleKey and Enum.KeyCode[data.toggleKey] then
+				toggleKey = Enum.KeyCode[data.toggleKey]
+			end
 			replacements = data.replacements or {}
 			favorites = data.favorites or {}
 			customNames = data.customNames or {}
@@ -2846,6 +2891,7 @@ local function loadCfg()
 	end
 end
 loadCfg()
+toggleKeyBtn.Text = "Hide Key: " .. toggleKey.Name
 loadSavedBinds()
 local function tickLoop()
 	for _, p in pairs(Players:GetPlayers()) do
