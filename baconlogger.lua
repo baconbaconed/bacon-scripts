@@ -1,4 +1,4 @@
---this is the only script ill ever leave unobfuscated, because velocity is a little bitch about obfuscating
+print("this is the only script ill leave unobfuscated since velocity a bitch, enjoy")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -77,9 +77,9 @@ local function grabAnimator(char)
 	return hum:FindFirstChildOfClass("Animator") or hum
 end
 local function fireAnim(id, speed, loop)
-	if banned[id] then return end
+	if banned[id] then return nil end
 	local animator = grabAnimator()
-	if not animator or not id or id == "" then return end
+	if not animator or not id or id == "" then return nil end
 	local anim = Instance.new("Animation")
 	anim.AnimationId = "rbxassetid://" .. id
 	local track = animator:LoadAnimation(anim)
@@ -90,18 +90,25 @@ local function fireAnim(id, speed, loop)
 	track:Play(0, 1, playSpeed)
 	scriptTracks[track] = true
 	table.insert(connections, track.Stopped:Connect(function()
+		local intentional = not scriptTracks[track]
 		scriptTracks[track] = nil
+		if loop and not banned[id] and not intentional then
+			task.defer(function()
+				fireAnim(id, speed, loop)
+			end)
+		end
 	end))
 	return track
 end
+
 local function killAnim(id)
 	local animator = grabAnimator()
 	if not animator then return end
 	for _, track in pairs(animator:GetPlayingAnimationTracks()) do
 		local tid = grabId(track.Animation.AnimationId)
 		if tid == id then
-			track:Stop()
 			scriptTracks[track] = nil
+			track:Stop()
 		end
 	end
 end
@@ -274,6 +281,18 @@ favsTabBtn.BorderSizePixel = 1
 favsTabBtn.BorderColor3 = Color3.fromRGB(80, 80, 0)
 favsTabBtn.ZIndex = 2
 favsTabBtn.Parent = mainFrame
+
+local logCountLabel = Instance.new("TextLabel")
+logCountLabel.Text = "0 logged"
+logCountLabel.Position = UDim2.new(0.60, -90, 0, 78)
+logCountLabel.Size = UDim2.new(0, 88, 0, 18)
+logCountLabel.BackgroundTransparency = 1
+logCountLabel.TextColor3 = Color3.fromRGB(80, 80, 80)
+logCountLabel.TextXAlignment = Enum.TextXAlignment.Right
+logCountLabel.Font = Enum.Font.Code
+logCountLabel.TextSize = 11
+logCountLabel.ZIndex = 2
+logCountLabel.Parent = mainFrame
 local list = Instance.new("ScrollingFrame")
 list.Name = "AnimList"
 list.Position = UDim2.new(0, 5, 0, 100)
@@ -398,9 +417,85 @@ table.insert(connections, timeBox:GetPropertyChangedSignal("Text"):Connect(funct
 		end
 	end
 end))
+
+local mainTimerLabel = Instance.new("TextLabel")
+mainTimerLabel.Text = "no anim playing"
+mainTimerLabel.Position = UDim2.new(0, 10, 0, 168)
+mainTimerLabel.Size = UDim2.new(1, -20, 0, 14)
+mainTimerLabel.BackgroundTransparency = 1
+mainTimerLabel.TextColor3 = Color3.fromRGB(0, 160, 120)
+mainTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
+mainTimerLabel.Font = Enum.Font.Code
+mainTimerLabel.TextSize = 11
+mainTimerLabel.ZIndex = 3
+mainTimerLabel.Visible = true
+mainTimerLabel.Parent = controls
+
+local mainScrubBg = Instance.new("Frame")
+mainScrubBg.Position = UDim2.new(0, 10, 0, 185)
+mainScrubBg.Size = UDim2.new(1, -20, 0, 12)
+mainScrubBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainScrubBg.BorderSizePixel = 1
+mainScrubBg.BorderColor3 = Color3.fromRGB(0, 80, 80)
+mainScrubBg.ZIndex = 3
+mainScrubBg.Parent = controls
+
+local mainScrubFill = Instance.new("Frame")
+mainScrubFill.Size = UDim2.new(0, 0, 1, 0)
+mainScrubFill.BackgroundColor3 = Color3.fromRGB(0, 200, 150)
+mainScrubFill.BorderSizePixel = 0
+mainScrubFill.ZIndex = 4
+mainScrubFill.Parent = mainScrubBg
+
+local mainScrubBtn = Instance.new("TextButton")
+mainScrubBtn.Size = UDim2.new(1, 0, 1, 0)
+mainScrubBtn.BackgroundTransparency = 1
+mainScrubBtn.Text = ""
+mainScrubBtn.ZIndex = 5
+mainScrubBtn.Parent = mainScrubBg
+
+local mainPaused = false
+local mainPauseBtn = Instance.new("TextButton")
+mainPauseBtn.Text = "⏸ Pause"
+mainPauseBtn.Position = UDim2.new(0, 10, 0, 196)
+mainPauseBtn.Size = UDim2.new(1, -20, 0, 20)
+mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 60)
+mainPauseBtn.TextColor3 = Color3.new(1, 1, 1)
+mainPauseBtn.BorderSizePixel = 1
+mainPauseBtn.BorderColor3 = Color3.fromRGB(0, 100, 120)
+mainPauseBtn.Font = Enum.Font.Code
+mainPauseBtn.TextSize = 11
+mainPauseBtn.ZIndex = 3
+mainPauseBtn.Parent = controls
+
+table.insert(connections, mainPauseBtn.MouseButton1Click:Connect(function()
+	mainPaused = not mainPaused
+	for track in pairs(scriptTracks) do
+		if mainPaused then
+			track:AdjustSpeed(0)
+		else
+			track:AdjustSpeed(tonumber(speedBox.Text) or 1)
+		end
+	end
+	mainPauseBtn.Text = mainPaused and "▶ Resume" or "⏸ Pause"
+	mainPauseBtn.BackgroundColor3 = mainPaused and Color3.fromRGB(0, 80, 0) or Color3.fromRGB(0, 50, 60)
+end))
+
+local mainScrubbing = false
+table.insert(connections, mainScrubBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		mainScrubbing = true
+	end
+end))
+table.insert(connections, mainScrubBtn.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		mainScrubbing = false
+	end
+end))
+
 local loopToggle = Instance.new("TextButton")
 loopToggle.Text = "Loop: OFF"
-loopToggle.Position = UDim2.new(0, 10, 0, 175)
+loopToggle.Position = UDim2.new(0, 10, 0, 220)
 loopToggle.Size = UDim2.new(1, -20, 0, 25)
 loopToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
 loopToggle.TextColor3 = Color3.new(1, 1, 1)
@@ -419,49 +514,50 @@ table.insert(connections, loopToggle.MouseButton1Click:Connect(function()
 	refreshLoopBtn()
 	dumpCfg()
 end))
-local function button(text, y, callback)
+local function button(text, y, callback, bgColor, borderColor)
 	local b = Instance.new("TextButton")
 	b.Text = text
 	b.Position = UDim2.new(0, 10, 0, y)
 	b.Size = UDim2.new(1, -20, 0, 25)
-	b.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+	b.BackgroundColor3 = bgColor or Color3.fromRGB(0, 60, 60)
 	b.TextColor3 = Color3.new(1, 1, 1)
 	b.BorderSizePixel = 1
-	b.BorderColor3 = Color3.fromRGB(0, 120, 100)
+	b.BorderColor3 = borderColor or Color3.fromRGB(0, 120, 100)
 	b.ZIndex = 3
 	b.Visible = true
 	b.Parent = controls
 	table.insert(connections, b.MouseButton1Click:Connect(callback))
 end
-button("Play", 215, function()
+button("Play", 255, function()
 	local id = idBox.Text
 	local speed = tonumber(speedBox.Text) or 1
 	fireAnim(id, speed, looped)
 end)
-button("Stop", 250, function()
+button("Stop", 290, function()
 	killAnim(idBox.Text)
-end)
-button("Stop All", 285, function()
+end, Color3.fromRGB(80, 20, 20), Color3.fromRGB(160, 40, 40))
+button("Stop All", 325, function()
 	local animator = grabAnimator()
 	if animator then
 		for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+			scriptTracks[track] = nil
 			track:Stop()
 		end
 	end
 	scriptTracks = {}
-end)
-button("Ban", 320, function()
+end, Color3.fromRGB(80, 20, 20), Color3.fromRGB(160, 40, 40))
+button("Ban", 360, function()
 	banned[idBox.Text] = true
 	killAnim(idBox.Text)
 	dumpCfg()
-end)
-button("Unban", 355, function()
+end, Color3.fromRGB(80, 20, 20), Color3.fromRGB(160, 40, 40))
+button("Unban", 395, function()
 	banned[idBox.Text] = nil
 	dumpCfg()
-end)
-button("Copy ID", 390, function()
+end, Color3.fromRGB(70, 45, 0), Color3.fromRGB(140, 90, 0))
+button("Copy ID", 430, function()
 	yoink(idBox.Text)
-end)
+end, Color3.fromRGB(0, 40, 80), Color3.fromRGB(0, 80, 160))
 local function nukeList()
 	for id, entry in pairs(animFrames) do
 		if entry.Parent and entry.Parent:IsA("Frame") then
@@ -473,11 +569,12 @@ local function nukeList()
 	animCounts = {}
 	animFrames = {}
 	seenTracks = {}
+	logCountLabel.Text = "0 logged"
 end
-button("Clear List", 425, nukeList)
+button("Clear List", 460, nukeList)
 local globalToggle = Instance.new("TextButton")
 globalToggle.Text = "Global Log: OFF"
-globalToggle.Position = UDim2.new(0, 10, 0, 460)
+globalToggle.Position = UDim2.new(0, 10, 0, 492)
 globalToggle.Size = UDim2.new(1, -20, 0, 25)
 globalToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
 globalToggle.TextColor3 = Color3.new(1, 1, 1)
@@ -498,7 +595,7 @@ table.insert(connections, globalToggle.MouseButton1Click:Connect(function()
 end))
 local autoCopyToggle = Instance.new("TextButton")
 autoCopyToggle.Text = "Auto-Copy: OFF"
-autoCopyToggle.Position = UDim2.new(0, 10, 0, 495)
+autoCopyToggle.Position = UDim2.new(0, 10, 0, 520)
 autoCopyToggle.Size = UDim2.new(1, -20, 0, 22)
 autoCopyToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
 autoCopyToggle.TextColor3 = Color3.new(1, 1, 1)
@@ -517,10 +614,9 @@ table.insert(connections, autoCopyToggle.MouseButton1Click:Connect(function()
 	refreshAutoCopyBtn()
 	dumpCfg()
 end))
-
 local exportBtn = Instance.new("TextButton")
 exportBtn.Text = "Export Log"
-exportBtn.Position = UDim2.new(0, 10, 0, 522)
+exportBtn.Position = UDim2.new(0, 10, 0, 546)
 exportBtn.Size = UDim2.new(1, -20, 0, 22)
 exportBtn.BackgroundColor3 = Color3.fromRGB(0, 40, 80)
 exportBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -529,7 +625,6 @@ exportBtn.BorderColor3 = Color3.fromRGB(0, 80, 160)
 exportBtn.ZIndex = 3
 exportBtn.Visible = true
 exportBtn.Parent = controls
-
 table.insert(connections, exportBtn.MouseButton1Click:Connect(function()
 	local out = {}
 	for key, entry in pairs(animFrames) do
@@ -544,7 +639,21 @@ table.insert(connections, exportBtn.MouseButton1Click:Connect(function()
 			customName = customNames[pureId] or nil,
 		})
 	end
-	local json = HttpService:JSONEncode(out)
+	local lines = {"["}
+	for i, entry in ipairs(out) do
+		local comma = i < #out and "," or ""
+		table.insert(lines, "  {")
+		table.insert(lines, '    "id": "' .. (entry.id or "") .. '",')
+		table.insert(lines, '    "key": "' .. (entry.key or "") .. '",')
+		table.insert(lines, '    "name": "' .. tostring(entry.name or ""):gsub('"', '\\"') .. '",')
+		table.insert(lines, '    "count": ' .. tostring(entry.count) .. ',')
+		table.insert(lines, '    "lastSeen": "' .. tostring(entry.lastSeen) .. '",')
+		table.insert(lines, '    "favorited": ' .. tostring(entry.favorited) .. ',')
+		table.insert(lines, '    "customName": ' .. (entry.customName and ('"' .. tostring(entry.customName):gsub('"', '\\"') .. '"') or "null"))
+		table.insert(lines, "  }" .. comma)
+	end
+	table.insert(lines, "]")
+	local json = table.concat(lines, "\n")
 	if writefile then
 		writefile("bacon_logger_export.json", json)
 		exportBtn.Text = "Exported!"
@@ -567,7 +676,7 @@ local minimized = false
 table.insert(connections, minimize.MouseButton1Click:Connect(function()
 	minimized = not minimized
 	if minimized then
-		mainFrame.Size = UDim2.new(0, 200, 0, 25)
+		mainFrame.Size = UDim2.new(0, 420, 0, 25)
 		list.Visible = false
 		favsList.Visible = false
 		controls.Visible = false
@@ -778,7 +887,7 @@ table.insert(connections, sideClose.MouseButton1Click:Connect(function()
 end))
 local viewportWin = Instance.new("Frame")
 viewportWin.Name = "ViewportWindow"
-viewportWin.Size = UDim2.new(0, 300, 0, 410)
+viewportWin.Size = UDim2.new(0, 300, 0, 488)
 viewportWin.Position = UDim2.new(0, 670, 0, 380)
 viewportWin.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 viewportWin.BorderSizePixel = 1
@@ -838,9 +947,38 @@ vpClose.Parent = vpTop
 table.insert(connections, vpClose.MouseButton1Click:Connect(function()
 	viewportWin.Visible = false
 end))
+
+local vpIdInput = Instance.new("TextBox")
+vpIdInput.Text = ""
+vpIdInput.PlaceholderText = "animation id..."
+vpIdInput.Position = UDim2.new(0, 5, 0, 30)
+vpIdInput.Size = UDim2.new(1, -55, 0, 24)
+vpIdInput.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpIdInput.TextColor3 = Color3.new(1, 1, 1)
+vpIdInput.PlaceholderColor3 = Color3.fromRGB(0, 100, 80)
+vpIdInput.BorderSizePixel = 1
+vpIdInput.BorderColor3 = Color3.fromRGB(0, 120, 100)
+vpIdInput.Font = Enum.Font.Code
+vpIdInput.TextSize = 12
+vpIdInput.ZIndex = 7
+vpIdInput.Parent = viewportWin
+
+local vpIdGoBtn = Instance.new("TextButton")
+vpIdGoBtn.Text = "▶"
+vpIdGoBtn.Position = UDim2.new(1, -47, 0, 30)
+vpIdGoBtn.Size = UDim2.new(0, 42, 0, 24)
+vpIdGoBtn.BackgroundColor3 = Color3.fromRGB(0, 80, 60)
+vpIdGoBtn.TextColor3 = Color3.new(1, 1, 1)
+vpIdGoBtn.BorderSizePixel = 1
+vpIdGoBtn.BorderColor3 = Color3.fromRGB(0, 160, 120)
+vpIdGoBtn.Font = Enum.Font.Code
+vpIdGoBtn.TextSize = 13
+vpIdGoBtn.ZIndex = 7
+vpIdGoBtn.Parent = viewportWin
+
 local vpFrame = Instance.new("ViewportFrame")
 vpFrame.Size = UDim2.new(1, -10, 0, 220)
-vpFrame.Position = UDim2.new(0, 5, 0, 30)
+vpFrame.Position = UDim2.new(0, 5, 0, 58)
 vpFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 vpFrame.BorderSizePixel = 1
 vpFrame.BorderColor3 = Color3.fromRGB(0, 100, 100)
@@ -855,8 +993,8 @@ vpFrame.Ambient = Color3.fromRGB(120, 120, 120)
 vpFrame.LightDirection = Vector3.new(-1, -2, -1)
 local vpIdLabel = Instance.new("TextLabel")
 vpIdLabel.Text = "no animation selected"
-vpIdLabel.Position = UDim2.new(0, 5, 0, 256)
-vpIdLabel.Size = UDim2.new(1, -10, 0, 16)
+vpIdLabel.Position = UDim2.new(0, 5, 0, 284)
+vpIdLabel.Size = UDim2.new(1, -10, 0, 14)
 vpIdLabel.BackgroundTransparency = 1
 vpIdLabel.TextColor3 = Color3.fromRGB(0, 180, 130)
 vpIdLabel.Font = Enum.Font.Code
@@ -864,166 +1002,49 @@ vpIdLabel.TextSize = 11
 vpIdLabel.TextXAlignment = Enum.TextXAlignment.Left
 vpIdLabel.ZIndex = 6
 vpIdLabel.Parent = viewportWin
-local vpSpeedLabel = Instance.new("TextLabel")
-vpSpeedLabel.Text = "Speed"
-vpSpeedLabel.Position = UDim2.new(0, 5, 0, 275)
-vpSpeedLabel.Size = UDim2.new(0, 40, 0, 20)
-vpSpeedLabel.BackgroundTransparency = 1
-vpSpeedLabel.TextColor3 = Color3.fromRGB(0, 200, 150)
-vpSpeedLabel.Font = Enum.Font.Code
-vpSpeedLabel.TextSize = 12
-vpSpeedLabel.ZIndex = 6
-vpSpeedLabel.Parent = viewportWin
-local vpSpeedBox = Instance.new("TextBox")
-vpSpeedBox.Text = "1"
-vpSpeedBox.PlaceholderText = "speed"
-vpSpeedBox.Position = UDim2.new(0, 50, 0, 275)
-vpSpeedBox.Size = UDim2.new(0, 55, 0, 20)
-vpSpeedBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-vpSpeedBox.TextColor3 = Color3.new(1, 1, 1)
-vpSpeedBox.BorderSizePixel = 1
-vpSpeedBox.BorderColor3 = Color3.fromRGB(0, 100, 80)
-vpSpeedBox.Font = Enum.Font.Code
-vpSpeedBox.TextSize = 12
-vpSpeedBox.ZIndex = 6
-vpSpeedBox.Parent = viewportWin
+
+local vpTimerLabel = Instance.new("TextLabel")
+vpTimerLabel.Text = "-- / --"
+vpTimerLabel.Position = UDim2.new(0, 5, 0, 300)
+vpTimerLabel.Size = UDim2.new(1, -10, 0, 14)
+vpTimerLabel.BackgroundTransparency = 1
+vpTimerLabel.TextColor3 = Color3.fromRGB(0, 220, 160)
+vpTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
+vpTimerLabel.Font = Enum.Font.Code
+vpTimerLabel.TextSize = 11
+vpTimerLabel.ZIndex = 6
+vpTimerLabel.Parent = viewportWin
+
+local vpScrubBg = Instance.new("Frame")
+vpScrubBg.Position = UDim2.new(0, 5, 0, 317)
+vpScrubBg.Size = UDim2.new(1, -10, 0, 12)
+vpScrubBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+vpScrubBg.BorderSizePixel = 1
+vpScrubBg.BorderColor3 = Color3.fromRGB(0, 80, 80)
+vpScrubBg.ZIndex = 6
+vpScrubBg.Parent = viewportWin
+
+local vpScrubFill = Instance.new("Frame")
+vpScrubFill.Size = UDim2.new(0, 0, 1, 0)
+vpScrubFill.BackgroundColor3 = Color3.fromRGB(0, 200, 150)
+vpScrubFill.BorderSizePixel = 0
+vpScrubFill.ZIndex = 7
+vpScrubFill.Parent = vpScrubBg
+
+local vpScrubBtn = Instance.new("TextButton")
+vpScrubBtn.Size = UDim2.new(1, 0, 1, 0)
+vpScrubBtn.BackgroundTransparency = 1
+vpScrubBtn.Text = ""
+vpScrubBtn.ZIndex = 8
+vpScrubBtn.Parent = vpScrubBg
+
+local vpPaused = false
+local vpLastPos = 0
+local vpLoopFlash = 0
 local vpLooped = false
-local vpLoopToggle = Instance.new("TextButton")
-vpLoopToggle.Text = "Loop: OFF"
-vpLoopToggle.Position = UDim2.new(0, 113, 0, 275)
-vpLoopToggle.Size = UDim2.new(0, 80, 0, 20)
-vpLoopToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-vpLoopToggle.TextColor3 = Color3.new(1, 1, 1)
-vpLoopToggle.BorderSizePixel = 1
-vpLoopToggle.BorderColor3 = Color3.fromRGB(120, 0, 0)
-vpLoopToggle.Font = Enum.Font.Code
-vpLoopToggle.TextSize = 11
-vpLoopToggle.ZIndex = 6
-vpLoopToggle.Parent = viewportWin
-local vpTimeLabel = Instance.new("TextLabel")
-vpTimeLabel.Text = "Time"
-vpTimeLabel.Position = UDim2.new(0, 200, 0, 275)
-vpTimeLabel.Size = UDim2.new(0, 35, 0, 20)
-vpTimeLabel.BackgroundTransparency = 1
-vpTimeLabel.TextColor3 = Color3.fromRGB(0, 200, 150)
-vpTimeLabel.Font = Enum.Font.Code
-vpTimeLabel.TextSize = 12
-vpTimeLabel.ZIndex = 6
-vpTimeLabel.Parent = viewportWin
-local vpTimeBox = Instance.new("TextBox")
-vpTimeBox.Text = "0"
-vpTimeBox.PlaceholderText = "time"
-vpTimeBox.Position = UDim2.new(0, 238, 0, 275)
-vpTimeBox.Size = UDim2.new(0, 52, 0, 20)
-vpTimeBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-vpTimeBox.TextColor3 = Color3.new(1, 1, 1)
-vpTimeBox.BorderSizePixel = 1
-vpTimeBox.BorderColor3 = Color3.fromRGB(0, 100, 80)
-vpTimeBox.Font = Enum.Font.Code
-vpTimeBox.TextSize = 12
-vpTimeBox.ZIndex = 6
-vpTimeBox.Parent = viewportWin
-local vpPlayBtn = Instance.new("TextButton")
-vpPlayBtn.Text = "▶ Play Preview"
-vpPlayBtn.Position = UDim2.new(0, 5, 0, 300)
-vpPlayBtn.Size = UDim2.new(0.5, -8, 0, 25)
-vpPlayBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
-vpPlayBtn.TextColor3 = Color3.new(1, 1, 1)
-vpPlayBtn.BorderSizePixel = 1
-vpPlayBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
-vpPlayBtn.Font = Enum.Font.Code
-vpPlayBtn.ZIndex = 6
-vpPlayBtn.Parent = viewportWin
-local vpStopBtn = Instance.new("TextButton")
-vpStopBtn.Text = "■ Stop Preview"
-vpStopBtn.Position = UDim2.new(0.5, 3, 0, 300)
-vpStopBtn.Size = UDim2.new(0.5, -8, 0, 25)
-vpStopBtn.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-vpStopBtn.TextColor3 = Color3.new(1, 1, 1)
-vpStopBtn.BorderSizePixel = 1
-vpStopBtn.BorderColor3 = Color3.fromRGB(120, 0, 0)
-vpStopBtn.Font = Enum.Font.Code
-vpStopBtn.ZIndex = 6
-vpStopBtn.Parent = viewportWin
-local vpPlaySelfBtn = Instance.new("TextButton")
-vpPlaySelfBtn.Text = "★ Play on Self"
-vpPlaySelfBtn.Position = UDim2.new(0, 5, 0, 330)
-vpPlaySelfBtn.Size = UDim2.new(1, -10, 0, 22)
-vpPlaySelfBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 80)
-vpPlaySelfBtn.TextColor3 = Color3.new(1, 1, 1)
-vpPlaySelfBtn.BorderSizePixel = 1
-vpPlaySelfBtn.BorderColor3 = Color3.fromRGB(0, 100, 160)
-vpPlaySelfBtn.Font = Enum.Font.Code
-vpPlaySelfBtn.ZIndex = 6
-vpPlaySelfBtn.Parent = viewportWin
-
-local vpRotateCCW = Instance.new("TextButton")
-vpRotateCCW.Text = "◄"
-vpRotateCCW.Position = UDim2.new(0, 5, 0, 357)
-vpRotateCCW.Size = UDim2.new(0.22, -4, 0, 20)
-vpRotateCCW.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-vpRotateCCW.TextColor3 = Color3.new(1, 1, 1)
-vpRotateCCW.BorderSizePixel = 1
-vpRotateCCW.BorderColor3 = Color3.fromRGB(60, 60, 120)
-vpRotateCCW.Font = Enum.Font.Code
-vpRotateCCW.TextSize = 13
-vpRotateCCW.ZIndex = 6
-vpRotateCCW.Parent = viewportWin
-
-local vpRotateCW = Instance.new("TextButton")
-vpRotateCW.Text = "►"
-vpRotateCW.Position = UDim2.new(0.78, 3, 0, 357)
-vpRotateCW.Size = UDim2.new(0.22, -8, 0, 20)
-vpRotateCW.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-vpRotateCW.TextColor3 = Color3.new(1, 1, 1)
-vpRotateCW.BorderSizePixel = 1
-vpRotateCW.BorderColor3 = Color3.fromRGB(60, 60, 120)
-vpRotateCW.Font = Enum.Font.Code
-vpRotateCW.TextSize = 13
-vpRotateCW.ZIndex = 6
-vpRotateCW.Parent = viewportWin
-
-local vpPrecisionBox = Instance.new("TextBox")
-vpPrecisionBox.Text = "90"
-vpPrecisionBox.PlaceholderText = "step"
-vpPrecisionBox.Position = UDim2.new(0.22, 2, 0, 357)
-vpPrecisionBox.Size = UDim2.new(0.56, -4, 0, 20)
-vpPrecisionBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-vpPrecisionBox.TextColor3 = Color3.new(1, 1, 1)
-vpPrecisionBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
-vpPrecisionBox.BorderSizePixel = 1
-vpPrecisionBox.BorderColor3 = Color3.fromRGB(60, 60, 120)
-vpPrecisionBox.Font = Enum.Font.Code
-vpPrecisionBox.TextSize = 11
-vpPrecisionBox.ZIndex = 6
-vpPrecisionBox.Parent = viewportWin
-
-local vpZoomIn = Instance.new("TextButton")
-vpZoomIn.Text = "+ Zoom"
-vpZoomIn.Position = UDim2.new(0, 5, 0, 382)
-vpZoomIn.Size = UDim2.new(0.5, -8, 0, 20)
-vpZoomIn.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
-vpZoomIn.TextColor3 = Color3.new(1, 1, 1)
-vpZoomIn.BorderSizePixel = 1
-vpZoomIn.BorderColor3 = Color3.fromRGB(0, 100, 0)
-vpZoomIn.Font = Enum.Font.Code
-vpZoomIn.TextSize = 11
-vpZoomIn.ZIndex = 6
-vpZoomIn.Parent = viewportWin
-
-local vpZoomOut = Instance.new("TextButton")
-vpZoomOut.Text = "- Zoom"
-vpZoomOut.Position = UDim2.new(0.5, 3, 0, 382)
-vpZoomOut.Size = UDim2.new(0.5, -8, 0, 20)
-vpZoomOut.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
-vpZoomOut.TextColor3 = Color3.new(1, 1, 1)
-vpZoomOut.BorderSizePixel = 1
-vpZoomOut.BorderColor3 = Color3.fromRGB(100, 0, 0)
-vpZoomOut.Font = Enum.Font.Code
-vpZoomOut.TextSize = 11
-vpZoomOut.ZIndex = 6
-vpZoomOut.Parent = viewportWin
-
+local vpSpeedBox = nil
+local vpPausedAt = 0
+local vpPausedLength = 0
 local ghostChar = nil
 local vpTrack = nil
 local vpCurrentId = nil
@@ -1048,10 +1069,251 @@ local function nukeGhost()
 	end
 end
 
+local vpPauseBtn = Instance.new("TextButton")
+vpPauseBtn.Text = "⏸ Pause"
+vpPauseBtn.Position = UDim2.new(0, 5, 0, 328)
+vpPauseBtn.Size = UDim2.new(1, -10, 0, 20)
+vpPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 60)
+vpPauseBtn.TextColor3 = Color3.new(1, 1, 1)
+vpPauseBtn.BorderSizePixel = 1
+vpPauseBtn.BorderColor3 = Color3.fromRGB(0, 100, 120)
+vpPauseBtn.Font = Enum.Font.Code
+vpPauseBtn.TextSize = 11
+vpPauseBtn.ZIndex = 6
+vpPauseBtn.Parent = viewportWin
+
+table.insert(connections, vpPauseBtn.MouseButton1Click:Connect(function()
+	if not vpPaused and not vpTrack then return end
+	vpPaused = not vpPaused
+	if vpPaused then
+		vpPausedAt = vpTrack and vpTrack.TimePosition or 0
+		vpPausedLength = vpTrack and vpTrack.Length or 0
+		if vpTrack then
+			pcall(function() vpTrack:Stop(0) end)
+			vpTrack = nil
+		end
+		if vpAnimator then
+			pcall(function() vpAnimator:Destroy() end)
+			vpAnimator = nil
+		end
+	else
+		if vpCurrentId and vpCurrentId ~= "" and ghostChar then
+			local hum = ghostChar:FindFirstChildOfClass("Humanoid")
+			if hum then
+				if vpAnimator then
+					pcall(function() vpAnimator:Destroy() end)
+				end
+				local animator = Instance.new("Animator")
+				animator.Parent = hum
+				vpAnimator = animator
+				local anim = Instance.new("Animation")
+				anim.AnimationId = "rbxassetid://" .. vpCurrentId
+				local track
+				pcall(function() track = animator:LoadAnimation(anim) end)
+				if track then
+					track.Priority = Enum.AnimationPriority.Action4
+					track.Looped = vpLooped
+					track:Play(0, 1, 0)
+					track.TimePosition = vpPausedAt
+					vpTrack = track
+					task.defer(function()
+						if vpTrack == track then
+							track:AdjustSpeed(tonumber(vpSpeedBox.Text) or 1)
+						end
+					end)
+				end
+			end
+		end
+	end
+	vpPauseBtn.Text = vpPaused and "▶ Resume" or "⏸ Pause"
+	vpPauseBtn.BackgroundColor3 = vpPaused and Color3.fromRGB(0, 80, 0) or Color3.fromRGB(0, 50, 60)
+end))
+
+local vpScrubbing = false
+local vpScrubTrack = nil
+table.insert(connections, vpScrubBtn.MouseButton1Down:Connect(function()
+	vpScrubbing = true
+	if vpPaused and ghostChar and vpCurrentId and vpCurrentId ~= "" then
+		local hum = ghostChar:FindFirstChildOfClass("Humanoid")
+		if hum then
+			if vpAnimator then pcall(function() vpAnimator:Destroy() end) end
+			local animator = Instance.new("Animator")
+			animator.Parent = hum
+			vpAnimator = animator
+			local anim = Instance.new("Animation")
+			anim.AnimationId = "rbxassetid://" .. vpCurrentId
+			pcall(function() vpScrubTrack = animator:LoadAnimation(anim) end)
+			if vpScrubTrack then
+				vpScrubTrack.Priority = Enum.AnimationPriority.Action4
+				vpScrubTrack:Play(0, 1, 0)
+				vpScrubTrack.TimePosition = vpPausedAt
+			end
+		end
+	end
+end))
+table.insert(connections, UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and vpScrubbing then
+		vpScrubbing = false
+		vpScrubTrack = nil
+	end
+end))
+
+local vpSpeedLabel = Instance.new("TextLabel")
+vpSpeedLabel.Text = "Speed"
+vpSpeedLabel.Position = UDim2.new(0, 5, 0, 353)
+vpSpeedLabel.Size = UDim2.new(0, 40, 0, 20)
+vpSpeedLabel.BackgroundTransparency = 1
+vpSpeedLabel.TextColor3 = Color3.fromRGB(0, 200, 150)
+vpSpeedLabel.Font = Enum.Font.Code
+vpSpeedLabel.TextSize = 12
+vpSpeedLabel.ZIndex = 6
+vpSpeedLabel.Parent = viewportWin
+vpSpeedBox = Instance.new("TextBox")
+vpSpeedBox.Text = "1"
+vpSpeedBox.PlaceholderText = "speed"
+vpSpeedBox.Position = UDim2.new(0, 50, 0, 353)
+vpSpeedBox.Size = UDim2.new(0, 55, 0, 20)
+vpSpeedBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpSpeedBox.TextColor3 = Color3.new(1, 1, 1)
+vpSpeedBox.BorderSizePixel = 1
+vpSpeedBox.BorderColor3 = Color3.fromRGB(0, 100, 80)
+vpSpeedBox.Font = Enum.Font.Code
+vpSpeedBox.TextSize = 12
+vpSpeedBox.ZIndex = 6
+vpSpeedBox.Parent = viewportWin
+local vpLoopToggle = Instance.new("TextButton")
+vpLoopToggle.Text = "Loop: OFF"
+vpLoopToggle.Position = UDim2.new(0, 113, 0, 353)
+vpLoopToggle.Size = UDim2.new(0, 80, 0, 20)
+vpLoopToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
+vpLoopToggle.TextColor3 = Color3.new(1, 1, 1)
+vpLoopToggle.BorderSizePixel = 1
+vpLoopToggle.BorderColor3 = Color3.fromRGB(120, 0, 0)
+vpLoopToggle.Font = Enum.Font.Code
+vpLoopToggle.TextSize = 11
+vpLoopToggle.ZIndex = 6
+vpLoopToggle.Parent = viewportWin
+local vpTimeLabel = Instance.new("TextLabel")
+vpTimeLabel.Text = "Time"
+vpTimeLabel.Position = UDim2.new(0, 200, 0, 353)
+vpTimeLabel.Size = UDim2.new(0, 35, 0, 20)
+vpTimeLabel.BackgroundTransparency = 1
+vpTimeLabel.TextColor3 = Color3.fromRGB(0, 200, 150)
+vpTimeLabel.Font = Enum.Font.Code
+vpTimeLabel.TextSize = 12
+vpTimeLabel.ZIndex = 6
+vpTimeLabel.Parent = viewportWin
+local vpTimeBox = Instance.new("TextBox")
+vpTimeBox.Text = "0"
+vpTimeBox.PlaceholderText = "time"
+vpTimeBox.Position = UDim2.new(0, 238, 0, 353)
+vpTimeBox.Size = UDim2.new(0, 52, 0, 20)
+vpTimeBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpTimeBox.TextColor3 = Color3.new(1, 1, 1)
+vpTimeBox.BorderSizePixel = 1
+vpTimeBox.BorderColor3 = Color3.fromRGB(0, 100, 80)
+vpTimeBox.Font = Enum.Font.Code
+vpTimeBox.TextSize = 12
+vpTimeBox.ZIndex = 6
+vpTimeBox.Parent = viewportWin
+local vpPlayBtn = Instance.new("TextButton")
+vpPlayBtn.Text = "▶ Play Preview"
+vpPlayBtn.Position = UDim2.new(0, 5, 0, 378)
+vpPlayBtn.Size = UDim2.new(0.5, -8, 0, 25)
+vpPlayBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+vpPlayBtn.TextColor3 = Color3.new(1, 1, 1)
+vpPlayBtn.BorderSizePixel = 1
+vpPlayBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
+vpPlayBtn.Font = Enum.Font.Code
+vpPlayBtn.ZIndex = 6
+vpPlayBtn.Parent = viewportWin
+local vpStopBtn = Instance.new("TextButton")
+vpStopBtn.Text = "■ Stop Preview"
+vpStopBtn.Position = UDim2.new(0.5, 3, 0, 378)
+vpStopBtn.Size = UDim2.new(0.5, -8, 0, 25)
+vpStopBtn.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
+vpStopBtn.TextColor3 = Color3.new(1, 1, 1)
+vpStopBtn.BorderSizePixel = 1
+vpStopBtn.BorderColor3 = Color3.fromRGB(120, 0, 0)
+vpStopBtn.Font = Enum.Font.Code
+vpStopBtn.ZIndex = 6
+vpStopBtn.Parent = viewportWin
+local vpPlaySelfBtn = Instance.new("TextButton")
+vpPlaySelfBtn.Text = "★ Play on Self"
+vpPlaySelfBtn.Position = UDim2.new(0, 5, 0, 408)
+vpPlaySelfBtn.Size = UDim2.new(1, -10, 0, 22)
+vpPlaySelfBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 80)
+vpPlaySelfBtn.TextColor3 = Color3.new(1, 1, 1)
+vpPlaySelfBtn.BorderSizePixel = 1
+vpPlaySelfBtn.BorderColor3 = Color3.fromRGB(0, 100, 160)
+vpPlaySelfBtn.Font = Enum.Font.Code
+vpPlaySelfBtn.ZIndex = 6
+vpPlaySelfBtn.Parent = viewportWin
+local vpRotateCCW = Instance.new("TextButton")
+vpRotateCCW.Text = "◄"
+vpRotateCCW.Position = UDim2.new(0, 5, 0, 435)
+vpRotateCCW.Size = UDim2.new(0.22, -4, 0, 20)
+vpRotateCCW.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+vpRotateCCW.TextColor3 = Color3.new(1, 1, 1)
+vpRotateCCW.BorderSizePixel = 1
+vpRotateCCW.BorderColor3 = Color3.fromRGB(60, 60, 120)
+vpRotateCCW.Font = Enum.Font.Code
+vpRotateCCW.TextSize = 13
+vpRotateCCW.ZIndex = 6
+vpRotateCCW.Parent = viewportWin
+local vpRotateCW = Instance.new("TextButton")
+vpRotateCW.Text = "►"
+vpRotateCW.Position = UDim2.new(0.78, 3, 0, 435)
+vpRotateCW.Size = UDim2.new(0.22, -8, 0, 20)
+vpRotateCW.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+vpRotateCW.TextColor3 = Color3.new(1, 1, 1)
+vpRotateCW.BorderSizePixel = 1
+vpRotateCW.BorderColor3 = Color3.fromRGB(60, 60, 120)
+vpRotateCW.Font = Enum.Font.Code
+vpRotateCW.TextSize = 13
+vpRotateCW.ZIndex = 6
+vpRotateCW.Parent = viewportWin
+local vpPrecisionBox = Instance.new("TextBox")
+vpPrecisionBox.Text = "90"
+vpPrecisionBox.PlaceholderText = "step"
+vpPrecisionBox.Position = UDim2.new(0.22, 2, 0, 435)
+vpPrecisionBox.Size = UDim2.new(0.56, -4, 0, 20)
+vpPrecisionBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpPrecisionBox.TextColor3 = Color3.new(1, 1, 1)
+vpPrecisionBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
+vpPrecisionBox.BorderSizePixel = 1
+vpPrecisionBox.BorderColor3 = Color3.fromRGB(60, 60, 120)
+vpPrecisionBox.Font = Enum.Font.Code
+vpPrecisionBox.TextSize = 11
+vpPrecisionBox.ZIndex = 6
+vpPrecisionBox.Parent = viewportWin
+local vpZoomIn = Instance.new("TextButton")
+vpZoomIn.Text = "+ Zoom"
+vpZoomIn.Position = UDim2.new(0, 5, 0, 460)
+vpZoomIn.Size = UDim2.new(0.5, -8, 0, 20)
+vpZoomIn.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
+vpZoomIn.TextColor3 = Color3.new(1, 1, 1)
+vpZoomIn.BorderSizePixel = 1
+vpZoomIn.BorderColor3 = Color3.fromRGB(0, 100, 0)
+vpZoomIn.Font = Enum.Font.Code
+vpZoomIn.TextSize = 11
+vpZoomIn.ZIndex = 6
+vpZoomIn.Parent = viewportWin
+local vpZoomOut = Instance.new("TextButton")
+vpZoomOut.Text = "- Zoom"
+vpZoomOut.Position = UDim2.new(0.5, 3, 0, 460)
+vpZoomOut.Size = UDim2.new(0.5, -8, 0, 20)
+vpZoomOut.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
+vpZoomOut.TextColor3 = Color3.new(1, 1, 1)
+vpZoomOut.BorderSizePixel = 1
+vpZoomOut.BorderColor3 = Color3.fromRGB(100, 0, 0)
+vpZoomOut.Font = Enum.Font.Code
+vpZoomOut.TextSize = 11
+vpZoomOut.ZIndex = 6
+vpZoomOut.Parent = viewportWin
 local function makeRig()
 	local model = Instance.new("Model")
 	model.Name = "PreviewRig"
-
 	local function part(name, size)
 		local p = Instance.new("Part")
 		p.Name = name
@@ -1064,7 +1326,6 @@ local function makeRig()
 		p.Parent = model
 		return p
 	end
-
 	local root  = part("HumanoidRootPart", Vector3.new(2, 2, 1))
 	local torso = part("Torso",            Vector3.new(2, 2, 1))
 	local head  = part("Head",             Vector3.new(2, 1, 1))
@@ -1072,18 +1333,15 @@ local function makeRig()
 	local lArm  = part("Left Arm",         Vector3.new(1, 2, 1))
 	local rLeg  = part("Right Leg",        Vector3.new(1, 2, 1))
 	local lLeg  = part("Left Leg",         Vector3.new(1, 2, 1))
-
 	root.Anchored = true
 	root.Transparency = 1
 	root.CFrame = CFrame.new(0, 5, 0) * CFrame.Angles(0, vpYaw, 0)
 	model.PrimaryPart = root
-
 	local hum = Instance.new("Humanoid")
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.WalkSpeed = 0
 	hum.JumpPower = 0
 	hum.Parent = model
-
 	local function motor(name, p0, p1, c0, c1)
 		local m = Instance.new("Motor6D")
 		m.Name = name
@@ -1093,31 +1351,24 @@ local function makeRig()
 		m.C1 = c1
 		m.Parent = p0
 	end
-
 	motor("RootJoint",  root,  torso,
 		CFrame.new(0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0),
 		CFrame.new(0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0))
-
 	motor("Neck",       torso, head,
 		CFrame.new(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0),
 		CFrame.new(0, -0.5, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0))
-
 	motor("Right Shoulder", torso, rArm,
 		CFrame.new(1, 0.5, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0),
 		CFrame.new(-0.5, 0.5, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0))
-
 	motor("Left Shoulder",  torso, lArm,
 		CFrame.new(-1, 0.5, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0),
 		CFrame.new(0.5, 0.5, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0))
-
 	motor("Right Hip",  torso, rLeg,
 		CFrame.new(1, -1, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0),
 		CFrame.new(0.5, 1, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0))
-
 	motor("Left Hip",   torso, lLeg,
 		CFrame.new(-1, -1, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0),
 		CFrame.new(-0.5, 1, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0))
-
 	local nose = Instance.new("Part")
 	nose.Name = "Nose"
 	nose.Size = Vector3.new(0.3, 0.3, 0.4)
@@ -1128,67 +1379,188 @@ local function makeRig()
 	nose.CanCollide = false
 	nose.CastShadow = false
 	nose.Parent = model
-
 	local noseWeld = Instance.new("Weld")
 	noseWeld.Part0 = head
 	noseWeld.Part1 = nose
 	noseWeld.C0 = CFrame.new(0, 0, -0.65)
 	noseWeld.Parent = head
-
 	model.Parent = worldModel
-
 	local animator = Instance.new("Animator")
 	animator.Parent = hum
-
 	return model, animator, root
 end
-
 local function previewAnim(id)
 	if not id or id == "" then return end
+	vpPaused = false
+	vpPauseBtn.Text = "⏸ Pause"
+	vpPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 60)
 	nukeGhost()
-
 	task.spawn(function()
 		local rig, animator, rootPart = makeRig()
 		if not rig or not animator then return end
-
 		ghostChar = rig
 		vpAnimator = animator
 		vpRootPart = rootPart
-
 		task.wait(0.1)
-
 		local anim = Instance.new("Animation")
 		anim.AnimationId = "rbxassetid://" .. id
-
 		local track
 		pcall(function() track = animator:LoadAnimation(anim) end)
-
 		if track then
 			track.Priority = Enum.AnimationPriority.Action4
 			track.Looped = vpLooped
 			track:Play(0, 1, tonumber(vpSpeedBox.Text) or 1)
 			vpTrack = track
 		end
-
 		vpCamera.CFrame = CFrame.new(Vector3.new(0, 5, vpZoomDist), Vector3.new(0, 4, 0))
 	end)
 end
+
+local function fmtTime(n)
+	return string.format("%.2f", n)
+end
+
+table.insert(connections, RunService.Heartbeat:Connect(function()
+end))
+
 table.insert(connections, RunService.RenderStepped:Connect(function()
+	local mouse = UserInputService:GetMouseLocation()
+
 	if viewportWin.Visible and ghostChar then
 		vpCamera.CFrame = CFrame.new(Vector3.new(0, 5, vpZoomDist), Vector3.new(0, 4, 0))
 	end
+
+	-- VP scrub drag
+	if vpScrubbing then
+		local bx = vpScrubBg.AbsolutePosition.X
+		local bw = vpScrubBg.AbsoluteSize.X
+		local rel = math.clamp((mouse.X - bx) / bw, 0, 1)
+		if vpTrack and vpTrack.Length > 0 then
+			vpPausedAt = rel * vpTrack.Length
+			vpTrack.TimePosition = vpPausedAt
+		elseif vpPaused and vpPausedLength > 0 then
+			vpPausedAt = rel * vpPausedLength
+			if vpScrubTrack then
+				vpScrubTrack.TimePosition = vpPausedAt
+			end
+		end
+	end
+
+	-- VP scrubber fill
+	if vpPaused and vpPausedLength > 0 then
+		vpScrubFill.Size = UDim2.new(math.clamp(vpPausedAt / vpPausedLength, 0, 1), 0, 1, 0)
+		vpScrubFill.BackgroundColor3 = Color3.fromRGB(180, 120, 0)
+	elseif vpTrack and vpTrack.Length > 0 then
+		vpScrubFill.Size = UDim2.new(math.clamp(vpTrack.TimePosition / vpTrack.Length, 0, 1), 0, 1, 0)
+		vpScrubFill.BackgroundColor3 = vpScrubbing and Color3.fromRGB(0, 180, 130) or Color3.fromRGB(0, 200, 150)
+	elseif not vpScrubbing then
+		vpScrubFill.Size = UDim2.new(0, 0, 1, 0)
+	end
+
+	-- VP timer label
+	if vpPaused then
+		vpTimerLabel.Text = "⏸ " .. fmtTime(vpPausedAt) .. "s / " .. fmtTime(vpPausedLength) .. "s"
+		vpTimerLabel.TextColor3 = Color3.fromRGB(180, 120, 0)
+	elseif vpTrack then
+		local pos = vpTrack.TimePosition
+		local len = vpTrack.Length
+		if vpTrack.IsPlaying then
+			if vpLooped and pos < vpLastPos and vpLastPos > 0.1 then
+				vpLoopFlash = 0.25
+			end
+			vpLastPos = pos
+			if vpLoopFlash > 0 then
+				vpLoopFlash = math.max(0, vpLoopFlash - 0.016)
+				local t = vpLoopFlash / 0.25
+				vpTimerLabel.TextColor3 = Color3.fromRGB(
+					math.floor(0 + 255 * t),
+					math.floor(220 + (255-220) * t),
+					math.floor(160 + (100-160) * t))
+			else
+				vpTimerLabel.TextColor3 = Color3.fromRGB(0, 220, 160)
+			end
+			vpTimerLabel.Text = "▶ " .. fmtTime(pos) .. "s / " .. fmtTime(len) .. "s"
+		else
+			vpLastPos = 0
+			vpTimerLabel.Text = "stopped"
+			vpTimerLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
+		end
+	else
+		vpTimerLabel.Text = "-- / --"
+		vpTimerLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+	end
+
+	-- Main scrub drag
+	local activeTrack = nil
+	local activeCount = 0
+	for t in pairs(scriptTracks) do
+		if t.IsPlaying or (mainPaused and scriptTracks[t]) then
+			activeCount += 1
+			if not activeTrack then activeTrack = t end
+		end
+	end
+	-- fallback: find any scriptTrack even if speed=0 (paused)
+	if not activeTrack then
+		for t in pairs(scriptTracks) do
+			activeTrack = t
+			break
+		end
+	end
+
+	if mainScrubbing and activeTrack and activeTrack.Length > 0 then
+		local bx = mainScrubBg.AbsolutePosition.X
+		local bw = mainScrubBg.AbsoluteSize.X
+		local rel = math.clamp((mouse.X - bx) / bw, 0, 1)
+		activeTrack.TimePosition = rel * activeTrack.Length
+	end
+
+	-- Main scrubber fill
+	if activeTrack and activeTrack.Length > 0 then
+		local pct = math.clamp(activeTrack.TimePosition / activeTrack.Length, 0, 1)
+		mainScrubFill.Size = UDim2.new(pct, 0, 1, 0)
+		mainScrubFill.BackgroundColor3 = mainPaused and Color3.fromRGB(180, 120, 0) or Color3.fromRGB(0, 200, 150)
+	else
+		mainScrubFill.Size = UDim2.new(0, 0, 1, 0)
+	end
+
+	-- Main timer label
+	if activeTrack and activeTrack.Length > 0 then
+		local pos = activeTrack.TimePosition
+		local len = activeTrack.Length
+		local id = grabId(activeTrack.Animation.AnimationId) or "?"
+		mainTimerLabel.Text = (mainPaused and "⏸ " or "▶ ") .. id .. "  " .. fmtTime(pos) .. "s / " .. fmtTime(len) .. "s" .. (activeCount > 1 and ("  (+" .. (activeCount-1) .. ")") or "")
+		mainTimerLabel.TextColor3 = mainPaused and Color3.fromRGB(180, 120, 0) or Color3.fromRGB(0, 220, 160)
+	else
+		mainTimerLabel.Text = "no anim playing"
+		mainTimerLabel.TextColor3 = Color3.fromRGB(60, 60, 60)
+		if mainPaused then
+			mainPaused = false
+			mainPauseBtn.Text = "⏸ Pause"
+			mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 60)
+		end
+	end
 end))
+
 local function popPreview(id)
 	vpCurrentId = id
 	vpIdLabel.Text = "ID: " .. id
 	vpTitle.Text = "preview — " .. id
+	vpIdInput.Text = id
 	viewportWin.Visible = true
 	previewAnim(id)
 end
-table.insert(connections, vpPlayBtn.MouseButton1Click:Connect(function()
-	if vpCurrentId then
-		previewAnim(vpCurrentId)
+table.insert(connections, vpIdGoBtn.MouseButton1Click:Connect(function()
+	local id = grabId(vpIdInput.Text)
+	if id and id ~= "" then popPreview(id) end
+end))
+table.insert(connections, vpIdInput.FocusLost:Connect(function(enter)
+	if enter then
+		local id = grabId(vpIdInput.Text)
+		if id and id ~= "" then popPreview(id) end
 	end
+end))
+table.insert(connections, vpPlayBtn.MouseButton1Click:Connect(function()
+	if vpCurrentId then previewAnim(vpCurrentId) end
 end))
 table.insert(connections, vpStopBtn.MouseButton1Click:Connect(function()
 	if vpTrack then
@@ -1243,9 +1615,7 @@ table.insert(connections, vpLoopToggle.MouseButton1Click:Connect(function()
 	vpLoopToggle.Text = "Loop: " .. (vpLooped and "ON" or "OFF")
 	vpLoopToggle.BackgroundColor3 = vpLooped and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
 	vpLoopToggle.BorderColor3 = vpLooped and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
-	if vpTrack then
-		vpTrack.Looped = vpLooped
-	end
+	if vpTrack then vpTrack.Looped = vpLooped end
 end))
 table.insert(connections, previewToggle.MouseButton1Click:Connect(function()
 	viewportWin.Visible = not viewportWin.Visible
@@ -1335,7 +1705,6 @@ local function addBind(bindData)
 	bFrame.BorderColor3 = Color3.fromRGB(0, 60, 60)
 	bFrame.ZIndex = 3
 	bFrame.Parent = sideList
-
 	local activeBar = Instance.new("Frame")
 	activeBar.Name = "ActiveBar"
 	activeBar.Size = UDim2.new(1, 0, 0, 3)
@@ -1344,7 +1713,6 @@ local function addBind(bindData)
 	activeBar.BorderSizePixel = 0
 	activeBar.ZIndex = 5
 	activeBar.Parent = bFrame
-
 	local macroHint = Instance.new("TextLabel")
 	macroHint.Size = UDim2.new(1, -10, 0, 14)
 	macroHint.Position = UDim2.new(0, 5, 0, 8)
@@ -1356,7 +1724,6 @@ local function addBind(bindData)
 	macroHint.Text = "ID or macro (play x; wait t; stop)"
 	macroHint.ZIndex = 4
 	macroHint.Parent = bFrame
-
 	local idL = Instance.new("TextBox")
 	idL.Size = UDim2.new(1, -10, 0, 22)
 	idL.Position = UDim2.new(0, 5, 0, 25)
@@ -1368,7 +1735,6 @@ local function addBind(bindData)
 	idL.TextSize = 12
 	idL.ZIndex = 4
 	idL.Parent = bFrame
-
 	local keyB = Instance.new("TextButton")
 	keyB.Size = UDim2.new(1, -10, 0, 22)
 	keyB.Position = UDim2.new(0, 5, 0, 52)
@@ -1379,7 +1745,6 @@ local function addBind(bindData)
 	keyB.TextSize = 12
 	keyB.ZIndex = 4
 	keyB.Parent = bFrame
-
 	local holdT = Instance.new("TextButton")
 	holdT.Size = UDim2.new(1, -10, 0, 20)
 	holdT.Position = UDim2.new(0, 5, 0, 78)
@@ -1390,7 +1755,6 @@ local function addBind(bindData)
 	holdT.TextSize = 12
 	holdT.ZIndex = 4
 	holdT.Parent = bFrame
-
 	local speedB = Instance.new("TextBox")
 	speedB.Size = UDim2.new(1, -10, 0, 20)
 	speedB.Position = UDim2.new(0, 5, 0, 103)
@@ -1401,7 +1765,6 @@ local function addBind(bindData)
 	speedB.TextSize = 12
 	speedB.ZIndex = 4
 	speedB.Parent = bFrame
-
 	local loopT = Instance.new("TextButton")
 	loopT.Size = UDim2.new(1, -10, 0, 20)
 	loopT.Position = UDim2.new(0, 5, 0, 128)
@@ -1412,7 +1775,6 @@ local function addBind(bindData)
 	loopT.TextSize = 12
 	loopT.ZIndex = 4
 	loopT.Parent = bFrame
-
 	local lastFiredLabel = Instance.new("TextLabel")
 	lastFiredLabel.Size = UDim2.new(1, -10, 0, 14)
 	lastFiredLabel.Position = UDim2.new(0, 5, 0, 153)
@@ -1424,7 +1786,6 @@ local function addBind(bindData)
 	lastFiredLabel.Text = "never fired"
 	lastFiredLabel.ZIndex = 4
 	lastFiredLabel.Parent = bFrame
-
 	local del = Instance.new("TextButton")
 	del.Size = UDim2.new(0, 15, 0, 15)
 	del.Position = UDim2.new(1, -15, 0, 0)
@@ -1433,7 +1794,6 @@ local function addBind(bindData)
 	del.TextColor3 = Color3.new(1, 1, 1)
 	del.ZIndex = 5
 	del.Parent = bFrame
-
 	bindData._activeBar = activeBar
 	bindData._lastFiredLabel = lastFiredLabel
 	table.insert(bindIndicators, bindData)
@@ -1563,7 +1923,7 @@ local function addLogRow(id, name, key, priority)
 	entryFrame.ZIndex = 3
 	entryFrame.Parent = list
 	local entry = Instance.new("TextButton")
-	entry.Size = UDim2.new(1, -114, 1, 0)
+	entry.Size = UDim2.new(1, -132, 1, 0)
 	entry.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 	entry.TextColor3 = Color3.fromRGB(0, 255, 200)
 	entry.TextXAlignment = Enum.TextXAlignment.Left
@@ -1578,7 +1938,7 @@ local function addLogRow(id, name, key, priority)
 	local previewBtn = Instance.new("TextButton")
 	previewBtn.Name = "Preview"
 	previewBtn.Size = UDim2.new(0, 22, 1, 0)
-	previewBtn.Position = UDim2.new(1, -114, 0, 0)
+	previewBtn.Position = UDim2.new(1, -132, 0, 0)
 	previewBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 70)
 	previewBtn.TextColor3 = Color3.new(1, 1, 1)
 	previewBtn.Text = "👁"
@@ -1592,7 +1952,7 @@ local function addLogRow(id, name, key, priority)
 	local favBtn = Instance.new("TextButton")
 	favBtn.Name = "Fav"
 	favBtn.Size = UDim2.new(0, 22, 1, 0)
-	favBtn.Position = UDim2.new(1, -90, 0, 0)
+	favBtn.Position = UDim2.new(1, -108, 0, 0)
 	favBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 0)
 	favBtn.TextColor3 = Color3.new(1, 1, 1)
 	favBtn.Text = favorites[id] and "★" or "☆"
@@ -1605,8 +1965,8 @@ local function addLogRow(id, name, key, priority)
 	favBtn.Parent = entryFrame
 	local nameBtn = Instance.new("TextButton")
 	nameBtn.Name = "Name"
-	nameBtn.Size = UDim2.new(0, 35, 1, 0)
-	nameBtn.Position = UDim2.new(1, -66, 0, 0)
+	nameBtn.Size = UDim2.new(0, 48, 1, 0)
+	nameBtn.Position = UDim2.new(1, -80, 0, 0)
 	nameBtn.BackgroundColor3 = Color3.fromRGB(0, 40, 40)
 	nameBtn.TextColor3 = Color3.new(1, 1, 1)
 	nameBtn.Text = "Name"
@@ -1619,7 +1979,7 @@ local function addLogRow(id, name, key, priority)
 	nameBtn.Parent = entryFrame
 	local copyBtn = Instance.new("TextButton")
 	copyBtn.Name = "Copy"
-	copyBtn.Size = UDim2.new(0, 35, 1, 0)
+	copyBtn.Size = UDim2.new(0, 48, 1, 0)
 	copyBtn.Position = UDim2.new(1, -28, 0, 0)
 	copyBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
 	copyBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -1648,38 +2008,58 @@ local function addLogRow(id, name, key, priority)
 		dumpCfg()
 	end))
 	table.insert(connections, nameBtn.MouseButton1Click:Connect(function()
-		local newName = idBox.Text
-		if newName ~= "" and newName ~= id then
-			customNames[id] = newName
-			entry.Text = "(1) [" .. (priority or "N/A") .. "] " .. id .. " | " .. newName .. " (" .. name .. ") @" .. (animTimestamps[key] or "?")
-			if favoriteEntries[id] then
-				local fBtn = favoriteEntries[id]:FindFirstChildOfClass("TextButton")
-				if fBtn then
-					fBtn.Text = "★ " .. id .. " | " .. newName
+		local nameInput = Instance.new("TextBox")
+		nameInput.Text = customNames[id] or ""
+		nameInput.PlaceholderText = "enter name..."
+		nameInput.Size = UDim2.new(1, -114, 1, 0)
+		nameInput.Position = UDim2.new(0, 0, 0, 0)
+		nameInput.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		nameInput.TextColor3 = Color3.new(1, 1, 1)
+		nameInput.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
+		nameInput.BorderSizePixel = 1
+		nameInput.BorderColor3 = Color3.fromRGB(0, 200, 150)
+		nameInput.Font = Enum.Font.Code
+		nameInput.TextSize = 11
+		nameInput.ZIndex = 6
+		nameInput.Parent = entryFrame
+		nameInput:CaptureFocus()
+		local function applyName()
+			local newName = nameInput.Text:match("^%s*(.-)%s*$")
+			nameInput:Destroy()
+			if newName ~= "" then
+				customNames[id] = newName
+				entry.Text = "(" .. (animCounts[key] or 1) .. ") [" .. (priority or "N/A") .. "] " .. id .. " | " .. newName .. " (" .. name .. ") @" .. (animTimestamps[key] or "?")
+				if favoriteEntries[id] then
+					local fBtn = favoriteEntries[id]:FindFirstChildOfClass("TextButton")
+					if fBtn then fBtn.Text = "★ " .. id .. " | " .. newName end
 				end
+				dumpCfg()
 			end
-			dumpCfg()
 		end
+		table.insert(connections, nameInput.FocusLost:Connect(function()
+			applyName()
+		end))
 	end))
 	table.insert(connections, copyBtn.MouseButton1Click:Connect(function()
 		yoink(id)
 	end))
 	animFrames[key] = entry
+	local n = 0
+	for _ in pairs(animFrames) do n += 1 end
+	logCountLabel.Text = n .. " logged"
 end
 local PRIORITY_NAMES = {
-	Action  = "game",
-	Action2 = "game2",
-	Action3 = "game3",
-	Action4 = "game4",
-	Core    = "coreanims",
-	Idle    = "idle",
+	Action   = "game",
+	Action2  = "game2",
+	Action3  = "game3",
+	Action4  = "game4",
+	Core     = "coreanims",
+	Idle     = "idle",
 	Movement = "movement",
 }
-
 local function fixPriority(raw)
 	return PRIORITY_NAMES[raw] or raw or "?"
 end
-
 local function logIt(id, name, playerName, priority)
 	if banned[id] then return end
 	local entryName = name
@@ -1693,9 +2073,7 @@ local function logIt(id, name, playerName, priority)
 	if customNames[id] then
 		entryName = customNames[id] .. " (" .. entryName .. ")"
 	end
-	if autoCopy then
-		yoink(id)
-	end
+	if autoCopy then yoink(id) end
 	if not animCounts[key] then
 		animCounts[key] = 1
 		animTimestamps[key] = os.date("%H:%M:%S")
@@ -1774,6 +2152,26 @@ end
 local function hookAnimator(animator, playerName)
 	if animator then
 		table.insert(connections, animator.AnimationPlayed:Connect(function(track)
+			if playerName == player.Name then
+				local scriptAnimActive = false
+				for t in pairs(scriptTracks) do
+					if t.IsPlaying then
+						scriptAnimActive = true
+						break
+					end
+				end
+				if scriptAnimActive and not scriptTracks[track] then
+					track:AdjustWeight(0, 0)
+					track:AdjustSpeed(0)
+					track:Stop(0)
+					for t in pairs(scriptTracks) do
+						if t.IsPlaying then
+							t:AdjustWeight(1, 0)
+						end
+					end
+					return
+				end
+			end
 			trackSeen(track, playerName)
 		end))
 		for _, track in pairs(animator:GetPlayingAnimationTracks()) do
@@ -1798,8 +2196,8 @@ task.spawn(function()
 	while running do
 		for _, bind in pairs(keybinds) do
 			if bind.active and not banned[bind.id] then
-				local isMacro = tostring(bind.id):find(";") or tostring(bind.id):lower():match("^play%s")
-				if not isMacro then
+				local isMacroCheck = tostring(bind.id):find(";") or tostring(bind.id):lower():match("^play%s")
+				if not isMacroCheck then
 					local isPlaying = false
 					local animator = grabAnimator()
 					if animator then
@@ -1820,12 +2218,6 @@ task.spawn(function()
 		task.wait()
 	end
 end)
-task.spawn(function()
-	while running do
-		refreshColors()
-		task.wait(0.5)
-	end
-end)
 local function doCmd(cmd, isRelease)
 	local parts = cmd:lower():split(" ")
 	local action = parts[1]
@@ -1836,9 +2228,7 @@ local function doCmd(cmd, isRelease)
 			isFrozen = not isFrozen
 		end
 		for track in pairs(scriptTracks) do
-			if track.IsPlaying then
-				track:AdjustSpeed(isFrozen and 0 or 1)
-			end
+			if track.IsPlaying then track:AdjustSpeed(isFrozen and 0 or 1) end
 		end
 	elseif action == "speed" and not isRelease then
 		local num = tonumber(parts[2])
@@ -1887,9 +2277,7 @@ local function doMacro(macroStr, bindData, stopFlag)
 				local id = parts[2]
 				local spd = tonumber(parts[3]) or bindData.speed or 1
 				local lp = (parts[4] == "true") or bindData.loop or false
-				if id and id ~= "" then
-					fireAnim(id, spd, lp)
-				end
+				if id and id ~= "" then fireAnim(id, spd, lp) end
 			elseif cmd == "wait" then
 				local t = tonumber(parts[2]) or 0.5
 				local elapsed = 0
@@ -1902,9 +2290,7 @@ local function doMacro(macroStr, bindData, stopFlag)
 				if id and id ~= "" then
 					killAnim(id)
 				else
-					for track in pairs(scriptTracks) do
-						pcall(function() track:Stop() end)
-					end
+					for track in pairs(scriptTracks) do pcall(function() track:Stop() end) end
 					scriptTracks = {}
 				end
 			elseif cmd == "speed" then
@@ -1940,14 +2326,12 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, pr
 	for _, bind in pairs(keybinds) do
 		if bind.key and input.KeyCode == bind.key then
 			local idStr = tostring(bind.id)
-
 			local timeStr = os.date("%H:%M:%S")
 			bind._lastFired = timeStr
 			if bind._lastFiredLabel and bind._lastFiredLabel.Parent then
 				bind._lastFiredLabel.Text = "fired: " .. timeStr
 				bind._lastFiredLabel.TextColor3 = Color3.fromRGB(0, 200, 150)
 			end
-
 			if isMacro(idStr) then
 				if not bind.macroFlag or not bind.macroFlag.active then
 					bind.macroFlag = { active = true }
@@ -1976,9 +2360,9 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, pr
 					if not bind.active then
 						killAnim(bind.id)
 					else
-						local track = fireAnim(bind.id, bind.speed, bind.loop)
-						if not bind.loop and track then
-							track.Stopped:Connect(function()
+						local t = fireAnim(bind.id, bind.speed, bind.loop)
+						if not bind.loop and t then
+							t.Stopped:Connect(function()
 								bind.active = false
 							end)
 						end
@@ -1993,9 +2377,7 @@ table.insert(connections, UserInputService.InputEnded:Connect(function(input)
 		if bind.key and input.KeyCode == bind.key then
 			local idStr = tostring(bind.id)
 			if isMacro(idStr) then
-				if bind.macroFlag then
-					bind.macroFlag.active = false
-				end
+				if bind.macroFlag then bind.macroFlag.active = false end
 			elseif isCmd(idStr) then
 				if bind.hold then
 					local low = idStr:lower()
@@ -2053,9 +2435,7 @@ local function loadCfg()
 				addReplUI(id, rep.targetId, rep.speed, rep.loop)
 			end
 			for id, isFav in pairs(favorites) do
-				if isFav then
-					addFavRow(id, customNames[id] or id)
-				end
+				if isFav then addFavRow(id, customNames[id] or id) end
 			end
 		end
 	end
@@ -2086,6 +2466,8 @@ local function tickLoop()
 				end
 				if isLocal and scriptAnimActive and not scriptTracks[track] then
 					track:AdjustWeight(0, 0)
+					track:AdjustSpeed(0)
+					track:Stop(0)
 				elseif globalLogging or isLocal then
 					trackSeen(track, p.Name)
 				end
@@ -2095,5 +2477,3 @@ local function tickLoop()
 end
 table.insert(connections, RunService.Stepped:Connect(tickLoop))
 table.insert(connections, RunService.RenderStepped:Connect(tickLoop))
-table.insert(connections, RunService.Stepped:Connect(runLoop))
-table.insert(connections, RunService.RenderStepped:Connect(runLoop))
