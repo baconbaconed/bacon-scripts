@@ -1,4 +1,4 @@
-print("this is the only script ill leave unobfuscated since velocity a bitch, enjoy")
+print("this is the only script ill leave unobfuscated since velocity a bitch, enjoy bacon logger")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
