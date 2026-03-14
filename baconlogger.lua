@@ -529,9 +529,18 @@ local function button(text, y, callback, bgColor, borderColor)
 	table.insert(connections, b.MouseButton1Click:Connect(callback))
 end
 button("Play", 255, function()
-	local id = idBox.Text
-	local speed = tonumber(speedBox.Text) or 1
-	fireAnim(id, speed, looped)
+    local id = idBox.Text
+    local speed = tonumber(speedBox.Text) or 1
+    local scrub = tonumber(timeBox.Text) or 0
+
+    local track = fireAnim(id, speed, looped)
+
+    if track and scrub > 0 then
+        task.wait()
+        pcall(function()
+            track.TimePosition = scrub
+        end)
+    end
 end)
 button("Stop", 290, function()
 	killAnim(idBox.Text)
