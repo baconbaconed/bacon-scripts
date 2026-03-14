@@ -651,7 +651,15 @@ end
 button("Play", 255, function()
 	local id = idBox.Text
 	local speed = tonumber(speedBox.Text) or 1
-	fireAnim(id, speed, looped)
+	local scrub = tonumber(timeBox.Text) or 0
+	local track = fireAnim(id, speed, looped)
+	if track and scrub > 0 then
+		task.defer(function()
+			if track then
+				track.TimePosition = math.clamp(scrub, 0, track.Length)
+			end
+		end)
+	end
 end)
 button("Stop", 290, function()
 	killAnim(idBox.Text)
