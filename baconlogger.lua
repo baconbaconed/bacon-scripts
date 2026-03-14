@@ -1,4 +1,4 @@
-print("this is the only script ill leave unobfuscated since velocity a bitch, enjoy bacon logger")
+--this is the only script ill ever leave unobfuscated, because velocity is a little bitch about obfuscating
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -2181,6 +2181,12 @@ local function hookAnimator(animator, playerName)
 end
 local function onJoin(p)
 	table.insert(connections, p.CharacterAdded:Connect(function(char)
+		if p == player then
+			for _, bind in pairs(keybinds) do
+				bind.active = false
+			end
+			scriptTracks = {}
+		end
 		task.wait(1)
 		hookAnimator(grabAnimator(char), p.Name)
 	end))
