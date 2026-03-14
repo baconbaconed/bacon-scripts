@@ -1,4 +1,4 @@
---this is the only script ill ever leave unobfuscated, because velocity is a little bitch about obfuscating
+print("enjoy bacon logger, open source if u wanna check github, JOIN THE DISCORD")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -129,115 +129,218 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, pr
 end))
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 750, 0, 590)
+mainFrame.Size = UDim2.new(0, 820, 0, 630)
 mainFrame.Position = UDim2.new(0, 50, 0, 50)
-mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-mainFrame.BorderSizePixel = 1
+mainFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+mainFrame.BorderSizePixel = 0
 mainFrame.BorderColor3 = Color3.fromRGB(0, 80, 80)
+do
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 6)
+	c.Parent = mainFrame
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.fromRGB(0, 90, 100)
+	s.Thickness = 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = mainFrame
+end
+
+local function mkCorner(parent, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 4)
+	c.Parent = parent
+end
+local function mkStroke(parent, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.fromRGB(0, 80, 90)
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = parent
+end
 mainFrame.Active = true
 mainFrame.Draggable = false
 mainFrame.ClipsDescendants = false
 mainFrame.ZIndex = 1
 mainFrame.Parent = gui
 local dragging, dragInput, dragStart, startPos
+local draggingSide, dragInputSide, dragStartSide, startPosSide
+local draggingVP, dragInputVP, dragStartVP, startPosVP
+local activeDragger = nil
+
 local function dragMain(input)
 	local delta = input.Position - dragStart
 	mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 end
 table.insert(connections, mainFrame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeDragger then
+		activeDragger = "main"
 		dragging = true
 		dragStart = input.Position
 		startPos = mainFrame.Position
 		table.insert(connections, input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then dragging = false end
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+				if activeDragger == "main" then activeDragger = nil end
+			end
 		end))
 	end
 end))
 table.insert(connections, mainFrame.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		dragInput = input
 	end
 end))
 table.insert(connections, UserInputService.InputChanged:Connect(function(input)
 	if input == dragInput and dragging then dragMain(input) end
 end))
+
+local resizing = false
+local resizeStart, resizeStartSize
+local resizeHandle = Instance.new("TextButton")
+resizeHandle.Size = UDim2.new(0, 14, 0, 14)
+resizeHandle.Position = UDim2.new(1, -14, 1, -14)
+resizeHandle.BackgroundColor3 = Color3.fromRGB(0, 80, 90)
+resizeHandle.Text = ""
+resizeHandle.BorderSizePixel = 0
+resizeHandle.ZIndex = 10
+resizeHandle.Parent = mainFrame
+mkCorner(resizeHandle, 3)
+do
+	local grip = Instance.new("TextLabel")
+	grip.Text = "⠿"
+	grip.Size = UDim2.new(1, 0, 1, 0)
+	grip.BackgroundTransparency = 1
+	grip.TextColor3 = Color3.fromRGB(0, 200, 160)
+	grip.Font = Enum.Font.Code
+	grip.TextSize = 11
+	grip.ZIndex = 11
+	grip.Parent = resizeHandle
+end
+table.insert(connections, resizeHandle.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		resizing = true
+		resizeStart = input.Position
+		resizeStartSize = mainFrame.AbsoluteSize
+	end
+end))
+table.insert(connections, UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		resizing = false
+		if not dragging and not draggingSide and not draggingVP then
+			activeDragger = nil
+		end
+	end
+end))
+table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+	if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - resizeStart
+		local newW = math.max(600, resizeStartSize.X + delta.X)
+		local newH = math.max(400, resizeStartSize.Y + delta.Y)
+		mainFrame.Size = UDim2.new(0, newW, 0, newH)
+	end
+end))
+
 local top = Instance.new("Frame")
 top.Name = "TopBar"
-top.Size = UDim2.new(1, 0, 0, 25)
-top.BackgroundColor3 = Color3.fromRGB(0, 40, 40)
+top.Size = UDim2.new(1, 0, 0, 28)
+top.BackgroundColor3 = Color3.fromRGB(8, 28, 32)
 top.BorderSizePixel = 0
 top.ZIndex = 2
 top.Parent = mainFrame
+do
+	local g = Instance.new("UIGradient")
+	g.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 55, 65)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 25, 30)),
+	})
+	g.Rotation = 90
+	g.Parent = top
+end
 local title = Instance.new("TextLabel")
-title.Text = "bacon's advanced logger"
-title.Size = UDim2.new(1, -200, 1, 0)
+title.Text = "⬡ bacon's advanced logger"
+title.Size = UDim2.new(1, -220, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.TextColor3 = Color3.fromRGB(0, 255, 200)
+title.TextColor3 = Color3.fromRGB(0, 220, 170)
 title.Font = Enum.Font.Code
+title.TextSize = 13
+title.TextXAlignment = Enum.TextXAlignment.Left
 title.ZIndex = 3
 title.Parent = top
 local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0, 25, 1, 0)
-closeButton.Position = UDim2.new(1, -25, 0, 0)
+closeButton.Size = UDim2.new(0, 26, 0, 20)
+closeButton.Position = UDim2.new(1, -28, 0, 4)
 closeButton.Text = "X"
-closeButton.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(140, 20, 20)
 closeButton.TextColor3 = Color3.new(1, 1, 1)
 closeButton.BorderSizePixel = 0
+closeButton.Font = Enum.Font.Code
+closeButton.TextSize = 12
 closeButton.ZIndex = 3
 closeButton.Parent = top
+mkCorner(closeButton, 4)
 local minimize = Instance.new("TextButton")
-minimize.Size = UDim2.new(0, 25, 1, 0)
-minimize.Position = UDim2.new(1, -50, 0, 0)
+minimize.Size = UDim2.new(0, 26, 0, 20)
+minimize.Position = UDim2.new(1, -56, 0, 4)
 minimize.Text = "-"
-minimize.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+minimize.BackgroundColor3 = Color3.fromRGB(0, 55, 65)
 minimize.TextColor3 = Color3.new(1, 1, 1)
 minimize.BorderSizePixel = 0
+minimize.Font = Enum.Font.Code
+minimize.TextSize = 12
 minimize.ZIndex = 3
 minimize.Parent = top
+mkCorner(minimize, 4)
 local openSide = Instance.new("TextButton")
-openSide.Size = UDim2.new(0, 50, 1, 0)
-openSide.Position = UDim2.new(1, -100, 0, 0)
+openSide.Size = UDim2.new(0, 52, 0, 20)
+openSide.Position = UDim2.new(1, -110, 0, 4)
 openSide.Text = "Binds"
-openSide.BackgroundColor3 = Color3.fromRGB(0, 80, 80)
-openSide.TextColor3 = Color3.new(1, 1, 1)
+openSide.BackgroundColor3 = Color3.fromRGB(0, 75, 85)
+openSide.TextColor3 = Color3.fromRGB(0, 220, 170)
 openSide.BorderSizePixel = 0
+openSide.Font = Enum.Font.Code
+openSide.TextSize = 12
 openSide.ZIndex = 3
 openSide.Parent = top
+mkCorner(openSide, 4)
 local previewToggle = Instance.new("TextButton")
-previewToggle.Size = UDim2.new(0, 55, 1, 0)
-previewToggle.Position = UDim2.new(1, -158, 0, 0)
+previewToggle.Size = UDim2.new(0, 60, 0, 20)
+previewToggle.Position = UDim2.new(1, -174, 0, 4)
 previewToggle.Text = "Preview"
-previewToggle.BackgroundColor3 = Color3.fromRGB(0, 60, 80)
-previewToggle.TextColor3 = Color3.new(1, 1, 1)
+previewToggle.BackgroundColor3 = Color3.fromRGB(0, 55, 80)
+previewToggle.TextColor3 = Color3.fromRGB(0, 200, 220)
 previewToggle.BorderSizePixel = 0
+previewToggle.Font = Enum.Font.Code
+previewToggle.TextSize = 12
 previewToggle.ZIndex = 3
 previewToggle.Parent = top
+mkCorner(previewToggle, 4)
 local searchBox = Instance.new("TextBox")
 searchBox.Text = ""
 searchBox.Name = "SearchBox"
 searchBox.PlaceholderText = "Search animations..."
-searchBox.Position = UDim2.new(0, 5, 0, 30)
-searchBox.Size = UDim2.new(0.60, -10, 0, 22)
-searchBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+searchBox.Position = UDim2.new(0, 6, 0, 32)
+searchBox.Size = UDim2.new(0.60, -12, 0, 22)
+searchBox.BackgroundColor3 = Color3.fromRGB(18, 22, 28)
 searchBox.TextColor3 = Color3.new(1, 1, 1)
-searchBox.BorderSizePixel = 1
-searchBox.BorderColor3 = Color3.fromRGB(0, 100, 100)
+searchBox.PlaceholderColor3 = Color3.fromRGB(0, 100, 90)
+searchBox.BorderSizePixel = 0
 searchBox.Font = Enum.Font.Code
-searchBox.TextSize = 13
+searchBox.TextSize = 12
 searchBox.ZIndex = 2
 searchBox.Parent = mainFrame
+mkCorner(searchBox, 4)
+mkStroke(searchBox, Color3.fromRGB(0, 80, 90), 1)
 local playerFilterBox = Instance.new("TextBox")
 playerFilterBox.Text = ""
 playerFilterBox.Name = "PlayerFilter"
 playerFilterBox.PlaceholderText = "Filter player..."
 playerFilterBox.Position = UDim2.new(0, 5, 0, 55)
 playerFilterBox.Size = UDim2.new(0.30, -5, 0, 20)
-playerFilterBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+playerFilterBox.BackgroundColor3 = Color3.fromRGB(18, 22, 28)
 playerFilterBox.TextColor3 = Color3.new(1, 1, 1)
-playerFilterBox.PlaceholderColor3 = Color3.fromRGB(0, 100, 80)
-playerFilterBox.BorderSizePixel = 1
-playerFilterBox.BorderColor3 = Color3.fromRGB(60, 60, 0)
+playerFilterBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 0)
+playerFilterBox.BorderSizePixel = 0
 playerFilterBox.Font = Enum.Font.Code
 playerFilterBox.TextSize = 12
 playerFilterBox.ZIndex = 2
@@ -248,44 +351,47 @@ priorityFilterBox.Name = "PriorityFilter"
 priorityFilterBox.PlaceholderText = "Filter priority..."
 priorityFilterBox.Position = UDim2.new(0.30, 5, 0, 55)
 priorityFilterBox.Size = UDim2.new(0.30, -10, 0, 20)
-priorityFilterBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+priorityFilterBox.BackgroundColor3 = Color3.fromRGB(18, 22, 28)
 priorityFilterBox.TextColor3 = Color3.new(1, 1, 1)
-priorityFilterBox.PlaceholderColor3 = Color3.fromRGB(0, 100, 80)
-priorityFilterBox.BorderSizePixel = 1
-priorityFilterBox.BorderColor3 = Color3.fromRGB(60, 60, 0)
+priorityFilterBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 0)
+priorityFilterBox.BorderSizePixel = 0
 priorityFilterBox.Font = Enum.Font.Code
 priorityFilterBox.TextSize = 12
 priorityFilterBox.ZIndex = 2
 priorityFilterBox.Parent = mainFrame
+mkCorner(playerFilterBox, 4)
+mkStroke(playerFilterBox, Color3.fromRGB(80, 80, 0), 1)
+mkCorner(priorityFilterBox, 4)
+mkStroke(priorityFilterBox, Color3.fromRGB(80, 80, 0), 1)
 local logTabBtn = Instance.new("TextButton")
 logTabBtn.Text = "[ Log ]"
 logTabBtn.Position = UDim2.new(0, 5, 0, 78)
 logTabBtn.Size = UDim2.new(0.30, -5, 0, 18)
-logTabBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
-logTabBtn.TextColor3 = Color3.fromRGB(0, 255, 200)
+logTabBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 70)
+logTabBtn.TextColor3 = Color3.fromRGB(0, 220, 170)
 logTabBtn.Font = Enum.Font.Code
 logTabBtn.TextSize = 12
-logTabBtn.BorderSizePixel = 1
-logTabBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
+logTabBtn.BorderSizePixel = 0
 logTabBtn.ZIndex = 2
 logTabBtn.Parent = mainFrame
+mkCorner(logTabBtn, 4)
 local favsTabBtn = Instance.new("TextButton")
 favsTabBtn.Text = "[ Favs ]"
 favsTabBtn.Position = UDim2.new(0.30, 5, 0, 78)
 favsTabBtn.Size = UDim2.new(0.30, -10, 0, 18)
-favsTabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 0)
-favsTabBtn.TextColor3 = Color3.fromRGB(200, 200, 0)
+favsTabBtn.BackgroundColor3 = Color3.fromRGB(40, 38, 0)
+favsTabBtn.TextColor3 = Color3.fromRGB(220, 210, 0)
 favsTabBtn.Font = Enum.Font.Code
 favsTabBtn.TextSize = 12
-favsTabBtn.BorderSizePixel = 1
-favsTabBtn.BorderColor3 = Color3.fromRGB(80, 80, 0)
+favsTabBtn.BorderSizePixel = 0
 favsTabBtn.ZIndex = 2
 favsTabBtn.Parent = mainFrame
+mkCorner(favsTabBtn, 4)
 
 local logCountLabel = Instance.new("TextLabel")
 logCountLabel.Text = "0 logged"
-logCountLabel.Position = UDim2.new(0.60, -90, 0, 78)
-logCountLabel.Size = UDim2.new(0, 88, 0, 18)
+logCountLabel.Position = UDim2.new(0.60, -92, 0, 32)
+logCountLabel.Size = UDim2.new(0, 88, 0, 22)
 logCountLabel.BackgroundTransparency = 1
 logCountLabel.TextColor3 = Color3.fromRGB(80, 80, 80)
 logCountLabel.TextXAlignment = Enum.TextXAlignment.Right
@@ -297,9 +403,8 @@ local list = Instance.new("ScrollingFrame")
 list.Name = "AnimList"
 list.Position = UDim2.new(0, 5, 0, 100)
 list.Size = UDim2.new(0.60, -10, 1, -105)
-list.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-list.BorderSizePixel = 1
-list.BorderColor3 = Color3.fromRGB(0, 60, 60)
+list.BackgroundColor3 = Color3.fromRGB(14, 17, 22)
+list.BorderSizePixel = 0
 list.ScrollBarThickness = 4
 list.ScrollBarImageColor3 = Color3.fromRGB(0, 200, 150)
 list.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -307,6 +412,8 @@ list.ClipsDescendants = true
 list.ZIndex = 2
 list.Visible = true
 list.Parent = mainFrame
+mkCorner(list, 4)
+mkStroke(list, Color3.fromRGB(0, 65, 75), 1)
 local layout = Instance.new("UIListLayout")
 layout.Padding = UDim.new(0, 1)
 layout.Parent = list
@@ -317,9 +424,8 @@ local favsList = Instance.new("ScrollingFrame")
 favsList.Name = "FavsList"
 favsList.Position = UDim2.new(0, 5, 0, 100)
 favsList.Size = UDim2.new(0.60, -10, 1, -105)
-favsList.BackgroundColor3 = Color3.fromRGB(10, 10, 8)
-favsList.BorderSizePixel = 1
-favsList.BorderColor3 = Color3.fromRGB(80, 80, 0)
+favsList.BackgroundColor3 = Color3.fromRGB(16, 15, 10)
+favsList.BorderSizePixel = 0
 favsList.ScrollBarThickness = 4
 favsList.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 0)
 favsList.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -327,6 +433,8 @@ favsList.ClipsDescendants = true
 favsList.ZIndex = 2
 favsList.Visible = false
 favsList.Parent = mainFrame
+mkCorner(favsList, 4)
+mkStroke(favsList, Color3.fromRGB(80, 75, 0), 1)
 local favsLayout = Instance.new("UIListLayout")
 favsLayout.Padding = UDim.new(0, 2)
 favsLayout.Parent = favsList
@@ -338,22 +446,26 @@ local function switchTab(tab)
 	currentTab = tab
 	list.Visible = (tab == "log")
 	favsList.Visible = (tab == "favs")
-	logTabBtn.BackgroundColor3 = (tab == "log") and Color3.fromRGB(0, 80, 80) or Color3.fromRGB(0, 40, 40)
-	favsTabBtn.BackgroundColor3 = (tab == "favs") and Color3.fromRGB(80, 80, 0) or Color3.fromRGB(40, 40, 0)
+	logTabBtn.BackgroundColor3 = (tab == "log") and Color3.fromRGB(0, 80, 90) or Color3.fromRGB(0, 35, 40)
+	favsTabBtn.BackgroundColor3 = (tab == "favs") and Color3.fromRGB(80, 76, 0) or Color3.fromRGB(35, 33, 0)
 end
 table.insert(connections, logTabBtn.MouseButton1Click:Connect(function() switchTab("log") end))
 table.insert(connections, favsTabBtn.MouseButton1Click:Connect(function() switchTab("favs") end))
-local controls = Instance.new("Frame")
+local controls = Instance.new("ScrollingFrame")
 controls.Name = "Controls"
 controls.Position = UDim2.new(0.60, 5, 0, 30)
 controls.Size = UDim2.new(0.40, -10, 1, -35)
-controls.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-controls.BorderSizePixel = 1
-controls.BorderColor3 = Color3.fromRGB(0, 60, 60)
-controls.ClipsDescendants = false
+controls.BackgroundColor3 = Color3.fromRGB(16, 20, 26)
+controls.BorderSizePixel = 0
+controls.ClipsDescendants = true
+controls.ScrollBarThickness = 3
+controls.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 130)
+controls.CanvasSize = UDim2.new(0, 0, 0, 680)
 controls.ZIndex = 2
 controls.Visible = true
 controls.Parent = mainFrame
+mkCorner(controls, 5)
+mkStroke(controls, Color3.fromRGB(0, 65, 75), 1)
 local function mkLabel(text, y)
 	local l = Instance.new("TextLabel")
 	l.Text = text
@@ -372,41 +484,44 @@ local idBox = Instance.new("TextBox")
 idBox.Text = ""
 idBox.Position = UDim2.new(0, 10, 0, 30)
 idBox.Size = UDim2.new(1, -20, 0, 25)
-idBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+idBox.BackgroundColor3 = Color3.fromRGB(10, 14, 20)
 idBox.TextColor3 = Color3.new(1, 1, 1)
 idBox.PlaceholderColor3 = Color3.fromRGB(0, 100, 80)
 idBox.PlaceholderText = "animation id..."
-idBox.BorderSizePixel = 1
-idBox.BorderColor3 = Color3.fromRGB(0, 120, 100)
+idBox.BorderSizePixel = 0
 idBox.ZIndex = 3
 idBox.Visible = true
 idBox.Parent = controls
+mkCorner(idBox, 4)
+mkStroke(idBox, Color3.fromRGB(0, 90, 100), 1)
 mkLabel("Speed", 65)
 local speedBox = Instance.new("TextBox")
 speedBox.Text = "1"
 speedBox.PlaceholderText = "speed (1 = normal)"
 speedBox.Position = UDim2.new(0, 10, 0, 85)
 speedBox.Size = UDim2.new(1, -20, 0, 25)
-speedBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+speedBox.BackgroundColor3 = Color3.fromRGB(10, 14, 20)
 speedBox.TextColor3 = Color3.new(1, 1, 1)
-speedBox.BorderSizePixel = 1
-speedBox.BorderColor3 = Color3.fromRGB(0, 120, 100)
+speedBox.BorderSizePixel = 0
 speedBox.ZIndex = 3
 speedBox.Visible = true
 speedBox.Parent = controls
+mkCorner(speedBox, 4)
+mkStroke(speedBox, Color3.fromRGB(0, 90, 100), 1)
 mkLabel("Time (Scrub)", 120)
 local timeBox = Instance.new("TextBox")
 timeBox.Text = "0"
 timeBox.PlaceholderText = "scrub time (secs)"
 timeBox.Position = UDim2.new(0, 10, 0, 140)
 timeBox.Size = UDim2.new(1, -20, 0, 25)
-timeBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+timeBox.BackgroundColor3 = Color3.fromRGB(10, 14, 20)
 timeBox.TextColor3 = Color3.new(1, 1, 1)
-timeBox.BorderSizePixel = 1
-timeBox.BorderColor3 = Color3.fromRGB(0, 120, 100)
+timeBox.BorderSizePixel = 0
 timeBox.ZIndex = 3
 timeBox.Visible = true
 timeBox.Parent = controls
+mkCorner(timeBox, 4)
+mkStroke(timeBox, Color3.fromRGB(0, 90, 100), 1)
 table.insert(connections, timeBox:GetPropertyChangedSignal("Text"):Connect(function()
 	local num = tonumber(timeBox.Text:match("[%d%.]+"))
 	if num then
@@ -434,15 +549,15 @@ mainTimerLabel.Parent = controls
 local mainScrubBg = Instance.new("Frame")
 mainScrubBg.Position = UDim2.new(0, 10, 0, 185)
 mainScrubBg.Size = UDim2.new(1, -20, 0, 12)
-mainScrubBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainScrubBg.BorderSizePixel = 1
-mainScrubBg.BorderColor3 = Color3.fromRGB(0, 80, 80)
+mainScrubBg.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
+mainScrubBg.BorderSizePixel = 0
 mainScrubBg.ZIndex = 3
 mainScrubBg.Parent = controls
+mkCorner(mainScrubBg, 6)
 
 local mainScrubFill = Instance.new("Frame")
 mainScrubFill.Size = UDim2.new(0, 0, 1, 0)
-mainScrubFill.BackgroundColor3 = Color3.fromRGB(0, 200, 150)
+mainScrubFill.BackgroundColor3 = Color3.fromRGB(0, 210, 160)
 mainScrubFill.BorderSizePixel = 0
 mainScrubFill.ZIndex = 4
 mainScrubFill.Parent = mainScrubBg
@@ -459,14 +574,15 @@ local mainPauseBtn = Instance.new("TextButton")
 mainPauseBtn.Text = "⏸ Pause"
 mainPauseBtn.Position = UDim2.new(0, 10, 0, 196)
 mainPauseBtn.Size = UDim2.new(1, -20, 0, 20)
-mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 60)
+mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 55, 70)
 mainPauseBtn.TextColor3 = Color3.new(1, 1, 1)
-mainPauseBtn.BorderSizePixel = 1
-mainPauseBtn.BorderColor3 = Color3.fromRGB(0, 100, 120)
+mainPauseBtn.BorderSizePixel = 0
 mainPauseBtn.Font = Enum.Font.Code
 mainPauseBtn.TextSize = 11
 mainPauseBtn.ZIndex = 3
 mainPauseBtn.Parent = controls
+mkCorner(mainPauseBtn, 4)
+mkStroke(mainPauseBtn, Color3.fromRGB(0, 110, 130), 1)
 
 table.insert(connections, mainPauseBtn.MouseButton1Click:Connect(function()
 	mainPaused = not mainPaused
@@ -497,17 +613,18 @@ local loopToggle = Instance.new("TextButton")
 loopToggle.Text = "Loop: OFF"
 loopToggle.Position = UDim2.new(0, 10, 0, 220)
 loopToggle.Size = UDim2.new(1, -20, 0, 25)
-loopToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-loopToggle.TextColor3 = Color3.new(1, 1, 1)
-loopToggle.BorderSizePixel = 1
-loopToggle.BorderColor3 = Color3.fromRGB(120, 0, 0)
+loopToggle.BackgroundColor3 = Color3.fromRGB(55, 0, 0)
+loopToggle.TextColor3 = Color3.fromRGB(255, 180, 160)
+loopToggle.BorderSizePixel = 0
 loopToggle.ZIndex = 3
 loopToggle.Visible = true
 loopToggle.Parent = controls
+mkCorner(loopToggle, 4)
+mkStroke(loopToggle, Color3.fromRGB(120, 0, 0), 1)
 local function refreshLoopBtn()
 	loopToggle.Text = "Loop: " .. (looped and "ON" or "OFF")
-	loopToggle.BackgroundColor3 = looped and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
-	loopToggle.BorderColor3 = looped and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+	loopToggle.BackgroundColor3 = looped and Color3.fromRGB(0, 55, 0) or Color3.fromRGB(55, 0, 0)
+	loopToggle.TextColor3 = looped and Color3.fromRGB(160, 255, 180) or Color3.fromRGB(255, 180, 160)
 end
 table.insert(connections, loopToggle.MouseButton1Click:Connect(function()
 	looped = not looped
@@ -518,29 +635,23 @@ local function button(text, y, callback, bgColor, borderColor)
 	local b = Instance.new("TextButton")
 	b.Text = text
 	b.Position = UDim2.new(0, 10, 0, y)
-	b.Size = UDim2.new(1, -20, 0, 25)
-	b.BackgroundColor3 = bgColor or Color3.fromRGB(0, 60, 60)
-	b.TextColor3 = Color3.new(1, 1, 1)
-	b.BorderSizePixel = 1
-	b.BorderColor3 = borderColor or Color3.fromRGB(0, 120, 100)
+	b.Size = UDim2.new(1, -20, 0, 26)
+	b.BackgroundColor3 = bgColor or Color3.fromRGB(0, 60, 70)
+	b.TextColor3 = Color3.fromRGB(200, 240, 230)
+	b.BorderSizePixel = 0
+	b.Font = Enum.Font.Code
+	b.TextSize = 12
 	b.ZIndex = 3
 	b.Visible = true
 	b.Parent = controls
+	mkCorner(b, 4)
+	mkStroke(b, borderColor or Color3.fromRGB(0, 110, 120), 1)
 	table.insert(connections, b.MouseButton1Click:Connect(callback))
 end
 button("Play", 255, function()
-    local id = idBox.Text
-    local speed = tonumber(speedBox.Text) or 1
-    local scrub = tonumber(timeBox.Text) or 0
-
-    local track = fireAnim(id, speed, looped)
-
-    if track and scrub > 0 then
-        task.wait()
-        pcall(function()
-            track.TimePosition = scrub
-        end)
-    end
+	local id = idBox.Text
+	local speed = tonumber(speedBox.Text) or 1
+	fireAnim(id, speed, looped)
 end)
 button("Stop", 290, function()
 	killAnim(idBox.Text)
@@ -585,17 +696,17 @@ local globalToggle = Instance.new("TextButton")
 globalToggle.Text = "Global Log: OFF"
 globalToggle.Position = UDim2.new(0, 10, 0, 492)
 globalToggle.Size = UDim2.new(1, -20, 0, 25)
-globalToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-globalToggle.TextColor3 = Color3.new(1, 1, 1)
-globalToggle.BorderSizePixel = 1
-globalToggle.BorderColor3 = Color3.fromRGB(120, 0, 0)
+globalToggle.BackgroundColor3 = Color3.fromRGB(55, 0, 0)
+globalToggle.TextColor3 = Color3.fromRGB(255, 180, 160)
+globalToggle.BorderSizePixel = 0
 globalToggle.ZIndex = 3
 globalToggle.Visible = true
 globalToggle.Parent = controls
+mkCorner(globalToggle, 4)
+mkStroke(globalToggle, Color3.fromRGB(110, 0, 0), 1)
 local function refreshGlobalBtn()
 	globalToggle.Text = "Global Log: " .. (globalLogging and "ON" or "OFF")
-	globalToggle.BackgroundColor3 = globalLogging and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
-	globalToggle.BorderColor3 = globalLogging and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+	globalToggle.BackgroundColor3 = globalLogging and Color3.fromRGB(0, 55, 0) or Color3.fromRGB(55, 0, 0)
 end
 table.insert(connections, globalToggle.MouseButton1Click:Connect(function()
 	globalLogging = not globalLogging
@@ -606,17 +717,17 @@ local autoCopyToggle = Instance.new("TextButton")
 autoCopyToggle.Text = "Auto-Copy: OFF"
 autoCopyToggle.Position = UDim2.new(0, 10, 0, 520)
 autoCopyToggle.Size = UDim2.new(1, -20, 0, 22)
-autoCopyToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-autoCopyToggle.TextColor3 = Color3.new(1, 1, 1)
-autoCopyToggle.BorderSizePixel = 1
-autoCopyToggle.BorderColor3 = Color3.fromRGB(120, 0, 0)
+autoCopyToggle.BackgroundColor3 = Color3.fromRGB(55, 0, 0)
+autoCopyToggle.TextColor3 = Color3.fromRGB(255, 180, 160)
+autoCopyToggle.BorderSizePixel = 0
 autoCopyToggle.ZIndex = 3
 autoCopyToggle.Visible = true
 autoCopyToggle.Parent = controls
+mkCorner(autoCopyToggle, 4)
+mkStroke(autoCopyToggle, Color3.fromRGB(110, 0, 0), 1)
 local function refreshAutoCopyBtn()
 	autoCopyToggle.Text = "Auto-Copy: " .. (autoCopy and "ON" or "OFF")
-	autoCopyToggle.BackgroundColor3 = autoCopy and Color3.fromRGB(0, 60, 0) or Color3.fromRGB(60, 0, 0)
-	autoCopyToggle.BorderColor3 = autoCopy and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(120, 0, 0)
+	autoCopyToggle.BackgroundColor3 = autoCopy and Color3.fromRGB(0, 55, 0) or Color3.fromRGB(55, 0, 0)
 end
 table.insert(connections, autoCopyToggle.MouseButton1Click:Connect(function()
 	autoCopy = not autoCopy
@@ -627,13 +738,14 @@ local exportBtn = Instance.new("TextButton")
 exportBtn.Text = "Export Log"
 exportBtn.Position = UDim2.new(0, 10, 0, 546)
 exportBtn.Size = UDim2.new(1, -20, 0, 22)
-exportBtn.BackgroundColor3 = Color3.fromRGB(0, 40, 80)
-exportBtn.TextColor3 = Color3.new(1, 1, 1)
-exportBtn.BorderSizePixel = 1
-exportBtn.BorderColor3 = Color3.fromRGB(0, 80, 160)
+exportBtn.BackgroundColor3 = Color3.fromRGB(0, 38, 75)
+exportBtn.TextColor3 = Color3.fromRGB(160, 200, 255)
+exportBtn.BorderSizePixel = 0
 exportBtn.ZIndex = 3
 exportBtn.Visible = true
 exportBtn.Parent = controls
+mkCorner(exportBtn, 4)
+mkStroke(exportBtn, Color3.fromRGB(0, 75, 150), 1)
 table.insert(connections, exportBtn.MouseButton1Click:Connect(function()
 	local out = {}
 	for key, entry in pairs(animFrames) do
@@ -681,11 +793,34 @@ table.insert(connections, exportBtn.MouseButton1Click:Connect(function()
 		end)
 	end
 end))
+local discordBtn = Instance.new("TextButton")
+discordBtn.Text = "discord"
+discordBtn.Size = UDim2.new(0, 70, 0, 18)
+discordBtn.Position = UDim2.new(0, 6, 1, -22)
+discordBtn.BackgroundColor3 = Color3.fromRGB(25, 30, 80)
+discordBtn.TextColor3 = Color3.fromRGB(140, 160, 255)
+discordBtn.BorderSizePixel = 0
+discordBtn.Font = Enum.Font.Code
+discordBtn.TextSize = 10
+discordBtn.ZIndex = 3
+discordBtn.Parent = mainFrame
+mkCorner(discordBtn, 4)
+mkStroke(discordBtn, Color3.fromRGB(60, 80, 200), 1)
+table.insert(connections, discordBtn.MouseButton1Click:Connect(function()
+	yoink("discord.gg/u8FTncR4dF")
+	discordBtn.Text = "copied!"
+	discordBtn.TextColor3 = Color3.fromRGB(160, 255, 180)
+	task.delay(2, function()
+		discordBtn.Text = "discord"
+		discordBtn.TextColor3 = Color3.fromRGB(140, 160, 255)
+	end)
+end))
+
 local minimized = false
 table.insert(connections, minimize.MouseButton1Click:Connect(function()
 	minimized = not minimized
 	if minimized then
-		mainFrame.Size = UDim2.new(0, 420, 0, 25)
+		mainFrame.Size = UDim2.new(0, 460, 0, 28)
 		list.Visible = false
 		favsList.Visible = false
 		controls.Visible = false
@@ -694,9 +829,12 @@ table.insert(connections, minimize.MouseButton1Click:Connect(function()
 		priorityFilterBox.Visible = false
 		logTabBtn.Visible = false
 		favsTabBtn.Visible = false
+		logCountLabel.Visible = false
+		resizeHandle.Visible = false
+		discordBtn.Visible = false
 		minimize.Text = "+"
 	else
-		mainFrame.Size = UDim2.new(0, 750, 0, 590)
+		mainFrame.Size = UDim2.new(0, 820, 0, 630)
 		list.Visible = (currentTab == "log")
 		favsList.Visible = (currentTab == "favs")
 		controls.Visible = true
@@ -705,10 +843,14 @@ table.insert(connections, minimize.MouseButton1Click:Connect(function()
 		priorityFilterBox.Visible = true
 		logTabBtn.Visible = true
 		favsTabBtn.Visible = true
+		logCountLabel.Visible = true
+		resizeHandle.Visible = true
+		discordBtn.Visible = true
 		minimize.Text = "-"
 	end
 end))
 local running = true
+
 closeButton.MouseButton1Click:Connect(function()
 	running = false
 	for _, connection in pairs(connections) do
@@ -738,30 +880,34 @@ local sideFrame = Instance.new("Frame")
 sideFrame.Name = "SideFrame"
 sideFrame.Size = UDim2.new(0, 200, 0, 480)
 sideFrame.Position = UDim2.new(0, 655, 0, 50)
-sideFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-sideFrame.BorderSizePixel = 1
-sideFrame.BorderColor3 = Color3.fromRGB(0, 80, 80)
+sideFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+sideFrame.BorderSizePixel = 0
 sideFrame.Active = true
 sideFrame.ZIndex = 1
 sideFrame.Visible = false
 sideFrame.Parent = gui
-local draggingSide, dragInputSide, dragStartSide, startPosSide
+mkCorner(sideFrame, 6)
+mkStroke(sideFrame, Color3.fromRGB(0, 90, 100), 1)
 local function dragSide(input)
 	local delta = input.Position - dragStartSide
 	sideFrame.Position = UDim2.new(startPosSide.X.Scale, startPosSide.X.Offset + delta.X, startPosSide.Y.Scale, startPosSide.Y.Offset + delta.Y)
 end
 table.insert(connections, sideFrame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeDragger then
+		activeDragger = "side"
 		draggingSide = true
 		dragStartSide = input.Position
 		startPosSide = sideFrame.Position
 		table.insert(connections, input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then draggingSide = false end
+			if input.UserInputState == Enum.UserInputState.End then
+				draggingSide = false
+				if activeDragger == "side" then activeDragger = nil end
+			end
 		end))
 	end
 end))
 table.insert(connections, sideFrame.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+	if draggingSide and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		dragInputSide = input
 	end
 end))
@@ -773,7 +919,7 @@ table.insert(connections, openSide.MouseButton1Click:Connect(function()
 end))
 local sideTitle = Instance.new("TextLabel")
 sideTitle.Size = UDim2.new(1, 0, 0, 25)
-sideTitle.BackgroundColor3 = Color3.fromRGB(0, 40, 40)
+sideTitle.BackgroundColor3 = Color3.fromRGB(8, 28, 32)
 sideTitle.Text = "keybinds"
 sideTitle.TextColor3 = Color3.fromRGB(0, 255, 200)
 sideTitle.Font = Enum.Font.Code
@@ -782,7 +928,7 @@ sideTitle.Parent = sideFrame
 local sideList = Instance.new("ScrollingFrame")
 sideList.Position = UDim2.new(0, 5, 0, 30)
 sideList.Size = UDim2.new(1, -10, 1, -65)
-sideList.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+sideList.BackgroundColor3 = Color3.fromRGB(14, 17, 22)
 sideList.BorderSizePixel = 0
 sideList.CanvasSize = UDim2.new(0, 0, 0, 0)
 sideList.ScrollBarThickness = 2
@@ -798,18 +944,22 @@ local addB = Instance.new("TextButton")
 addB.Size = UDim2.new(0.5, -10, 0, 25)
 addB.Position = UDim2.new(0, 5, 1, -30)
 addB.Text = "Add Bind"
-addB.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
-addB.TextColor3 = Color3.new(1, 1, 1)
+addB.BackgroundColor3 = Color3.fromRGB(0, 60, 70)
+addB.TextColor3 = Color3.fromRGB(0, 220, 170)
 addB.ZIndex = 3
 addB.Parent = sideFrame
+mkCorner(addB, 4)
+mkStroke(addB, Color3.fromRGB(0, 110, 120), 1)
 local addR = Instance.new("TextButton")
 addR.Size = UDim2.new(0.5, -10, 0, 25)
 addR.Position = UDim2.new(0.5, 5, 1, -30)
 addR.Text = "Add Repl"
-addR.BackgroundColor3 = Color3.fromRGB(60, 60, 0)
-addR.TextColor3 = Color3.new(1, 1, 1)
+addR.BackgroundColor3 = Color3.fromRGB(60, 57, 0)
+addR.TextColor3 = Color3.fromRGB(220, 210, 0)
 addR.ZIndex = 3
 addR.Parent = sideFrame
+mkCorner(addR, 4)
+mkStroke(addR, Color3.fromRGB(120, 110, 0), 1)
 local sideClose = Instance.new("TextButton")
 sideClose.Size = UDim2.new(0, 20, 0, 20)
 sideClose.Position = UDim2.new(1, -20, 0, 0)
@@ -838,12 +988,13 @@ cmdsBtn.Parent = sideFrame
 local cmdsTooltip = Instance.new("Frame")
 cmdsTooltip.Size = UDim2.new(1, 0, 0, 260)
 cmdsTooltip.Position = UDim2.new(0, 0, 0, 25)
-cmdsTooltip.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-cmdsTooltip.BorderSizePixel = 1
-cmdsTooltip.BorderColor3 = Color3.fromRGB(0, 255, 200)
+cmdsTooltip.BackgroundColor3 = Color3.fromRGB(14, 18, 24)
+cmdsTooltip.BorderSizePixel = 0
 cmdsTooltip.ZIndex = 10
 cmdsTooltip.Visible = false
 cmdsTooltip.Parent = sideFrame
+mkCorner(cmdsTooltip, 4)
+mkStroke(cmdsTooltip, Color3.fromRGB(0, 180, 150), 1)
 local tooltipLabel = Instance.new("TextLabel")
 tooltipLabel.Size = UDim2.new(1, -10, 1, -10)
 tooltipLabel.Position = UDim2.new(0, 5, 0, 5)
@@ -898,31 +1049,35 @@ local viewportWin = Instance.new("Frame")
 viewportWin.Name = "ViewportWindow"
 viewportWin.Size = UDim2.new(0, 300, 0, 488)
 viewportWin.Position = UDim2.new(0, 670, 0, 380)
-viewportWin.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-viewportWin.BorderSizePixel = 1
-viewportWin.BorderColor3 = Color3.fromRGB(0, 80, 80)
+viewportWin.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+viewportWin.BorderSizePixel = 0
 viewportWin.Active = true
 viewportWin.ClipsDescendants = false
 viewportWin.ZIndex = 5
 viewportWin.Visible = false
 viewportWin.Parent = gui
-local draggingVP, dragInputVP, dragStartVP, startPosVP
+mkCorner(viewportWin, 6)
+mkStroke(viewportWin, Color3.fromRGB(0, 90, 100), 1)
 local function dragVP(input)
 	local delta = input.Position - dragStartVP
 	viewportWin.Position = UDim2.new(startPosVP.X.Scale, startPosVP.X.Offset + delta.X, startPosVP.Y.Scale, startPosVP.Y.Offset + delta.Y)
 end
 table.insert(connections, viewportWin.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeDragger then
+		activeDragger = "vp"
 		draggingVP = true
 		dragStartVP = input.Position
 		startPosVP = viewportWin.Position
 		table.insert(connections, input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then draggingVP = false end
+			if input.UserInputState == Enum.UserInputState.End then
+				draggingVP = false
+				if activeDragger == "vp" then activeDragger = nil end
+			end
 		end))
 	end
 end))
 table.insert(connections, viewportWin.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+	if draggingVP and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		dragInputVP = input
 	end
 end))
@@ -931,13 +1086,13 @@ table.insert(connections, UserInputService.InputChanged:Connect(function(input)
 end))
 local vpTop = Instance.new("Frame")
 vpTop.Size = UDim2.new(1, 0, 0, 25)
-vpTop.BackgroundColor3 = Color3.fromRGB(0, 40, 40)
+vpTop.BackgroundColor3 = Color3.fromRGB(8, 28, 32)
 vpTop.BorderSizePixel = 0
 vpTop.ZIndex = 6
 vpTop.Parent = viewportWin
 local vpTitle = Instance.new("TextLabel")
 vpTitle.Text = "preview"
-vpTitle.Size = UDim2.new(1, -50, 1, 0)
+vpTitle.Size = UDim2.new(1, -120, 1, 0)
 vpTitle.BackgroundTransparency = 1
 vpTitle.TextColor3 = Color3.fromRGB(0, 255, 200)
 vpTitle.Font = Enum.Font.Code
@@ -945,16 +1100,44 @@ vpTitle.TextSize = 13
 vpTitle.ZIndex = 7
 vpTitle.Parent = vpTop
 local vpClose = Instance.new("TextButton")
-vpClose.Size = UDim2.new(0, 25, 1, 0)
-vpClose.Position = UDim2.new(1, -25, 0, 0)
+vpClose.Size = UDim2.new(0, 25, 0, 20)
+vpClose.Position = UDim2.new(1, -27, 0, 3)
 vpClose.Text = "X"
-vpClose.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+vpClose.BackgroundColor3 = Color3.fromRGB(140, 20, 20)
 vpClose.TextColor3 = Color3.new(1, 1, 1)
 vpClose.BorderSizePixel = 0
+vpClose.Font = Enum.Font.Code
+vpClose.TextSize = 11
 vpClose.ZIndex = 7
 vpClose.Parent = vpTop
+mkCorner(vpClose, 4)
+
+local vpMinimize = Instance.new("TextButton")
+vpMinimize.Size = UDim2.new(0, 25, 0, 20)
+vpMinimize.Position = UDim2.new(1, -54, 0, 3)
+vpMinimize.Text = "-"
+vpMinimize.BackgroundColor3 = Color3.fromRGB(0, 55, 65)
+vpMinimize.TextColor3 = Color3.new(1, 1, 1)
+vpMinimize.BorderSizePixel = 0
+vpMinimize.Font = Enum.Font.Code
+vpMinimize.TextSize = 11
+vpMinimize.ZIndex = 7
+vpMinimize.Parent = vpTop
+mkCorner(vpMinimize, 4)
+
+local vpMinimized = false
 table.insert(connections, vpClose.MouseButton1Click:Connect(function()
 	viewportWin.Visible = false
+end))
+table.insert(connections, vpMinimize.MouseButton1Click:Connect(function()
+	vpMinimized = not vpMinimized
+	if vpMinimized then
+		viewportWin.Size = UDim2.new(0, 300, 0, 28)
+		vpMinimize.Text = "+"
+	else
+		viewportWin.Size = UDim2.new(0, 300, 0, 488)
+		vpMinimize.Text = "-"
+	end
 end))
 
 local vpIdInput = Instance.new("TextBox")
@@ -962,24 +1145,24 @@ vpIdInput.Text = ""
 vpIdInput.PlaceholderText = "animation id..."
 vpIdInput.Position = UDim2.new(0, 5, 0, 30)
 vpIdInput.Size = UDim2.new(1, -55, 0, 24)
-vpIdInput.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+vpIdInput.BackgroundColor3 = Color3.fromRGB(12, 16, 22)
 vpIdInput.TextColor3 = Color3.new(1, 1, 1)
 vpIdInput.PlaceholderColor3 = Color3.fromRGB(0, 100, 80)
-vpIdInput.BorderSizePixel = 1
-vpIdInput.BorderColor3 = Color3.fromRGB(0, 120, 100)
+vpIdInput.BorderSizePixel = 0
 vpIdInput.Font = Enum.Font.Code
 vpIdInput.TextSize = 12
 vpIdInput.ZIndex = 7
 vpIdInput.Parent = viewportWin
+mkCorner(vpIdInput, 4)
+mkStroke(vpIdInput, Color3.fromRGB(0, 90, 100), 1)
 
 local vpIdGoBtn = Instance.new("TextButton")
 vpIdGoBtn.Text = "▶"
 vpIdGoBtn.Position = UDim2.new(1, -47, 0, 30)
 vpIdGoBtn.Size = UDim2.new(0, 42, 0, 24)
-vpIdGoBtn.BackgroundColor3 = Color3.fromRGB(0, 80, 60)
+vpIdGoBtn.BackgroundColor3 = Color3.fromRGB(0, 75, 60)
 vpIdGoBtn.TextColor3 = Color3.new(1, 1, 1)
-vpIdGoBtn.BorderSizePixel = 1
-vpIdGoBtn.BorderColor3 = Color3.fromRGB(0, 160, 120)
+vpIdGoBtn.BorderSizePixel = 0
 vpIdGoBtn.Font = Enum.Font.Code
 vpIdGoBtn.TextSize = 13
 vpIdGoBtn.ZIndex = 7
@@ -988,11 +1171,12 @@ vpIdGoBtn.Parent = viewportWin
 local vpFrame = Instance.new("ViewportFrame")
 vpFrame.Size = UDim2.new(1, -10, 0, 220)
 vpFrame.Position = UDim2.new(0, 5, 0, 58)
-vpFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-vpFrame.BorderSizePixel = 1
-vpFrame.BorderColor3 = Color3.fromRGB(0, 100, 100)
+vpFrame.BackgroundColor3 = Color3.fromRGB(18, 20, 24)
+vpFrame.BorderSizePixel = 0
 vpFrame.ZIndex = 6
 vpFrame.Parent = viewportWin
+mkCorner(vpFrame, 4)
+mkStroke(vpFrame, Color3.fromRGB(0, 80, 90), 1)
 local vpCamera = Instance.new("Camera")
 vpCamera.Parent = vpFrame
 vpFrame.CurrentCamera = vpCamera
@@ -1027,11 +1211,11 @@ vpTimerLabel.Parent = viewportWin
 local vpScrubBg = Instance.new("Frame")
 vpScrubBg.Position = UDim2.new(0, 5, 0, 317)
 vpScrubBg.Size = UDim2.new(1, -10, 0, 12)
-vpScrubBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-vpScrubBg.BorderSizePixel = 1
-vpScrubBg.BorderColor3 = Color3.fromRGB(0, 80, 80)
+vpScrubBg.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
+vpScrubBg.BorderSizePixel = 0
 vpScrubBg.ZIndex = 6
 vpScrubBg.Parent = viewportWin
+mkCorner(vpScrubBg, 6)
 
 local vpScrubFill = Instance.new("Frame")
 vpScrubFill.Size = UDim2.new(0, 0, 1, 0)
@@ -1090,6 +1274,7 @@ vpPauseBtn.Font = Enum.Font.Code
 vpPauseBtn.TextSize = 11
 vpPauseBtn.ZIndex = 6
 vpPauseBtn.Parent = viewportWin
+mkCorner(vpPauseBtn, 4)
 
 table.insert(connections, vpPauseBtn.MouseButton1Click:Connect(function()
 	if not vpPaused and not vpTrack then return end
@@ -1202,6 +1387,7 @@ vpLoopToggle.Font = Enum.Font.Code
 vpLoopToggle.TextSize = 11
 vpLoopToggle.ZIndex = 6
 vpLoopToggle.Parent = viewportWin
+mkCorner(vpLoopToggle, 4)
 local vpTimeLabel = Instance.new("TextLabel")
 vpTimeLabel.Text = "Time"
 vpTimeLabel.Position = UDim2.new(0, 200, 0, 353)
@@ -1236,6 +1422,7 @@ vpPlayBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
 vpPlayBtn.Font = Enum.Font.Code
 vpPlayBtn.ZIndex = 6
 vpPlayBtn.Parent = viewportWin
+mkCorner(vpPlayBtn, 4)
 local vpStopBtn = Instance.new("TextButton")
 vpStopBtn.Text = "■ Stop Preview"
 vpStopBtn.Position = UDim2.new(0.5, 3, 0, 378)
@@ -1247,6 +1434,7 @@ vpStopBtn.BorderColor3 = Color3.fromRGB(120, 0, 0)
 vpStopBtn.Font = Enum.Font.Code
 vpStopBtn.ZIndex = 6
 vpStopBtn.Parent = viewportWin
+mkCorner(vpStopBtn, 4)
 local vpPlaySelfBtn = Instance.new("TextButton")
 vpPlaySelfBtn.Text = "★ Play on Self"
 vpPlaySelfBtn.Position = UDim2.new(0, 5, 0, 408)
@@ -1258,6 +1446,7 @@ vpPlaySelfBtn.BorderColor3 = Color3.fromRGB(0, 100, 160)
 vpPlaySelfBtn.Font = Enum.Font.Code
 vpPlaySelfBtn.ZIndex = 6
 vpPlaySelfBtn.Parent = viewportWin
+mkCorner(vpPlaySelfBtn, 4)
 local vpRotateCCW = Instance.new("TextButton")
 vpRotateCCW.Text = "◄"
 vpRotateCCW.Position = UDim2.new(0, 5, 0, 435)
@@ -1270,6 +1459,7 @@ vpRotateCCW.Font = Enum.Font.Code
 vpRotateCCW.TextSize = 13
 vpRotateCCW.ZIndex = 6
 vpRotateCCW.Parent = viewportWin
+mkCorner(vpRotateCCW, 4)
 local vpRotateCW = Instance.new("TextButton")
 vpRotateCW.Text = "►"
 vpRotateCW.Position = UDim2.new(0.78, 3, 0, 435)
@@ -1282,6 +1472,7 @@ vpRotateCW.Font = Enum.Font.Code
 vpRotateCW.TextSize = 13
 vpRotateCW.ZIndex = 6
 vpRotateCW.Parent = viewportWin
+mkCorner(vpRotateCW, 4)
 local vpPrecisionBox = Instance.new("TextBox")
 vpPrecisionBox.Text = "90"
 vpPrecisionBox.PlaceholderText = "step"
@@ -1308,6 +1499,7 @@ vpZoomIn.Font = Enum.Font.Code
 vpZoomIn.TextSize = 11
 vpZoomIn.ZIndex = 6
 vpZoomIn.Parent = viewportWin
+mkCorner(vpZoomIn, 4)
 local vpZoomOut = Instance.new("TextButton")
 vpZoomOut.Text = "- Zoom"
 vpZoomOut.Position = UDim2.new(0.5, 3, 0, 460)
@@ -1320,6 +1512,7 @@ vpZoomOut.Font = Enum.Font.Code
 vpZoomOut.TextSize = 11
 vpZoomOut.ZIndex = 6
 vpZoomOut.Parent = viewportWin
+mkCorner(vpZoomOut, 4)
 local function makeRig()
 	local model = Instance.new("Model")
 	model.Name = "PreviewRig"
@@ -1420,6 +1613,14 @@ local function previewAnim(id)
 			track.Looped = vpLooped
 			track:Play(0, 1, tonumber(vpSpeedBox.Text) or 1)
 			vpTrack = track
+			local scrub = tonumber(vpTimeBox.Text) or 0
+			if scrub > 0 then
+				task.defer(function()
+					if vpTrack then
+						vpTrack.TimePosition = math.clamp(scrub, 0, vpTrack.Length)
+					end
+				end)
+			end
 		end
 		vpCamera.CFrame = CFrame.new(Vector3.new(0, 5, vpZoomDist), Vector3.new(0, 4, 0))
 	end)
@@ -1545,7 +1746,7 @@ table.insert(connections, RunService.RenderStepped:Connect(function()
 		if mainPaused then
 			mainPaused = false
 			mainPauseBtn.Text = "⏸ Pause"
-			mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 60)
+			mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0, 55, 70)
 		end
 	end
 end))
@@ -1709,11 +1910,12 @@ end))
 local function addBind(bindData)
 	local bFrame = Instance.new("Frame")
 	bFrame.Size = UDim2.new(1, 0, 0, 190)
-	bFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	bFrame.BorderSizePixel = 1
-	bFrame.BorderColor3 = Color3.fromRGB(0, 60, 60)
+	bFrame.BackgroundColor3 = Color3.fromRGB(16, 20, 26)
+	bFrame.BorderSizePixel = 0
 	bFrame.ZIndex = 3
 	bFrame.Parent = sideList
+	mkCorner(bFrame, 5)
+	mkStroke(bFrame, Color3.fromRGB(0, 60, 70), 1)
 	local activeBar = Instance.new("Frame")
 	activeBar.Name = "ActiveBar"
 	activeBar.Size = UDim2.new(1, 0, 0, 3)
@@ -1866,40 +2068,40 @@ local function addFavRow(id, displayName)
 	fFrame.Parent = favsList
 	local fBtn = Instance.new("TextButton")
 	fBtn.Size = UDim2.new(1, -95, 1, 0)
-	fBtn.BackgroundColor3 = Color3.fromRGB(20, 18, 5)
+	fBtn.BackgroundColor3 = Color3.fromRGB(22, 19, 5)
 	fBtn.TextColor3 = Color3.fromRGB(220, 200, 0)
 	fBtn.TextXAlignment = Enum.TextXAlignment.Left
 	fBtn.Text = "★ " .. id .. " | " .. (displayName or "Unknown")
-	fBtn.BorderSizePixel = 1
-	fBtn.BorderColor3 = Color3.fromRGB(80, 80, 0)
+	fBtn.BorderSizePixel = 0
 	fBtn.Font = Enum.Font.Code
 	fBtn.TextSize = 12
 	fBtn.ZIndex = 4
 	fBtn.Parent = fFrame
+	mkCorner(fBtn, 3)
 	local fPreviewBtn = Instance.new("TextButton")
 	fPreviewBtn.Size = UDim2.new(0, 42, 1, 0)
 	fPreviewBtn.Position = UDim2.new(1, -95, 0, 0)
 	fPreviewBtn.Text = "👁 View"
-	fPreviewBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 70)
+	fPreviewBtn.BackgroundColor3 = Color3.fromRGB(0, 48, 68)
 	fPreviewBtn.TextColor3 = Color3.new(1, 1, 1)
-	fPreviewBtn.BorderSizePixel = 1
-	fPreviewBtn.BorderColor3 = Color3.fromRGB(0, 100, 140)
+	fPreviewBtn.BorderSizePixel = 0
 	fPreviewBtn.Font = Enum.Font.Code
 	fPreviewBtn.TextSize = 11
 	fPreviewBtn.ZIndex = 4
 	fPreviewBtn.Parent = fFrame
+	mkCorner(fPreviewBtn, 3)
 	local fCopyBtn = Instance.new("TextButton")
 	fCopyBtn.Size = UDim2.new(0, 42, 1, 0)
 	fCopyBtn.Position = UDim2.new(1, -48, 0, 0)
 	fCopyBtn.Text = "Copy"
-	fCopyBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+	fCopyBtn.BackgroundColor3 = Color3.fromRGB(0, 55, 65)
 	fCopyBtn.TextColor3 = Color3.new(1, 1, 1)
-	fCopyBtn.BorderSizePixel = 1
-	fCopyBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
+	fCopyBtn.BorderSizePixel = 0
 	fCopyBtn.Font = Enum.Font.Code
 	fCopyBtn.TextSize = 11
 	fCopyBtn.ZIndex = 4
 	fCopyBtn.Parent = fFrame
+	mkCorner(fCopyBtn, 3)
 	local fUnstarBtn = Instance.new("TextButton")
 	fUnstarBtn.Size = UDim2.new(0, 0, 1, 0)
 	fUnstarBtn.BackgroundTransparency = 1
@@ -1928,78 +2130,80 @@ local function addLogRow(id, name, key, priority)
 	local entryFrame = Instance.new("Frame")
 	entryFrame.Name = key
 	entryFrame.Size = UDim2.new(1, -5, 0, 22)
+	entryFrame.ClipsDescendants = true
 	entryFrame.BackgroundTransparency = 1
 	entryFrame.ZIndex = 3
 	entryFrame.Parent = list
 	local entry = Instance.new("TextButton")
-	entry.Size = UDim2.new(1, -132, 1, 0)
-	entry.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+	entry.Size = UDim2.new(1, -142, 1, 0)
+	entry.BackgroundColor3 = Color3.fromRGB(16, 20, 26)
 	entry.TextColor3 = Color3.fromRGB(0, 255, 200)
 	entry.TextXAlignment = Enum.TextXAlignment.Left
 	entry.Text = "(1) [" .. (priority or "N/A") .. "] " .. id .. " | " .. name .. " @" .. (animTimestamps[key] or os.date("%H:%M:%S"))
-	entry.BorderSizePixel = 1
-	entry.BorderColor3 = Color3.fromRGB(0, 100, 100)
+	entry.BorderSizePixel = 0
 	entry.Font = Enum.Font.Code
 	entry.TextSize = 11
+	entry.TextTruncate = Enum.TextTruncate.AtEnd
 	entry.ZIndex = 4
 	entry.Visible = true
 	entry.Parent = entryFrame
+	mkCorner(entry, 3)
 	local previewBtn = Instance.new("TextButton")
 	previewBtn.Name = "Preview"
-	previewBtn.Size = UDim2.new(0, 22, 1, 0)
-	previewBtn.Position = UDim2.new(1, -132, 0, 0)
-	previewBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 70)
+	previewBtn.Size = UDim2.new(0, 20, 1, 0)
+	previewBtn.Position = UDim2.new(1, -140, 0, 0)
+	previewBtn.BackgroundColor3 = Color3.fromRGB(0, 48, 68)
 	previewBtn.TextColor3 = Color3.new(1, 1, 1)
 	previewBtn.Text = "👁"
-	previewBtn.BorderSizePixel = 1
-	previewBtn.BorderColor3 = Color3.fromRGB(0, 100, 140)
+	previewBtn.BorderSizePixel = 0
 	previewBtn.Font = Enum.Font.Code
 	previewBtn.TextSize = 12
 	previewBtn.ZIndex = 4
 	previewBtn.Visible = true
 	previewBtn.Parent = entryFrame
+	mkCorner(previewBtn, 3)
 	local favBtn = Instance.new("TextButton")
 	favBtn.Name = "Fav"
-	favBtn.Size = UDim2.new(0, 22, 1, 0)
-	favBtn.Position = UDim2.new(1, -108, 0, 0)
-	favBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 0)
+	favBtn.Size = UDim2.new(0, 20, 1, 0)
+	favBtn.Position = UDim2.new(1, -118, 0, 0)
+	favBtn.BackgroundColor3 = Color3.fromRGB(38, 36, 0)
 	favBtn.TextColor3 = Color3.new(1, 1, 1)
 	favBtn.Text = favorites[id] and "★" or "☆"
-	favBtn.BorderSizePixel = 1
-	favBtn.BorderColor3 = Color3.fromRGB(80, 80, 0)
+	favBtn.BorderSizePixel = 0
 	favBtn.Font = Enum.Font.Code
 	favBtn.TextSize = 12
 	favBtn.ZIndex = 4
 	favBtn.Visible = true
 	favBtn.Parent = entryFrame
+	mkCorner(favBtn, 3)
 	local nameBtn = Instance.new("TextButton")
 	nameBtn.Name = "Name"
-	nameBtn.Size = UDim2.new(0, 48, 1, 0)
-	nameBtn.Position = UDim2.new(1, -80, 0, 0)
-	nameBtn.BackgroundColor3 = Color3.fromRGB(0, 40, 40)
+	nameBtn.Size = UDim2.new(0, 46, 1, 0)
+	nameBtn.Position = UDim2.new(1, -96, 0, 0)
+	nameBtn.BackgroundColor3 = Color3.fromRGB(0, 38, 45)
 	nameBtn.TextColor3 = Color3.new(1, 1, 1)
 	nameBtn.Text = "Name"
-	nameBtn.BorderSizePixel = 1
-	nameBtn.BorderColor3 = Color3.fromRGB(0, 80, 80)
+	nameBtn.BorderSizePixel = 0
 	nameBtn.Font = Enum.Font.Code
 	nameBtn.TextSize = 10
 	nameBtn.ZIndex = 4
 	nameBtn.Visible = true
 	nameBtn.Parent = entryFrame
+	mkCorner(nameBtn, 3)
 	local copyBtn = Instance.new("TextButton")
 	copyBtn.Name = "Copy"
-	copyBtn.Size = UDim2.new(0, 48, 1, 0)
-	copyBtn.Position = UDim2.new(1, -28, 0, 0)
-	copyBtn.BackgroundColor3 = Color3.fromRGB(0, 60, 60)
+	copyBtn.Size = UDim2.new(0, 46, 1, 0)
+	copyBtn.Position = UDim2.new(1, -48, 0, 0)
+	copyBtn.BackgroundColor3 = Color3.fromRGB(0, 55, 65)
 	copyBtn.TextColor3 = Color3.new(1, 1, 1)
 	copyBtn.Text = "Copy"
-	copyBtn.BorderSizePixel = 1
-	copyBtn.BorderColor3 = Color3.fromRGB(0, 120, 100)
+	copyBtn.BorderSizePixel = 0
 	copyBtn.Font = Enum.Font.Code
 	copyBtn.TextSize = 10
 	copyBtn.ZIndex = 4
 	copyBtn.Visible = true
 	copyBtn.Parent = entryFrame
+	mkCorner(copyBtn, 3)
 	table.insert(connections, entry.MouseButton1Click:Connect(function()
 		idBox.Text = id
 	end))
