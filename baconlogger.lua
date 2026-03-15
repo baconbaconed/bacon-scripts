@@ -18,7 +18,7 @@ local Data = {
 	animFrames = {},
 	banned = {},
 	trueBanned = {},
-	logBlacklist = {},  -- NEW: silent log suppression, animation still plays
+	logBlacklist = {},  
 	seenTracks = {},
 	replacingTargets = {},
 	scriptTracks = {},
@@ -66,8 +66,8 @@ local State = {
 	vpYaw = 0,
 	vpZoomDist = 11,
 	vpCurrentId = nil,
-	vpSkinQuery = nil,  -- last loaded skin username/userid (display only)
-	vpSkinCache = nil,  -- { type="desc"|"char", data=HumanoidDescription|Model } for instant re-apply
+	vpSkinQuery = nil,  
+	vpSkinCache = nil,  
 	vpScrubbing = false,
 	mainScrubbing = false,
 	dragging = false,
@@ -96,7 +96,7 @@ local function dumpCfg()
 		globalLogging = State.globalLogging,
 		banned = Data.banned,
 		trueBanned = Data.trueBanned,
-		logBlacklist = Data.logBlacklist,  -- NEW: persist log blacklist
+		logBlacklist = Data.logBlacklist,  
 		replacements = Data.replacements,
 		favorites = Data.favorites,
 		customNames = Data.customNames,
@@ -670,7 +670,7 @@ local function rebuildBannedList()
 	for _, child in ipairs(UI.bannedList:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
 	end
-	-- Regular bans
+	
 	for id, isBanned in pairs(Data.banned) do
 		if isBanned then
 			local row = Instance.new("Frame")
@@ -729,7 +729,7 @@ local function rebuildBannedList()
 			end))
 		end
 	end
-	-- NEW: Log blacklist entries shown in purple with ◈ prefix
+	
 	for id, isLogBanned in pairs(Data.logBlacklist) do
 		if isLogBanned then
 			local row = Instance.new("Frame")
@@ -811,7 +811,7 @@ UI.controls.BorderSizePixel = 0
 UI.controls.ClipsDescendants = true
 UI.controls.ScrollBarThickness = 3
 UI.controls.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 130)
-UI.controls.CanvasSize = UDim2.new(0, 0, 0, 820)  -- increased from 750 to fit new buttons
+UI.controls.CanvasSize = UDim2.new(0, 0, 0, 820)  
 UI.controls.ZIndex = 2
 UI.controls.Visible = true
 UI.controls.Parent = UI.mainFrame
@@ -1046,7 +1046,7 @@ button("Unban", 430, function()
 	refreshColors()
 end, Color3.fromRGB(70, 45, 0), Color3.fromRGB(140, 90, 0))
 
--- NEW: Log Ban — silently suppress logging, animation still plays, shows purple in Banned tab
+
 button("Log Ban", 465, function()
 	local id = UI.idBox.Text
 	if id == "" then return end
@@ -1056,7 +1056,7 @@ button("Log Ban", 465, function()
 	flashNotif("◈ Log-banned " .. id .. " (still plays)")
 end, Color3.fromRGB(50, 15, 80), Color3.fromRGB(130, 50, 200))
 
--- NEW: Log Unban — remove from log blacklist
+
 button("Log Unban", 500, function()
 	local id = UI.idBox.Text
 	if id == "" then return end
@@ -2101,7 +2101,7 @@ UI.vpZoomOut.ZIndex = 6
 UI.vpZoomOut.Parent = UI.viewportWin
 mkCorner(UI.vpZoomOut, 4)
 
--- Player skin section
+
 local vpSkinLabel = Instance.new("TextLabel")
 vpSkinLabel.Text = "username or userid"
 vpSkinLabel.Position = UDim2.new(0, 5, 0, 484)
@@ -2247,12 +2247,12 @@ local function makeRig()
 	noseWeld.Part1 = nose
 	noseWeld.C0 = CFrame.new(0, 0, -0.65)
 	noseWeld.Parent = head
-	-- SpecialMesh on head so ApplyDescription can swap the head mesh
+	
 	local headMesh = Instance.new("SpecialMesh")
 	headMesh.MeshType = Enum.MeshType.Head
 	headMesh.Scale = Vector3.new(1, 1, 1)
 	headMesh.Parent = head
-	-- Standard attachments ApplyDescription needs to place hats/face accessories
+	
 	local function att(parent, name, cf)
 		local a = Instance.new("Attachment")
 		a.Name = name
@@ -2277,7 +2277,7 @@ local function makeRig()
 	return model, animator, root
 end
 
--- Strip all applied appearance from the rig, leaving bare grey parts + motors intact
+
 local function stripRigAppearance(rig)
 	for _, obj in ipairs(rig:GetChildren()) do
 		if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants")
@@ -2296,7 +2296,7 @@ local function stripRigAppearance(rig)
 			end
 		end
 	end
-	-- Restore default round head mesh
+	
 	local head = rig:FindFirstChild("Head")
 	if head then
 		local mesh = Instance.new("SpecialMesh")
@@ -2308,9 +2308,9 @@ local function stripRigAppearance(rig)
 	if nose then nose:Destroy() end
 end
 
--- Copy full appearance from a live ingame character onto the rig
+
 local function applyFromChar(rig, srcChar)
-	-- Body colors
+	
 	local bc = srcChar:FindFirstChildOfClass("BodyColors")
 	if bc then
 		local colorMap = {
@@ -2327,7 +2327,7 @@ local function applyFromChar(rig, srcChar)
 		end
 		bc:Clone().Parent = rig
 	end
-	-- Head mesh — destroy existing then clone from source
+	
 	local srcHead = srcChar:FindFirstChild("Head")
 	local dstHead = rig:FindFirstChild("Head")
 	if srcHead and dstHead then
@@ -2339,30 +2339,30 @@ local function applyFromChar(rig, srcChar)
 		if srcMesh then
 			srcMesh:Clone().Parent = dstHead
 		else
-			-- source has no mesh either (e.g. GetCharacterAppearanceAsync model) — keep round default
+			
 			local mesh = Instance.new("SpecialMesh")
 			mesh.MeshType = Enum.MeshType.Head
 			mesh.Scale = Vector3.new(1, 1, 1)
 			mesh.Parent = dstHead
 		end
 	end
-	-- Shirt / pants / t-shirt graphic
+	
 	for _, obj in ipairs(srcChar:GetChildren()) do
 		if obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") then
 			obj:Clone().Parent = rig
 		end
 	end
-	-- Accessories — re-weld each handle to the correct rig part
+	
 	for _, obj in ipairs(srcChar:GetChildren()) do
 		if obj:IsA("Accessory") then
 			local acc = obj:Clone()
 			local handle = acc:FindFirstChild("Handle")
 			if handle then
-				-- Remove the existing attachment-based weld from the original char
+				
 				for _, w in ipairs(handle:GetChildren()) do
 					if w:IsA("Weld") or w:IsA("Motor6D") or w:IsA("Snap") then w:Destroy() end
 				end
-				-- Figure out which part to weld to via attachment name
+				
 				local att = handle:FindFirstChildOfClass("Attachment")
 				local targetPartName = "Head"
 				if att then
@@ -2403,7 +2403,7 @@ local function applyFromChar(rig, srcChar)
 	end
 end
 
--- Apply a player's full appearance via HumanoidDescription (works for offline players too)
+
 local function applyFromDescription(rig, desc)
 	local hum = rig:FindFirstChildOfClass("Humanoid")
 	if not hum then return false end
@@ -2413,7 +2413,7 @@ local function applyFromDescription(rig, desc)
 	return ok
 end
 
--- Apply a player's appearance onto the current ghost rig
+
 local function applyPlayerSkin(query)
 	if not Data.ghostChar then return end
 	local rig = Data.ghostChar
@@ -2422,7 +2422,7 @@ local function applyPlayerSkin(query)
 	UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(180, 160, 0)
 
 	task.spawn(function()
-		-- Step 1: resolve to a numeric userId
+		
 		local resolvedId
 		if tostring(query):match("^%d+$") then
 			resolvedId = tonumber(query)
@@ -2439,7 +2439,7 @@ local function applyPlayerSkin(query)
 			end
 		end
 
-		-- Step 2: check if this player is currently ingame — cheapest path
+		
 		local ingameChar = nil
 		for _, p in ipairs(Services.Players:GetPlayers()) do
 			if p.UserId == resolvedId and p.Character then
@@ -2458,14 +2458,12 @@ local function applyPlayerSkin(query)
 			return
 		end
 
-		-- Step 3: fetch HumanoidDescription from Roblox — works for offline players
-		-- GetCharacterAppearanceAsync returns a Model with the right accessories/colors/mesh
-		-- ApplyDescription on the rig's Humanoid handles everything natively
+
 		local desc
 		local ok, result = pcall(function()
 			desc = Players:GetHumanoidDescriptionFromUserId(resolvedId)
 		end)
-		-- Players may not be in scope, try via service
+		
 		if not ok or not desc then
 			ok, result = pcall(function()
 				desc = Services.Players:GetHumanoidDescriptionFromUserId(resolvedId)
@@ -2487,7 +2485,7 @@ local function applyPlayerSkin(query)
 			return
 		end
 
-		-- Step 4: last resort — GetCharacterAppearanceAsync gives a full model we can copy from
+	
 		local appearanceModel
 		ok, result = pcall(function()
 			appearanceModel = Services.Players:GetCharacterAppearanceAsync(resolvedId)
@@ -2507,12 +2505,12 @@ local function applyPlayerSkin(query)
 	end)
 end
 
--- Reset dummy back to plain grey rig
+
 local function resetDummySkin()
 	if not Data.ghostChar then return end
 	local rig = Data.ghostChar
 	stripRigAppearance(rig)
-	-- Re-add the red nose
+	
 	local head = rig:FindFirstChild("Head")
 	if head and not rig:FindFirstChild("Nose") then
 		local nose = Instance.new("Part")
@@ -2537,7 +2535,7 @@ local function resetDummySkin()
 	State.vpSkinQuery = nil
 	State.vpSkinCache = nil
 end
--- Instantly re-apply cached skin onto a freshly built rig, no network calls
+
 local function reapplyCachedSkin(rig)
 	local cache = State.vpSkinCache
 	if not cache then return end
@@ -2561,7 +2559,7 @@ local function previewAnim(id)
 		Data.ghostChar = rig
 		Data.vpAnimator = animator
 		Data.vpRootPart = rootPart
-		-- Apply skin immediately before any yield — no visible delay
+	
 		reapplyCachedSkin(rig)
 		vpCamera.CFrame = CFrame.new(Vector3.new(0, 5, State.vpZoomDist), Vector3.new(0, 4, 0))
 		task.wait(0.1)
@@ -3331,7 +3329,7 @@ end
 local function logIt(id, name, playerName, priority)
 	if Data.banned[id] then return end
 	if Data.trueBanned[id] then return end
-	if Data.logBlacklist[id] then return end  -- NEW: silently skip log-blacklisted anims
+	if Data.logBlacklist[id] then return end  
 	local entryName = name
 	local key = id
 	if playerName then
@@ -3374,7 +3372,7 @@ local function refreshColors()
 		elseif Data.banned[pureId] then
 			entry.TextColor3 = Color3.fromRGB(255, 50, 50)
 		elseif Data.logBlacklist[pureId] then
-			-- NEW: log-blacklisted entries show purple in the log list
+			
 			entry.TextColor3 = Color3.fromRGB(180, 100, 255)
 		elseif playingIds[pureId] then
 			entry.TextColor3 = Color3.fromRGB(50, 255, 50)
@@ -3428,9 +3426,9 @@ local function trackSeen(track, playerName)
 	if not anim then return end
 	local id = grabId(anim.AnimationId)
 	if not id then return end
-	-- Hard bans stop the track entirely
+	
 	if Data.banned[id] or Data.trueBanned[id] then stopTrack(track); return end
-	-- NEW: log blacklist — let the track play freely, just don't log it
+	
 	if Data.logBlacklist[id] then
 		if not Data.seenTracks[track] then
 			Data.seenTracks[track] = true
@@ -3776,7 +3774,7 @@ local function loadCfg()
 			State.autoCopy = data.autoCopy or false
 			Data.banned = data.banned or {}
 			Data.trueBanned = data.trueBanned or {}
-			Data.logBlacklist = data.logBlacklist or {}  -- NEW: restore log blacklist
+			Data.logBlacklist = data.logBlacklist or {}  
 			if data.toggleKey and Enum.KeyCode[data.toggleKey] then
 				State.toggleKey = Enum.KeyCode[data.toggleKey]
 			end
