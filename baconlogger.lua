@@ -42,7 +42,9 @@ local Data = {
 	vpScrubTrack = nil,
 	dummyTracks = {},
 	logOrder = 0,         
+    
 	logLastMove = {},     
+    
 }
 
 local State = {
@@ -168,6 +170,15 @@ local function fireAnim(id, speed, loop)
 			end
 			conn:Disconnect()
 		end
+
+		local anyLeft = false
+		for _ in pairs(Data.scriptTracks) do anyLeft = true; break end
+		if not anyLeft and State.mainPaused then
+			State.mainPaused = false
+			UI.mainPauseBtn.Text = "⏸ Pause"
+			UI.mainPauseBtn.BackgroundColor3 = Color3.fromRGB(28,28,28)
+			UI.mainPauseBtn.TextColor3 = Color3.fromRGB(180,180,180)
+		end
 		if loop and not Data.banned[id] and not intentional then
 			local holdBindOwns = false
 			for _, bind in pairs(Data.keybinds) do
@@ -222,7 +233,7 @@ local function mkCorner(parent, radius)
 end
 local function mkStroke(parent, color, thickness)
 	local s = Instance.new("UIStroke")
-	s.Color = color or Color3.fromRGB(0, 80, 90)
+	s.Color = color or Color3.fromRGB(65,65,65)
 	s.Thickness = thickness or 1
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	s.Parent = parent
@@ -232,25 +243,26 @@ UI.mainFrame = Instance.new("Frame")
 UI.mainFrame.Name = "MainFrame"
 UI.mainFrame.Size = UDim2.new(0, 820, 0, 630)
 UI.mainFrame.Position = UDim2.new(0, 50, 0, 50)
-UI.mainFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+UI.mainFrame.BackgroundColor3 = Color3.fromRGB(14,14,14)
+UI.mainFrame.BackgroundTransparency = 0.15
 UI.mainFrame.BorderSizePixel = 0
 UI.mainFrame.Active = true
 UI.mainFrame.Draggable = false
-UI.mainFrame.ClipsDescendants = false
+UI.mainFrame.ClipsDescendants = true
 UI.mainFrame.ZIndex = 1
 UI.mainFrame.Parent = UI.gui
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = UI.mainFrame
-	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0, 90, 100); s.Thickness = 1; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.mainFrame
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = UI.mainFrame
+	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(65,65,65); s.Thickness = 1.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.mainFrame
 end
 
 UI.notifLabel.Size = UDim2.new(0, 400, 0, 32)
 UI.notifLabel.AnchorPoint = Vector2.new(0.5, 0)
 UI.notifLabel.Position = UDim2.new(0.5, 0, 0, 8)
-UI.notifLabel.BackgroundColor3 = Color3.fromRGB(80, 20, 10)
+UI.notifLabel.BackgroundColor3 = Color3.fromRGB(42,42,42)
 UI.notifLabel.BackgroundTransparency = 1
-UI.notifLabel.TextColor3 = Color3.fromRGB(255, 120, 80)
-UI.notifLabel.Font = Enum.Font.Code
+UI.notifLabel.TextColor3 = Color3.fromRGB(210,210,210)
+UI.notifLabel.Font = Enum.Font.GothamSemibold
 UI.notifLabel.TextSize = 13
 UI.notifLabel.Text = ""
 UI.notifLabel.ZIndex = 100
@@ -258,7 +270,7 @@ UI.notifLabel.Visible = false
 UI.notifLabel.Parent = UI.gui
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 5); c.Parent = UI.notifLabel
-	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(180, 60, 30); s.Thickness = 1; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.notifLabel
+	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(65,65,65); s.Thickness = 1; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.notifLabel
 end
 local function flashNotif(msg)
 	UI.notifLabel.Text = msg
@@ -298,7 +310,7 @@ end))
 UI.resizeHandle = Instance.new("TextButton")
 UI.resizeHandle.Size = UDim2.new(0, 14, 0, 14)
 UI.resizeHandle.Position = UDim2.new(1, -14, 1, -14)
-UI.resizeHandle.BackgroundColor3 = Color3.fromRGB(0, 80, 90)
+UI.resizeHandle.BackgroundColor3 = Color3.fromRGB(42,42,42)
 UI.resizeHandle.Text = ""
 UI.resizeHandle.BorderSizePixel = 0
 UI.resizeHandle.ZIndex = 10
@@ -306,7 +318,7 @@ UI.resizeHandle.Parent = UI.mainFrame
 mkCorner(UI.resizeHandle, 3)
 do
 	local grip = Instance.new("TextLabel"); grip.Text = "⠿"; grip.Size = UDim2.new(1,0,1,0)
-	grip.BackgroundTransparency = 1; grip.TextColor3 = Color3.fromRGB(0,200,160)
+	grip.BackgroundTransparency = 1; grip.TextColor3 = Color3.fromRGB(95,95,95)
 	grip.Font = Enum.Font.Code; grip.TextSize = 11; grip.ZIndex = 11; grip.Parent = UI.resizeHandle
 end
 table.insert(Data.connections, UI.resizeHandle.InputBegan:Connect(function(input)
@@ -327,102 +339,102 @@ table.insert(Data.connections, Services.UserInputService.InputChanged:Connect(fu
 end))
 
 UI.top = Instance.new("Frame")
-UI.top.Name = "TopBar"; UI.top.Size = UDim2.new(1,0,0,28); UI.top.BackgroundColor3 = Color3.fromRGB(8,28,32)
-UI.top.BorderSizePixel = 0; UI.top.ZIndex = 2; UI.top.Parent = UI.mainFrame
+UI.top.Name = "TopBar"; UI.top.Size = UDim2.new(1,0,0,28); UI.top.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.top.BackgroundTransparency = 0
+UI.top.BorderSizePixel = 0; UI.top.ZIndex = 3; UI.top.Parent = UI.mainFrame
 do
 	local g = Instance.new("UIGradient")
-	g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0,55,65)), ColorSequenceKeypoint.new(1, Color3.fromRGB(5,25,30))})
+	g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(20,20,20)), ColorSequenceKeypoint.new(1, Color3.fromRGB(8,8,8))})
 	g.Rotation = 90; g.Parent = UI.top
 end
 UI.title = Instance.new("TextLabel")
-UI.title.Text = "⬡ bacon's advanced logger"
+UI.title.Text = "bacon\'s advanced logger"
 UI.title.Size = UDim2.new(1,-220,1,0); UI.title.Position = UDim2.new(0,10,0,0)
-UI.title.BackgroundTransparency = 1; UI.title.TextColor3 = Color3.fromRGB(0,220,170)
-UI.title.Font = Enum.Font.Code; UI.title.TextSize = 13; UI.title.TextXAlignment = Enum.TextXAlignment.Left
+UI.title.BackgroundTransparency = 1; UI.title.TextColor3 = Color3.fromRGB(210,210,210)
+UI.title.Font = Enum.Font.GothamBold; UI.title.TextSize = 15; UI.title.TextXAlignment = Enum.TextXAlignment.Left
 UI.title.ZIndex = 3; UI.title.Parent = UI.top
 
 UI.closeButton = Instance.new("TextButton")
 UI.closeButton.Size = UDim2.new(0,26,0,20); UI.closeButton.Position = UDim2.new(1,-28,0,4)
-UI.closeButton.Text = "X"; UI.closeButton.BackgroundColor3 = Color3.fromRGB(140,20,20)
-UI.closeButton.TextColor3 = Color3.new(1,1,1); UI.closeButton.BorderSizePixel = 0
-UI.closeButton.Font = Enum.Font.Code; UI.closeButton.TextSize = 12; UI.closeButton.ZIndex = 3; UI.closeButton.Parent = UI.top
+UI.closeButton.Text = "X"; UI.closeButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
+UI.closeButton.TextColor3 = Color3.fromRGB(255,255,255); UI.closeButton.BorderSizePixel = 0
+UI.closeButton.Font = Enum.Font.GothamSemibold; UI.closeButton.TextSize = 13; UI.closeButton.ZIndex = 3; UI.closeButton.Parent = UI.top
 mkCorner(UI.closeButton, 4)
 
 UI.minimize = Instance.new("TextButton")
 UI.minimize.Size = UDim2.new(0,26,0,20); UI.minimize.Position = UDim2.new(1,-56,0,4)
-UI.minimize.Text = "-"; UI.minimize.BackgroundColor3 = Color3.fromRGB(0,55,65)
-UI.minimize.TextColor3 = Color3.new(1,1,1); UI.minimize.BorderSizePixel = 0
-UI.minimize.Font = Enum.Font.Code; UI.minimize.TextSize = 12; UI.minimize.ZIndex = 3; UI.minimize.Parent = UI.top
+UI.minimize.Text = "-"; UI.minimize.BackgroundColor3 = Color3.fromRGB(22,38,24)
+UI.minimize.TextColor3 = Color3.fromRGB(140,210,145); UI.minimize.BorderSizePixel = 0
+UI.minimize.Font = Enum.Font.GothamSemibold; UI.minimize.TextSize = 13; UI.minimize.ZIndex = 3; UI.minimize.Parent = UI.top
 mkCorner(UI.minimize, 4)
 
 UI.openSide = Instance.new("TextButton")
 UI.openSide.Size = UDim2.new(0,52,0,20); UI.openSide.Position = UDim2.new(1,-110,0,4)
-UI.openSide.Text = "Binds"; UI.openSide.BackgroundColor3 = Color3.fromRGB(0,75,85)
-UI.openSide.TextColor3 = Color3.fromRGB(0,220,170); UI.openSide.BorderSizePixel = 0
-UI.openSide.Font = Enum.Font.Code; UI.openSide.TextSize = 12; UI.openSide.ZIndex = 3; UI.openSide.Parent = UI.top
+UI.openSide.Text = "Binds"; UI.openSide.BackgroundColor3 = Color3.fromRGB(42,42,42)
+UI.openSide.TextColor3 = Color3.fromRGB(160,160,160); UI.openSide.BorderSizePixel = 0
+UI.openSide.Font = Enum.Font.GothamSemibold; UI.openSide.TextSize = 13; UI.openSide.ZIndex = 3; UI.openSide.Parent = UI.top
 mkCorner(UI.openSide, 4)
 
 UI.previewToggle = Instance.new("TextButton")
 UI.previewToggle.Size = UDim2.new(0,60,0,20); UI.previewToggle.Position = UDim2.new(1,-174,0,4)
-UI.previewToggle.Text = "Preview"; UI.previewToggle.BackgroundColor3 = Color3.fromRGB(0,55,80)
-UI.previewToggle.TextColor3 = Color3.fromRGB(0,200,220); UI.previewToggle.BorderSizePixel = 0
-UI.previewToggle.Font = Enum.Font.Code; UI.previewToggle.TextSize = 12; UI.previewToggle.ZIndex = 3; UI.previewToggle.Parent = UI.top
+UI.previewToggle.Text = "Preview"; UI.previewToggle.BackgroundColor3 = Color3.fromRGB(42,42,42)
+UI.previewToggle.TextColor3 = Color3.fromRGB(160,160,160); UI.previewToggle.BorderSizePixel = 0
+UI.previewToggle.Font = Enum.Font.GothamSemibold; UI.previewToggle.TextSize = 13; UI.previewToggle.ZIndex = 3; UI.previewToggle.Parent = UI.top
 mkCorner(UI.previewToggle, 4)
 
 UI.searchBox = Instance.new("TextBox")
 UI.searchBox.Text = ""; UI.searchBox.PlaceholderText = "Search animations..."
 UI.searchBox.Position = UDim2.new(0,6,0,32); UI.searchBox.Size = UDim2.new(0.60,-12,0,22)
-UI.searchBox.BackgroundColor3 = Color3.fromRGB(18,22,28); UI.searchBox.TextColor3 = Color3.new(1,1,1)
-UI.searchBox.PlaceholderColor3 = Color3.fromRGB(0,100,90); UI.searchBox.BorderSizePixel = 0
+UI.searchBox.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.searchBox.TextColor3 = Color3.fromRGB(210,210,210)
+UI.searchBox.PlaceholderColor3 = Color3.fromRGB(65,65,65); UI.searchBox.BorderSizePixel = 0
 UI.searchBox.Font = Enum.Font.Code; UI.searchBox.TextSize = 12; UI.searchBox.ZIndex = 2; UI.searchBox.Parent = UI.mainFrame
-mkCorner(UI.searchBox, 4); mkStroke(UI.searchBox, Color3.fromRGB(0,80,90), 1)
+mkCorner(UI.searchBox, 4); mkStroke(UI.searchBox, Color3.fromRGB(42,42,42), 1)
 
 UI.playerFilterBox = Instance.new("TextBox")
 UI.playerFilterBox.Text = ""; UI.playerFilterBox.PlaceholderText = "Filter player..."
 UI.playerFilterBox.Position = UDim2.new(0,5,0,55); UI.playerFilterBox.Size = UDim2.new(0.30,-5,0,20)
-UI.playerFilterBox.BackgroundColor3 = Color3.fromRGB(18,22,28); UI.playerFilterBox.TextColor3 = Color3.new(1,1,1)
-UI.playerFilterBox.PlaceholderColor3 = Color3.fromRGB(80,80,0); UI.playerFilterBox.BorderSizePixel = 0
+UI.playerFilterBox.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.playerFilterBox.TextColor3 = Color3.fromRGB(210,210,210)
+UI.playerFilterBox.PlaceholderColor3 = Color3.fromRGB(65,65,65); UI.playerFilterBox.BorderSizePixel = 0
 UI.playerFilterBox.Font = Enum.Font.Code; UI.playerFilterBox.TextSize = 12; UI.playerFilterBox.ZIndex = 2; UI.playerFilterBox.Parent = UI.mainFrame
-mkCorner(UI.playerFilterBox, 4); mkStroke(UI.playerFilterBox, Color3.fromRGB(80,80,0), 1)
+mkCorner(UI.playerFilterBox, 4); mkStroke(UI.playerFilterBox, Color3.fromRGB(65,65,65), 1)
 
 UI.priorityFilterBox = Instance.new("TextBox")
 UI.priorityFilterBox.Text = ""; UI.priorityFilterBox.PlaceholderText = "Filter priority..."
 UI.priorityFilterBox.Position = UDim2.new(0.30,5,0,55); UI.priorityFilterBox.Size = UDim2.new(0.30,-10,0,20)
-UI.priorityFilterBox.BackgroundColor3 = Color3.fromRGB(18,22,28); UI.priorityFilterBox.TextColor3 = Color3.new(1,1,1)
-UI.priorityFilterBox.PlaceholderColor3 = Color3.fromRGB(80,80,0); UI.priorityFilterBox.BorderSizePixel = 0
+UI.priorityFilterBox.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.priorityFilterBox.TextColor3 = Color3.fromRGB(210,210,210)
+UI.priorityFilterBox.PlaceholderColor3 = Color3.fromRGB(65,65,65); UI.priorityFilterBox.BorderSizePixel = 0
 UI.priorityFilterBox.Font = Enum.Font.Code; UI.priorityFilterBox.TextSize = 12; UI.priorityFilterBox.ZIndex = 2; UI.priorityFilterBox.Parent = UI.mainFrame
-mkCorner(UI.priorityFilterBox, 4); mkStroke(UI.priorityFilterBox, Color3.fromRGB(80,80,0), 1)
+mkCorner(UI.priorityFilterBox, 4); mkStroke(UI.priorityFilterBox, Color3.fromRGB(65,65,65), 1)
 
 UI.logTabBtn = Instance.new("TextButton")
 UI.logTabBtn.Text = "[ Log ]"; UI.logTabBtn.Position = UDim2.new(0,5,0,78); UI.logTabBtn.Size = UDim2.new(0.20,-4,0,18)
-UI.logTabBtn.BackgroundColor3 = Color3.fromRGB(0,60,70); UI.logTabBtn.TextColor3 = Color3.fromRGB(0,220,170)
-UI.logTabBtn.Font = Enum.Font.Code; UI.logTabBtn.TextSize = 12; UI.logTabBtn.BorderSizePixel = 0; UI.logTabBtn.ZIndex = 2; UI.logTabBtn.Parent = UI.mainFrame
+UI.logTabBtn.BackgroundColor3 = Color3.fromRGB(220,220,220); UI.logTabBtn.TextColor3 = Color3.fromRGB(20,20,20)
+UI.logTabBtn.Font = Enum.Font.GothamSemibold; UI.logTabBtn.TextSize = 13; UI.logTabBtn.BorderSizePixel = 0; UI.logTabBtn.ZIndex = 2; UI.logTabBtn.Parent = UI.mainFrame
 mkCorner(UI.logTabBtn, 4)
 
 UI.favsTabBtn = Instance.new("TextButton")
 UI.favsTabBtn.Text = "[ Favs ]"; UI.favsTabBtn.Position = UDim2.new(0.20,2,0,78); UI.favsTabBtn.Size = UDim2.new(0.20,-4,0,18)
-UI.favsTabBtn.BackgroundColor3 = Color3.fromRGB(40,38,0); UI.favsTabBtn.TextColor3 = Color3.fromRGB(220,210,0)
-UI.favsTabBtn.Font = Enum.Font.Code; UI.favsTabBtn.TextSize = 12; UI.favsTabBtn.BorderSizePixel = 0; UI.favsTabBtn.ZIndex = 2; UI.favsTabBtn.Parent = UI.mainFrame
+UI.favsTabBtn.BackgroundColor3 = Color3.fromRGB(255,215,0); UI.favsTabBtn.TextColor3 = Color3.fromRGB(20,20,20)
+UI.favsTabBtn.Font = Enum.Font.GothamSemibold; UI.favsTabBtn.TextSize = 13; UI.favsTabBtn.BorderSizePixel = 0; UI.favsTabBtn.ZIndex = 2; UI.favsTabBtn.Parent = UI.mainFrame
 mkCorner(UI.favsTabBtn, 4)
 
 UI.bannedTabBtn = Instance.new("TextButton")
 UI.bannedTabBtn.Text = "[ Banned ]"; UI.bannedTabBtn.Position = UDim2.new(0.40,2,0,78); UI.bannedTabBtn.Size = UDim2.new(0.20,-6,0,18)
-UI.bannedTabBtn.BackgroundColor3 = Color3.fromRGB(50,10,10); UI.bannedTabBtn.TextColor3 = Color3.fromRGB(255,120,100)
-UI.bannedTabBtn.Font = Enum.Font.Code; UI.bannedTabBtn.TextSize = 12; UI.bannedTabBtn.BorderSizePixel = 0; UI.bannedTabBtn.ZIndex = 2; UI.bannedTabBtn.Parent = UI.mainFrame
+UI.bannedTabBtn.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.bannedTabBtn.TextColor3 = Color3.fromRGB(255,255,255)
+UI.bannedTabBtn.Font = Enum.Font.GothamSemibold; UI.bannedTabBtn.TextSize = 13; UI.bannedTabBtn.BorderSizePixel = 0; UI.bannedTabBtn.ZIndex = 2; UI.bannedTabBtn.Parent = UI.mainFrame
 mkCorner(UI.bannedTabBtn, 4)
 
 UI.logCountLabel = Instance.new("TextLabel")
 UI.logCountLabel.Text = "0 logged"; UI.logCountLabel.Position = UDim2.new(0.60,-92,0,32); UI.logCountLabel.Size = UDim2.new(0,88,0,22)
 UI.logCountLabel.BackgroundTransparency = 1; UI.logCountLabel.TextColor3 = Color3.fromRGB(80,80,80)
-UI.logCountLabel.TextXAlignment = Enum.TextXAlignment.Right; UI.logCountLabel.Font = Enum.Font.Code
+UI.logCountLabel.TextXAlignment = Enum.TextXAlignment.Right; UI.logCountLabel.Font = Enum.Font.Gotham
 UI.logCountLabel.TextSize = 11; UI.logCountLabel.ZIndex = 2; UI.logCountLabel.Parent = UI.mainFrame
 
 UI.list = Instance.new("ScrollingFrame")
 UI.list.Name = "AnimList"; UI.list.Position = UDim2.new(0,5,0,100); UI.list.Size = UDim2.new(0.60,-10,1,-105)
-UI.list.BackgroundColor3 = Color3.fromRGB(14,17,22); UI.list.BorderSizePixel = 0
-UI.list.ScrollBarThickness = 4; UI.list.ScrollBarImageColor3 = Color3.fromRGB(0,200,150)
+UI.list.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.list.BackgroundTransparency = 0.15; UI.list.BorderSizePixel = 0
+UI.list.ScrollBarThickness = 4; UI.list.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 UI.list.CanvasSize = UDim2.new(0,0,0,0); UI.list.ClipsDescendants = true; UI.list.ZIndex = 2; UI.list.Visible = true; UI.list.Parent = UI.mainFrame
-mkCorner(UI.list, 4); mkStroke(UI.list, Color3.fromRGB(0,65,75), 1)
+mkCorner(UI.list, 4); mkStroke(UI.list, Color3.fromRGB(42,42,42), 1)
 do
 	local layout = Instance.new("UIListLayout"); layout.Padding = UDim.new(0,1)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -434,10 +446,10 @@ end
 
 UI.favsList = Instance.new("ScrollingFrame")
 UI.favsList.Name = "FavsList"; UI.favsList.Position = UDim2.new(0,5,0,100); UI.favsList.Size = UDim2.new(0.60,-10,1,-105)
-UI.favsList.BackgroundColor3 = Color3.fromRGB(16,15,10); UI.favsList.BorderSizePixel = 0
-UI.favsList.ScrollBarThickness = 4; UI.favsList.ScrollBarImageColor3 = Color3.fromRGB(200,200,0)
+UI.favsList.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.favsList.BackgroundTransparency = 0.15; UI.favsList.BorderSizePixel = 0
+UI.favsList.ScrollBarThickness = 4; UI.favsList.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 UI.favsList.CanvasSize = UDim2.new(0,0,0,0); UI.favsList.ClipsDescendants = true; UI.favsList.ZIndex = 2; UI.favsList.Visible = false; UI.favsList.Parent = UI.mainFrame
-mkCorner(UI.favsList, 4); mkStroke(UI.favsList, Color3.fromRGB(80,75,0), 1)
+mkCorner(UI.favsList, 4); mkStroke(UI.favsList, Color3.fromRGB(65,65,65), 1)
 do
 	local fl = Instance.new("UIListLayout"); fl.Padding = UDim.new(0,2); fl.Parent = UI.favsList
 	table.insert(Data.connections, fl:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -447,10 +459,10 @@ end
 
 UI.bannedList = Instance.new("ScrollingFrame")
 UI.bannedList.Name = "BannedList"; UI.bannedList.Position = UDim2.new(0,5,0,100); UI.bannedList.Size = UDim2.new(0.60,-10,1,-105)
-UI.bannedList.BackgroundColor3 = Color3.fromRGB(18,10,10); UI.bannedList.BorderSizePixel = 0
-UI.bannedList.ScrollBarThickness = 4; UI.bannedList.ScrollBarImageColor3 = Color3.fromRGB(200,80,80)
+UI.bannedList.BackgroundColor3 = Color3.fromRGB(8,8,8); UI.bannedList.BackgroundTransparency = 0.15; UI.bannedList.BorderSizePixel = 0
+UI.bannedList.ScrollBarThickness = 4; UI.bannedList.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 UI.bannedList.CanvasSize = UDim2.new(0,0,0,0); UI.bannedList.ClipsDescendants = true; UI.bannedList.ZIndex = 2; UI.bannedList.Visible = false; UI.bannedList.Parent = UI.mainFrame
-mkCorner(UI.bannedList, 4); mkStroke(UI.bannedList, Color3.fromRGB(100,30,30), 1)
+mkCorner(UI.bannedList, 4); mkStroke(UI.bannedList, Color3.fromRGB(42,42,42), 1)
 do
 	local bl = Instance.new("UIListLayout"); bl.Padding = UDim.new(0,2); bl.Parent = UI.bannedList
 	table.insert(Data.connections, bl:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -466,18 +478,18 @@ local function rebuildBannedList()
 		if isBanned then
 			local row = Instance.new("Frame"); row.Size = UDim2.new(1,-5,0,22); row.BackgroundTransparency = 1; row.ZIndex = 3; row.Parent = UI.bannedList
 			local label = Instance.new("TextButton")
-			label.Size = UDim2.new(1,-80,1,0); label.BackgroundColor3 = Color3.fromRGB(30,12,12)
-			label.TextColor3 = Color3.fromRGB(255,100,80); label.TextXAlignment = Enum.TextXAlignment.Left
+			label.Size = UDim2.new(1,-110,1,0); label.BackgroundColor3 = Color3.fromRGB(8,8,8)
+			label.TextColor3 = Data.trueBanned[id] and Color3.fromRGB(139,0,0) or Color3.fromRGB(200,50,50); label.TextXAlignment = Enum.TextXAlignment.Left
 			label.Text = (Data.trueBanned[id] and "⬛ " or "") .. id
 			label.Font = Enum.Font.Code; label.TextSize = 11; label.BorderSizePixel = 0; label.ZIndex = 4; label.TextTruncate = Enum.TextTruncate.AtEnd; label.Parent = row
 			mkCorner(label, 3)
-			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,46,1,0); copyBtn.Position = UDim2.new(1,-80,0,0)
-			copyBtn.BackgroundColor3 = Color3.fromRGB(0,45,55); copyBtn.TextColor3 = Color3.new(1,1,1); copyBtn.Text = "Copy"
-			copyBtn.Font = Enum.Font.Code; copyBtn.TextSize = 10; copyBtn.BorderSizePixel = 0; copyBtn.ZIndex = 4; copyBtn.Parent = row
+			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,50,1,0); copyBtn.Position = UDim2.new(1,-85,0,0)
+			copyBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); copyBtn.TextColor3 = Color3.fromRGB(210,210,210); copyBtn.Text = "Copy"
+			copyBtn.Font = Enum.Font.GothamSemibold; copyBtn.TextSize = 10; copyBtn.BorderSizePixel = 0; copyBtn.ZIndex = 4; copyBtn.Parent = row
 			mkCorner(copyBtn, 3)
-			local unbanBtn = Instance.new("TextButton"); unbanBtn.Size = UDim2.new(0,46,1,0); unbanBtn.Position = UDim2.new(1,-30,0,0)
-			unbanBtn.BackgroundColor3 = Color3.fromRGB(55,30,0); unbanBtn.TextColor3 = Color3.fromRGB(255,180,80); unbanBtn.Text = "Unban"
-			unbanBtn.Font = Enum.Font.Code; unbanBtn.TextSize = 9; unbanBtn.BorderSizePixel = 0; unbanBtn.ZIndex = 4; unbanBtn.Parent = row
+			local unbanBtn = Instance.new("TextButton"); unbanBtn.Size = UDim2.new(0,50,1,0); unbanBtn.Position = UDim2.new(1,-30,0,0)
+			unbanBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); unbanBtn.TextColor3 = Color3.fromRGB(140,210,145); unbanBtn.Text = "Unban"
+			unbanBtn.Font = Enum.Font.Code; unbanBtn.TextSize = 10; unbanBtn.BorderSizePixel = 0; unbanBtn.ZIndex = 4; unbanBtn.Parent = row
 			mkCorner(unbanBtn, 3)
 			table.insert(Data.connections, label.MouseButton1Click:Connect(function() UI.idBox.Text = id end))
 			table.insert(Data.connections, copyBtn.MouseButton1Click:Connect(function() yoink(id) end))
@@ -490,18 +502,18 @@ local function rebuildBannedList()
 		if isLogBanned then
 			local row = Instance.new("Frame"); row.Size = UDim2.new(1,-5,0,22); row.BackgroundTransparency = 1; row.ZIndex = 3; row.Parent = UI.bannedList
 			local label = Instance.new("TextButton")
-			label.Size = UDim2.new(1,-80,1,0); label.BackgroundColor3 = Color3.fromRGB(22,12,32)
-			label.TextColor3 = Color3.fromRGB(190,130,255); label.TextXAlignment = Enum.TextXAlignment.Left
+			label.Size = UDim2.new(1,-110,1,0); label.BackgroundColor3 = Color3.fromRGB(14,14,14)
+			label.TextColor3 = Color3.fromRGB(180,140,230); label.TextXAlignment = Enum.TextXAlignment.Left
 			label.Text = "◈ " .. id
 			label.Font = Enum.Font.Code; label.TextSize = 11; label.BorderSizePixel = 0; label.ZIndex = 4; label.TextTruncate = Enum.TextTruncate.AtEnd; label.Parent = row
-			mkCorner(label, 3); mkStroke(label, Color3.fromRGB(90,40,140), 1)
-			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,46,1,0); copyBtn.Position = UDim2.new(1,-80,0,0)
-			copyBtn.BackgroundColor3 = Color3.fromRGB(30,15,50); copyBtn.TextColor3 = Color3.fromRGB(200,160,255); copyBtn.Text = "Copy"
-			copyBtn.Font = Enum.Font.Code; copyBtn.TextSize = 10; copyBtn.BorderSizePixel = 0; copyBtn.ZIndex = 4; copyBtn.Parent = row
+			mkCorner(label, 3); mkStroke(label, Color3.fromRGB(65,65,65), 1)
+			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,50,1,0); copyBtn.Position = UDim2.new(1,-85,0,0)
+			copyBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); copyBtn.TextColor3 = Color3.fromRGB(160,160,160); copyBtn.Text = "Copy"
+			copyBtn.Font = Enum.Font.GothamSemibold; copyBtn.TextSize = 10; copyBtn.BorderSizePixel = 0; copyBtn.ZIndex = 4; copyBtn.Parent = row
 			mkCorner(copyBtn, 3)
-			local unlogbanBtn = Instance.new("TextButton"); unlogbanBtn.Size = UDim2.new(0,46,1,0); unlogbanBtn.Position = UDim2.new(1,-30,0,0)
-			unlogbanBtn.BackgroundColor3 = Color3.fromRGB(50,20,70); unlogbanBtn.TextColor3 = Color3.fromRGB(210,170,255); unlogbanBtn.Text = "Remove"
-			unlogbanBtn.Font = Enum.Font.Code; unlogbanBtn.TextSize = 9; unlogbanBtn.BorderSizePixel = 0; unlogbanBtn.ZIndex = 4; unlogbanBtn.Parent = row
+			local unlogbanBtn = Instance.new("TextButton"); unlogbanBtn.Size = UDim2.new(0,50,1,0); unlogbanBtn.Position = UDim2.new(1,-30,0,0)
+			unlogbanBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); unlogbanBtn.TextColor3 = Color3.fromRGB(160,160,160); unlogbanBtn.Text = "Unban"
+			unlogbanBtn.Font = Enum.Font.Code; unlogbanBtn.TextSize = 10; unlogbanBtn.BorderSizePixel = 0; unlogbanBtn.ZIndex = 4; unlogbanBtn.Parent = row
 			mkCorner(unlogbanBtn, 3)
 			table.insert(Data.connections, label.MouseButton1Click:Connect(function() UI.idBox.Text = id end))
 			table.insert(Data.connections, copyBtn.MouseButton1Click:Connect(function() yoink(id) end))
@@ -516,50 +528,54 @@ local function switchTab(tab)
 	State.currentTab = tab
 	UI.list.Visible = (tab == "log"); UI.favsList.Visible = (tab == "favs"); UI.bannedList.Visible = (tab == "banned")
 	if tab == "banned" then rebuildBannedList() end
-	UI.logTabBtn.BackgroundColor3 = (tab == "log") and Color3.fromRGB(0,80,90) or Color3.fromRGB(0,35,40)
-	UI.favsTabBtn.BackgroundColor3 = (tab == "favs") and Color3.fromRGB(80,76,0) or Color3.fromRGB(35,33,0)
-	UI.bannedTabBtn.BackgroundColor3 = (tab == "banned") and Color3.fromRGB(100,20,20) or Color3.fromRGB(50,10,10)
+	UI.logTabBtn.BackgroundColor3 = (tab == "log") and Color3.fromRGB(220,220,220) or Color3.fromRGB(42,42,42)
+	UI.logTabBtn.TextColor3 = (tab == "log") and Color3.fromRGB(20,20,20) or Color3.fromRGB(160,160,160)
+	UI.favsTabBtn.BackgroundColor3 = (tab == "favs") and Color3.fromRGB(255,215,0) or Color3.fromRGB(28,28,28)
+	UI.favsTabBtn.TextColor3 = (tab == "favs") and Color3.fromRGB(20,20,20) or Color3.fromRGB(160,160,160)
+	UI.bannedTabBtn.BackgroundColor3 = (tab == "banned") and Color3.fromRGB(200,50,50) or Color3.fromRGB(14,14,14)
+	UI.bannedTabBtn.TextColor3 = (tab == "banned") and Color3.fromRGB(255,255,255) or Color3.fromRGB(80,80,80)
 end
+switchTab("log")
 table.insert(Data.connections, UI.logTabBtn.MouseButton1Click:Connect(function() switchTab("log") end))
 table.insert(Data.connections, UI.favsTabBtn.MouseButton1Click:Connect(function() switchTab("favs") end))
 table.insert(Data.connections, UI.bannedTabBtn.MouseButton1Click:Connect(function() switchTab("banned") end))
 
 UI.controls = Instance.new("ScrollingFrame")
 UI.controls.Name = "Controls"; UI.controls.Position = UDim2.new(0.60,5,0,30); UI.controls.Size = UDim2.new(0.40,-10,1,-35)
-UI.controls.BackgroundColor3 = Color3.fromRGB(16,20,26); UI.controls.BorderSizePixel = 0; UI.controls.ClipsDescendants = true
-UI.controls.ScrollBarThickness = 3; UI.controls.ScrollBarImageColor3 = Color3.fromRGB(0,150,130)
+UI.controls.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.controls.BackgroundTransparency = 0.15; UI.controls.BorderSizePixel = 0; UI.controls.ClipsDescendants = true
+UI.controls.ScrollBarThickness = 3; UI.controls.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 UI.controls.CanvasSize = UDim2.new(0,0,0,820); UI.controls.ZIndex = 2; UI.controls.Visible = true; UI.controls.Parent = UI.mainFrame
-mkCorner(UI.controls, 5); mkStroke(UI.controls, Color3.fromRGB(0,65,75), 1)
+mkCorner(UI.controls, 5); mkStroke(UI.controls, Color3.fromRGB(42,42,42), 1)
 
 local function mkLabel(text, y)
 	local l = Instance.new("TextLabel"); l.Text = text; l.Position = UDim2.new(0,10,0,y); l.Size = UDim2.new(1,-20,0,20)
-	l.BackgroundTransparency = 1; l.TextColor3 = Color3.fromRGB(0,200,150); l.TextXAlignment = Enum.TextXAlignment.Left
+	l.BackgroundTransparency = 1; l.TextColor3 = Color3.fromRGB(160,160,160); l.TextXAlignment = Enum.TextXAlignment.Left
 	l.Font = Enum.Font.Code; l.ZIndex = 3; l.Visible = true; l.Parent = UI.controls
 end
 
 mkLabel("Animation ID", 10)
 UI.idBox = Instance.new("TextBox")
 UI.idBox.Text = ""; UI.idBox.Position = UDim2.new(0,10,0,30); UI.idBox.Size = UDim2.new(1,-20,0,25)
-UI.idBox.BackgroundColor3 = Color3.fromRGB(10,14,20); UI.idBox.TextColor3 = Color3.new(1,1,1)
-UI.idBox.PlaceholderColor3 = Color3.fromRGB(0,100,80); UI.idBox.PlaceholderText = "animation id..."
+UI.idBox.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.idBox.TextColor3 = Color3.fromRGB(240,240,240)
+UI.idBox.PlaceholderColor3 = Color3.fromRGB(65,65,65); UI.idBox.PlaceholderText = "animation id..."
 UI.idBox.BorderSizePixel = 0; UI.idBox.ZIndex = 3; UI.idBox.Visible = true; UI.idBox.Parent = UI.controls
-mkCorner(UI.idBox, 4); mkStroke(UI.idBox, Color3.fromRGB(0,90,100), 1)
+mkCorner(UI.idBox, 4); mkStroke(UI.idBox, Color3.fromRGB(65,65,65), 1)
 
 mkLabel("Speed", 65)
 UI.speedBox = Instance.new("TextBox")
 UI.speedBox.Text = "1"; UI.speedBox.PlaceholderText = "speed (1 = normal)"
 UI.speedBox.Position = UDim2.new(0,10,0,85); UI.speedBox.Size = UDim2.new(1,-20,0,25)
-UI.speedBox.BackgroundColor3 = Color3.fromRGB(10,14,20); UI.speedBox.TextColor3 = Color3.new(1,1,1)
+UI.speedBox.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.speedBox.TextColor3 = Color3.fromRGB(210,210,210)
 UI.speedBox.BorderSizePixel = 0; UI.speedBox.ZIndex = 3; UI.speedBox.Visible = true; UI.speedBox.Parent = UI.controls
-mkCorner(UI.speedBox, 4); mkStroke(UI.speedBox, Color3.fromRGB(0,90,100), 1)
+mkCorner(UI.speedBox, 4); mkStroke(UI.speedBox, Color3.fromRGB(65,65,65), 1)
 
 mkLabel("Time (Scrub)", 120)
 UI.timeBox = Instance.new("TextBox")
 UI.timeBox.Text = "0"; UI.timeBox.PlaceholderText = "scrub time (secs)"
 UI.timeBox.Position = UDim2.new(0,10,0,140); UI.timeBox.Size = UDim2.new(1,-20,0,25)
-UI.timeBox.BackgroundColor3 = Color3.fromRGB(10,14,20); UI.timeBox.TextColor3 = Color3.new(1,1,1)
+UI.timeBox.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.timeBox.TextColor3 = Color3.fromRGB(210,210,210)
 UI.timeBox.BorderSizePixel = 0; UI.timeBox.ZIndex = 3; UI.timeBox.Visible = true; UI.timeBox.Parent = UI.controls
-mkCorner(UI.timeBox, 4); mkStroke(UI.timeBox, Color3.fromRGB(0,90,100), 1)
+mkCorner(UI.timeBox, 4); mkStroke(UI.timeBox, Color3.fromRGB(65,65,65), 1)
 table.insert(Data.connections, UI.timeBox:GetPropertyChangedSignal("Text"):Connect(function()
 	local num = tonumber(UI.timeBox.Text:match("[%d%.]+"))
 	if num then
@@ -571,32 +587,36 @@ end))
 
 UI.mainTimerLabel = Instance.new("TextLabel")
 UI.mainTimerLabel.Text = "no anim playing"; UI.mainTimerLabel.Position = UDim2.new(0,10,0,168); UI.mainTimerLabel.Size = UDim2.new(1,-20,0,14)
-UI.mainTimerLabel.BackgroundTransparency = 1; UI.mainTimerLabel.TextColor3 = Color3.fromRGB(0,160,120)
+UI.mainTimerLabel.BackgroundTransparency = 1; UI.mainTimerLabel.TextColor3 = Color3.fromRGB(160,160,160)
 UI.mainTimerLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.mainTimerLabel.Font = Enum.Font.Code
 UI.mainTimerLabel.TextSize = 11; UI.mainTimerLabel.ZIndex = 3; UI.mainTimerLabel.Visible = true; UI.mainTimerLabel.Parent = UI.controls
 
 UI.mainScrubBg = Instance.new("Frame")
 UI.mainScrubBg.Position = UDim2.new(0,10,0,185); UI.mainScrubBg.Size = UDim2.new(1,-20,0,12)
-UI.mainScrubBg.BackgroundColor3 = Color3.fromRGB(22,26,32); UI.mainScrubBg.BorderSizePixel = 0; UI.mainScrubBg.ZIndex = 3; UI.mainScrubBg.Parent = UI.controls
+UI.mainScrubBg.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.mainScrubBg.BorderSizePixel = 0; UI.mainScrubBg.ZIndex = 3; UI.mainScrubBg.Parent = UI.controls
 mkCorner(UI.mainScrubBg, 6)
 UI.mainScrubFill = Instance.new("Frame")
-UI.mainScrubFill.Size = UDim2.new(0,0,1,0); UI.mainScrubFill.BackgroundColor3 = Color3.fromRGB(0,210,160); UI.mainScrubFill.BorderSizePixel = 0; UI.mainScrubFill.ZIndex = 4; UI.mainScrubFill.Parent = UI.mainScrubBg
+	UI.mainScrubFill.Size = UDim2.new(0,0,1,0); UI.mainScrubFill.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.mainScrubFill.BorderSizePixel = 0; UI.mainScrubFill.ZIndex = 4; UI.mainScrubFill.Parent = UI.mainScrubBg
 UI.mainScrubBtn = Instance.new("TextButton")
 UI.mainScrubBtn.Size = UDim2.new(1,0,1,0); UI.mainScrubBtn.BackgroundTransparency = 1; UI.mainScrubBtn.Text = ""; UI.mainScrubBtn.ZIndex = 5; UI.mainScrubBtn.Parent = UI.mainScrubBg
 
 State.mainPaused = false
 UI.mainPauseBtn = Instance.new("TextButton")
 UI.mainPauseBtn.Text = "⏸ Pause"; UI.mainPauseBtn.Position = UDim2.new(0,10,0,196); UI.mainPauseBtn.Size = UDim2.new(1,-20,0,20)
-UI.mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0,55,70); UI.mainPauseBtn.TextColor3 = Color3.new(1,1,1)
-UI.mainPauseBtn.BorderSizePixel = 0; UI.mainPauseBtn.Font = Enum.Font.Code; UI.mainPauseBtn.TextSize = 11; UI.mainPauseBtn.ZIndex = 3; UI.mainPauseBtn.Parent = UI.controls
-mkCorner(UI.mainPauseBtn, 4); mkStroke(UI.mainPauseBtn, Color3.fromRGB(0,110,130), 1)
+UI.mainPauseBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.mainPauseBtn.TextColor3 = Color3.fromRGB(180,180,180)
+UI.mainPauseBtn.BorderSizePixel = 0; UI.mainPauseBtn.Font = Enum.Font.GothamSemibold; UI.mainPauseBtn.TextSize = 11; UI.mainPauseBtn.ZIndex = 3; UI.mainPauseBtn.Parent = UI.controls
+mkCorner(UI.mainPauseBtn, 4); mkStroke(UI.mainPauseBtn, Color3.fromRGB(55,55,55), 1)
 table.insert(Data.connections, UI.mainPauseBtn.MouseButton1Click:Connect(function()
+	local hasTracks = false
+	for track in pairs(Data.scriptTracks) do if track.IsPlaying or State.mainPaused then hasTracks = true; break end end
+	if not hasTracks and not State.mainPaused then return end 
 	State.mainPaused = not State.mainPaused
 	for track in pairs(Data.scriptTracks) do
 		if State.mainPaused then track:AdjustSpeed(0) else track:AdjustSpeed(tonumber(UI.speedBox.Text) or 1) end
 	end
 	UI.mainPauseBtn.Text = State.mainPaused and "▶ Resume" or "⏸ Pause"
-	UI.mainPauseBtn.BackgroundColor3 = State.mainPaused and Color3.fromRGB(0,80,0) or Color3.fromRGB(0,50,60)
+	UI.mainPauseBtn.BackgroundColor3 = State.mainPaused and Color3.fromRGB(16,35,35) or Color3.fromRGB(28,28,28)
+	UI.mainPauseBtn.TextColor3 = State.mainPaused and Color3.fromRGB(100,210,200) or Color3.fromRGB(180,180,180)
 end))
 table.insert(Data.connections, UI.mainScrubBtn.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then State.mainScrubbing = true end
@@ -607,58 +627,74 @@ end))
 
 UI.loopToggle = Instance.new("TextButton")
 UI.loopToggle.Text = "Loop: OFF"; UI.loopToggle.Position = UDim2.new(0,10,0,220); UI.loopToggle.Size = UDim2.new(1,-20,0,25)
-UI.loopToggle.BackgroundColor3 = Color3.fromRGB(55,0,0); UI.loopToggle.TextColor3 = Color3.fromRGB(255,180,160)
-UI.loopToggle.BorderSizePixel = 0; UI.loopToggle.ZIndex = 3; UI.loopToggle.Visible = true; UI.loopToggle.Parent = UI.controls
-mkCorner(UI.loopToggle, 4); mkStroke(UI.loopToggle, Color3.fromRGB(120,0,0), 1)
+UI.loopToggle.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.loopToggle.TextColor3 = Color3.fromRGB(140,140,140)
+UI.loopToggle.BorderSizePixel = 0; UI.loopToggle.Font = Enum.Font.GothamSemibold; UI.loopToggle.TextSize = 12; UI.loopToggle.ZIndex = 3; UI.loopToggle.Visible = true; UI.loopToggle.Parent = UI.controls
+mkCorner(UI.loopToggle, 4)
+local loopToggleStroke = Instance.new("UIStroke"); loopToggleStroke.Color = Color3.fromRGB(42,42,42); loopToggleStroke.Thickness = 1; loopToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; loopToggleStroke.Parent = UI.loopToggle
+
 local function refreshLoopBtn()
 	UI.loopToggle.Text = "Loop: " .. (State.looped and "ON" or "OFF")
-	UI.loopToggle.BackgroundColor3 = State.looped and Color3.fromRGB(0,55,0) or Color3.fromRGB(55,0,0)
-	UI.loopToggle.TextColor3 = State.looped and Color3.fromRGB(160,255,180) or Color3.fromRGB(255,180,160)
+	UI.loopToggle.BackgroundColor3 = State.looped and Color3.fromRGB(200,50,50) or Color3.fromRGB(14,14,14)
+	UI.loopToggle.TextColor3 = State.looped and Color3.fromRGB(255,255,255) or Color3.fromRGB(140,140,140)
+	loopToggleStroke.Color = State.looped and Color3.fromRGB(150,30,30) or Color3.fromRGB(42,42,42)
 end
 table.insert(Data.connections, UI.loopToggle.MouseButton1Click:Connect(function()
 	State.looped = not State.looped; refreshLoopBtn(); dumpCfg()
 end))
 
-local function button(text, y, callback, bgColor, borderColor)
+
+local function button(text, y, callback, bgColor, borderColor, textColor)
 	local b = Instance.new("TextButton"); b.Text = text; b.Position = UDim2.new(0,10,0,y); b.Size = UDim2.new(1,-20,0,26)
-	b.BackgroundColor3 = bgColor or Color3.fromRGB(0,60,70); b.TextColor3 = Color3.fromRGB(200,240,230)
-	b.BorderSizePixel = 0; b.Font = Enum.Font.Code; b.TextSize = 12; b.ZIndex = 3; b.Visible = true; b.Parent = UI.controls
-	mkCorner(b, 4); mkStroke(b, borderColor or Color3.fromRGB(0,110,120), 1)
+	b.BackgroundColor3 = bgColor or Color3.fromRGB(32,32,32); b.TextColor3 = textColor or Color3.fromRGB(200,200,200)
+	b.BorderSizePixel = 0; b.Font = Enum.Font.GothamSemibold; b.TextSize = 12; b.ZIndex = 3; b.Visible = true; b.Parent = UI.controls
+	mkCorner(b, 4); mkStroke(b, borderColor or Color3.fromRGB(60,60,60), 1)
 	table.insert(Data.connections, b.MouseButton1Click:Connect(callback))
+	return b
 end
 
 local refreshColors
+
 
 button("Play", 255, function()
 	local id = UI.idBox.Text; local speed = tonumber(UI.speedBox.Text) or 1; local scrub = tonumber(UI.timeBox.Text) or 0
 	local track = fireAnim(id, speed, State.looped)
 	if track and scrub > 0 then task.defer(function() if track then track.TimePosition = math.clamp(scrub, 0, track.Length) end end) end
-end)
-button("Stop", 290, function() killAnim(UI.idBox.Text) end, Color3.fromRGB(80,20,20), Color3.fromRGB(160,40,40))
+end, Color3.fromRGB(22,38,24), Color3.fromRGB(45,80,48), Color3.fromRGB(140,210,145))
+
+button("Stop", 290, function() killAnim(UI.idBox.Text) end,
+	Color3.fromRGB(38,22,22), Color3.fromRGB(75,40,40), Color3.fromRGB(210,130,130))
+
 button("Stop All", 325, function()
 	local animator = grabAnimator()
 	if animator then for _, track in pairs(animator:GetPlayingAnimationTracks()) do Data.scriptTracks[track] = nil; track:Stop() end end
 	for k in pairs(Data.scriptTracks) do Data.scriptTracks[k] = nil end
-end, Color3.fromRGB(80,20,20), Color3.fromRGB(160,40,40))
+end, Color3.fromRGB(42,20,20), Color3.fromRGB(85,38,38), Color3.fromRGB(220,120,120))
+
 button("Ban", 360, function()
 	Data.banned[UI.idBox.Text] = true; killAnim(UI.idBox.Text); dumpCfg()
-end, Color3.fromRGB(80,20,20), Color3.fromRGB(160,40,40))
+end, Color3.fromRGB(48,16,16), Color3.fromRGB(90,30,30), Color3.fromRGB(220,100,100))
+
 button("True Ban", 395, function()
 	local id = UI.idBox.Text; if id == "" then return end
 	Data.trueBanned[id] = true; Data.banned[id] = true; killAnim(id); dumpCfg(); refreshColors()
-end, Color3.fromRGB(100,0,0), Color3.fromRGB(200,0,0))
+end, Color3.fromRGB(55,10,10), Color3.fromRGB(100,25,25), Color3.fromRGB(230,80,80))
+
 button("Unban", 430, function()
 	local id = UI.idBox.Text; Data.banned[id] = nil; Data.trueBanned[id] = nil; dumpCfg(); refreshColors()
-end, Color3.fromRGB(70,45,0), Color3.fromRGB(140,90,0))
+end, Color3.fromRGB(22,38,24), Color3.fromRGB(45,80,48), Color3.fromRGB(140,210,145))
+
 button("Log Ban", 465, function()
 	local id = UI.idBox.Text; if id == "" then return end
 	Data.logBlacklist[id] = true; dumpCfg(); refreshColors(); flashNotif("◈ Log-banned " .. id .. " (still plays)")
-end, Color3.fromRGB(50,15,80), Color3.fromRGB(130,50,200))
+end, Color3.fromRGB(34,22,48), Color3.fromRGB(70,45,95), Color3.fromRGB(180,140,230))
+
 button("Log Unban", 500, function()
 	local id = UI.idBox.Text; if id == "" then return end
 	Data.logBlacklist[id] = nil; dumpCfg(); refreshColors(); flashNotif("◈ Log-unban " .. id)
-end, Color3.fromRGB(35,10,55), Color3.fromRGB(100,40,160))
-button("Copy ID", 535, function() yoink(UI.idBox.Text) end, Color3.fromRGB(0,40,80), Color3.fromRGB(0,80,160))
+end, Color3.fromRGB(28,18,40), Color3.fromRGB(60,38,80), Color3.fromRGB(160,120,210))
+
+button("Copy ID", 535, function() yoink(UI.idBox.Text) end,
+	Color3.fromRGB(18,28,48), Color3.fromRGB(38,65,105), Color3.fromRGB(120,175,240))
 
 local function nukeList()
 	for id, entry in pairs(Data.animFrames) do
@@ -673,16 +709,19 @@ local function nukeList()
 	Data.animCounts = {}; Data.animFrames = {}; Data.seenTracks = {}; UI.logCountLabel.Text = "0 logged"
 	Data.animLastFired = {}; Data.animFireIntervals = {}; Data.loopingAnims = {}; Data.logLastMove = {}; Data.logOrder = 0
 end
-button("Clear List", 570, nukeList)
+button("Clear List", 570, nukeList,
+	Color3.fromRGB(42,28,14), Color3.fromRGB(85,55,20), Color3.fromRGB(220,165,90))
 
 UI.globalToggle = Instance.new("TextButton")
 UI.globalToggle.Text = "Global Log: OFF"; UI.globalToggle.Position = UDim2.new(0,10,0,597); UI.globalToggle.Size = UDim2.new(1,-20,0,25)
-UI.globalToggle.BackgroundColor3 = Color3.fromRGB(55,0,0); UI.globalToggle.TextColor3 = Color3.fromRGB(255,180,160)
-UI.globalToggle.BorderSizePixel = 0; UI.globalToggle.ZIndex = 3; UI.globalToggle.Visible = true; UI.globalToggle.Parent = UI.controls
-mkCorner(UI.globalToggle, 4); mkStroke(UI.globalToggle, Color3.fromRGB(110,0,0), 1)
+UI.globalToggle.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.globalToggle.TextColor3 = Color3.fromRGB(140,140,140)
+UI.globalToggle.BorderSizePixel = 0; UI.globalToggle.Font = Enum.Font.GothamSemibold; UI.globalToggle.TextSize = 12; UI.globalToggle.ZIndex = 3; UI.globalToggle.Visible = true; UI.globalToggle.Parent = UI.controls
+mkCorner(UI.globalToggle, 4); mkStroke(UI.globalToggle, Color3.fromRGB(42,42,42), 1)
 local function refreshGlobalBtn()
 	UI.globalToggle.Text = "Global Log: " .. (State.globalLogging and "ON" or "OFF")
-	UI.globalToggle.BackgroundColor3 = State.globalLogging and Color3.fromRGB(0,55,0) or Color3.fromRGB(55,0,0)
+	UI.globalToggle.BackgroundColor3 = State.globalLogging and Color3.fromRGB(16,35,35) or Color3.fromRGB(14,14,14)
+	UI.globalToggle.TextColor3 = State.globalLogging and Color3.fromRGB(100,210,200) or Color3.fromRGB(140,140,140)
+	mkStroke(UI.globalToggle, State.globalLogging and Color3.fromRGB(40,100,95) or Color3.fromRGB(42,42,42), 1)
 end
 table.insert(Data.connections, UI.globalToggle.MouseButton1Click:Connect(function()
 	State.globalLogging = not State.globalLogging; refreshGlobalBtn(); dumpCfg()
@@ -690,12 +729,14 @@ end))
 
 UI.autoCopyToggle = Instance.new("TextButton")
 UI.autoCopyToggle.Text = "Auto-Copy: OFF"; UI.autoCopyToggle.Position = UDim2.new(0,10,0,625); UI.autoCopyToggle.Size = UDim2.new(1,-20,0,22)
-UI.autoCopyToggle.BackgroundColor3 = Color3.fromRGB(55,0,0); UI.autoCopyToggle.TextColor3 = Color3.fromRGB(255,180,160)
-UI.autoCopyToggle.BorderSizePixel = 0; UI.autoCopyToggle.ZIndex = 3; UI.autoCopyToggle.Visible = true; UI.autoCopyToggle.Parent = UI.controls
-mkCorner(UI.autoCopyToggle, 4); mkStroke(UI.autoCopyToggle, Color3.fromRGB(110,0,0), 1)
+UI.autoCopyToggle.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.autoCopyToggle.TextColor3 = Color3.fromRGB(140,140,140)
+UI.autoCopyToggle.BorderSizePixel = 0; UI.autoCopyToggle.Font = Enum.Font.GothamSemibold; UI.autoCopyToggle.TextSize = 12; UI.autoCopyToggle.ZIndex = 3; UI.autoCopyToggle.Visible = true; UI.autoCopyToggle.Parent = UI.controls
+mkCorner(UI.autoCopyToggle, 4); mkStroke(UI.autoCopyToggle, Color3.fromRGB(42,42,42), 1)
 local function refreshAutoCopyBtn()
 	UI.autoCopyToggle.Text = "Auto-Copy: " .. (State.autoCopy and "ON" or "OFF")
-	UI.autoCopyToggle.BackgroundColor3 = State.autoCopy and Color3.fromRGB(0,55,0) or Color3.fromRGB(55,0,0)
+	UI.autoCopyToggle.BackgroundColor3 = State.autoCopy and Color3.fromRGB(22,38,24) or Color3.fromRGB(14,14,14)
+	UI.autoCopyToggle.TextColor3 = State.autoCopy and Color3.fromRGB(140,210,145) or Color3.fromRGB(140,140,140)
+	mkStroke(UI.autoCopyToggle, State.autoCopy and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42), 1)
 end
 table.insert(Data.connections, UI.autoCopyToggle.MouseButton1Click:Connect(function()
 	State.autoCopy = not State.autoCopy; refreshAutoCopyBtn(); dumpCfg()
@@ -703,9 +744,9 @@ end))
 
 UI.exportBtn = Instance.new("TextButton")
 UI.exportBtn.Text = "Export Log"; UI.exportBtn.Position = UDim2.new(0,10,0,651); UI.exportBtn.Size = UDim2.new(1,-20,0,22)
-UI.exportBtn.BackgroundColor3 = Color3.fromRGB(0,38,75); UI.exportBtn.TextColor3 = Color3.fromRGB(160,200,255)
+UI.exportBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.exportBtn.TextColor3 = Color3.fromRGB(160,160,160)
 UI.exportBtn.BorderSizePixel = 0; UI.exportBtn.ZIndex = 3; UI.exportBtn.Visible = true; UI.exportBtn.Parent = UI.controls
-mkCorner(UI.exportBtn, 4); mkStroke(UI.exportBtn, Color3.fromRGB(0,75,150), 1)
+mkCorner(UI.exportBtn, 4); mkStroke(UI.exportBtn, Color3.fromRGB(65,65,65), 1)
 table.insert(Data.connections, UI.exportBtn.MouseButton1Click:Connect(function()
 	local out = {}
 	for key, entry in pairs(Data.animFrames) do
@@ -731,40 +772,40 @@ table.insert(Data.connections, UI.exportBtn.MouseButton1Click:Connect(function()
 	local json = table.concat(lines, "\n")
 	if writefile then
 		writefile("bacon_logger_export.json", json)
-		UI.exportBtn.Text = "Exported!"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(0,80,0)
-		task.delay(2, function() UI.exportBtn.Text = "Export Log"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(0,40,80) end)
+		UI.exportBtn.Text = "Exported!"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(28,28,28)
+		task.delay(2, function() UI.exportBtn.Text = "Export Log"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(28,28,28) end)
 	else
 		yoink(json)
-		UI.exportBtn.Text = "Copied!"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(0,60,60)
-		task.delay(2, function() UI.exportBtn.Text = "Export Log"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(0,40,80) end)
+		UI.exportBtn.Text = "Copied!"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(28,28,28)
+		task.delay(2, function() UI.exportBtn.Text = "Export Log"; UI.exportBtn.BackgroundColor3 = Color3.fromRGB(28,28,28) end)
 	end
 end))
 
 UI.toggleKeyBtn = Instance.new("TextButton")
 UI.toggleKeyBtn.Text = "Hide Key: " .. State.toggleKey.Name; UI.toggleKeyBtn.Position = UDim2.new(0,10,0,686); UI.toggleKeyBtn.Size = UDim2.new(1,-20,0,26)
-UI.toggleKeyBtn.BackgroundColor3 = Color3.fromRGB(30,20,50); UI.toggleKeyBtn.TextColor3 = Color3.fromRGB(180,150,255)
+UI.toggleKeyBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.toggleKeyBtn.TextColor3 = Color3.fromRGB(160,160,160)
 UI.toggleKeyBtn.BorderSizePixel = 0; UI.toggleKeyBtn.Font = Enum.Font.Code; UI.toggleKeyBtn.TextSize = 12; UI.toggleKeyBtn.ZIndex = 3; UI.toggleKeyBtn.Visible = true; UI.toggleKeyBtn.Parent = UI.controls
-mkCorner(UI.toggleKeyBtn, 4); mkStroke(UI.toggleKeyBtn, Color3.fromRGB(90,60,180), 1)
+mkCorner(UI.toggleKeyBtn, 4); mkStroke(UI.toggleKeyBtn, Color3.fromRGB(65,65,65), 1)
 table.insert(Data.connections, UI.toggleKeyBtn.MouseButton1Click:Connect(function()
 	if State.settingToggleKey then return end
-	State.settingToggleKey = true; UI.toggleKeyBtn.Text = "Press any key..."; UI.toggleKeyBtn.TextColor3 = Color3.fromRGB(255,220,100)
+	State.settingToggleKey = true; UI.toggleKeyBtn.Text = "Press any key..."; UI.toggleKeyBtn.TextColor3 = Color3.fromRGB(210,210,210)
 	local conn
 	conn = Services.UserInputService.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			conn:Disconnect(); State.settingToggleKey = false; State.toggleKey = input.KeyCode
-			UI.toggleKeyBtn.Text = "Hide Key: " .. State.toggleKey.Name; UI.toggleKeyBtn.TextColor3 = Color3.fromRGB(180,150,255); dumpCfg()
+			UI.toggleKeyBtn.Text = "Hide Key: " .. State.toggleKey.Name; UI.toggleKeyBtn.TextColor3 = Color3.fromRGB(160,160,160); dumpCfg()
 		end
 	end)
 end))
 
 UI.discordBtn = Instance.new("TextButton")
 UI.discordBtn.Text = "discord"; UI.discordBtn.Size = UDim2.new(0,70,0,18); UI.discordBtn.Position = UDim2.new(0,6,1,-22)
-UI.discordBtn.BackgroundColor3 = Color3.fromRGB(25,30,80); UI.discordBtn.TextColor3 = Color3.fromRGB(140,160,255)
+UI.discordBtn.BackgroundColor3 = Color3.fromRGB(55,60,150); UI.discordBtn.TextColor3 = Color3.fromRGB(180,190,255)
 UI.discordBtn.BorderSizePixel = 0; UI.discordBtn.Font = Enum.Font.Code; UI.discordBtn.TextSize = 10; UI.discordBtn.ZIndex = 3; UI.discordBtn.Parent = UI.mainFrame
-mkCorner(UI.discordBtn, 4); mkStroke(UI.discordBtn, Color3.fromRGB(60,80,200), 1)
+mkCorner(UI.discordBtn, 4); mkStroke(UI.discordBtn, Color3.fromRGB(80,90,200), 1)
 table.insert(Data.connections, UI.discordBtn.MouseButton1Click:Connect(function()
-	yoink("discord.gg/u8FTncR4dF"); UI.discordBtn.Text = "copied!"; UI.discordBtn.TextColor3 = Color3.fromRGB(160,255,180)
-	task.delay(2, function() UI.discordBtn.Text = "discord"; UI.discordBtn.TextColor3 = Color3.fromRGB(140,160,255) end)
+	yoink("discord.gg/u8FTncR4dF"); UI.discordBtn.Text = "copied!"; UI.discordBtn.TextColor3 = Color3.fromRGB(140,220,140)
+	task.delay(2, function() UI.discordBtn.Text = "discord"; UI.discordBtn.TextColor3 = Color3.fromRGB(180,190,255) end)
 end))
 
 table.insert(Data.connections, UI.minimize.MouseButton1Click:Connect(function()
@@ -813,7 +854,7 @@ UI.sideFrame = Instance.new("Frame")
 UI.sideFrame.Name = "SideFrame"
 UI.sideFrame.Size = UDim2.new(0, 280, 0, 540)
 UI.sideFrame.Position = UDim2.new(0, 660, 0, 50)
-UI.sideFrame.BackgroundColor3 = Color3.fromRGB(9, 11, 16)
+UI.sideFrame.BackgroundColor3 = Color3.fromRGB(14,14,14)
 UI.sideFrame.BackgroundTransparency = 0.08
 UI.sideFrame.BorderSizePixel = 0
 UI.sideFrame.Active = true
@@ -823,12 +864,13 @@ UI.sideFrame.Visible = false
 UI.sideFrame.Parent = UI.gui
 mkCorner(UI.sideFrame, 8)
 do
-	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0, 180, 200)
+	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(95,95,95)
 	s.Thickness = 1.2; s.Transparency = 0.4; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.sideFrame
 end
 
+
 do
-	local glow = Instance.new("Frame"); glow.Size = UDim2.new(1,0,0,1); glow.BackgroundColor3 = Color3.fromRGB(0,220,200)
+	local glow = Instance.new("Frame"); glow.Size = UDim2.new(1,0,0,1); glow.BackgroundColor3 = Color3.fromRGB(160,160,160)
 	glow.BackgroundTransparency = 0.6; glow.BorderSizePixel = 0; glow.ZIndex = 10; glow.Parent = UI.sideFrame
 end
 
@@ -859,13 +901,14 @@ table.insert(Data.connections, UI.openSide.MouseButton1Click:Connect(function()
 	UI.sideFrame.Visible = not UI.sideFrame.Visible
 end))
 
+
 UI.sideResizeHandle = Instance.new("TextButton")
 UI.sideResizeHandle.Size = UDim2.new(0, 14, 0, 14)
 UI.sideResizeHandle.Position = UDim2.new(1, -14, 1, -14)
-UI.sideResizeHandle.BackgroundColor3 = Color3.fromRGB(0, 140, 160)
+UI.sideResizeHandle.BackgroundColor3 = Color3.fromRGB(42,42,42)
 UI.sideResizeHandle.BackgroundTransparency = 0.4
 UI.sideResizeHandle.Text = "⠿"
-UI.sideResizeHandle.TextColor3 = Color3.fromRGB(0, 230, 210)
+UI.sideResizeHandle.TextColor3 = Color3.fromRGB(130,130,130)
 UI.sideResizeHandle.Font = Enum.Font.Code
 UI.sideResizeHandle.TextSize = 10
 UI.sideResizeHandle.BorderSizePixel = 0
@@ -894,56 +937,57 @@ end
 
 local sideTop = Instance.new("Frame")
 sideTop.Size = UDim2.new(1, 0, 0, 32)
-sideTop.BackgroundColor3 = Color3.fromRGB(5, 8, 14)
+sideTop.BackgroundColor3 = Color3.fromRGB(8,8,8)
+sideTop.BackgroundTransparency = 0
 sideTop.BorderSizePixel = 0; sideTop.ZIndex = 11; sideTop.Parent = UI.sideFrame
 mkCorner(sideTop, 8)
 do
 	local g = Instance.new("UIGradient")
-	g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0,50,70)), ColorSequenceKeypoint.new(1, Color3.fromRGB(0,20,35))})
+	g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(20,20,20)), ColorSequenceKeypoint.new(1, Color3.fromRGB(8,8,8))})
 	g.Rotation = 90; g.Parent = sideTop
-	
+
 	local cover = Instance.new("Frame"); cover.Size = UDim2.new(1,0,0,8); cover.Position = UDim2.new(0,0,1,-8)
-	cover.BackgroundColor3 = Color3.fromRGB(5,8,14); cover.BorderSizePixel = 0; cover.ZIndex = 11; cover.Parent = sideTop
+	cover.BackgroundColor3 = Color3.fromRGB(8,8,8); cover.BorderSizePixel = 0; cover.ZIndex = 11; cover.Parent = sideTop
 end
 
 local sideTitleLbl = Instance.new("TextLabel")
-sideTitleLbl.Text = "⬡ binds & rules"
+sideTitleLbl.Text = "binds & rules"
 sideTitleLbl.Size = UDim2.new(1,-100,1,0); sideTitleLbl.Position = UDim2.new(0,10,0,0)
-sideTitleLbl.BackgroundTransparency = 1; sideTitleLbl.TextColor3 = Color3.fromRGB(0,220,200)
-sideTitleLbl.Font = Enum.Font.Code; sideTitleLbl.TextSize = 12
+sideTitleLbl.BackgroundTransparency = 1; sideTitleLbl.TextColor3 = Color3.fromRGB(200,210,220)
+sideTitleLbl.Font = Enum.Font.GothamBold; sideTitleLbl.TextSize = 14
 sideTitleLbl.TextXAlignment = Enum.TextXAlignment.Left; sideTitleLbl.ZIndex = 12; sideTitleLbl.Parent = sideTop
 
 UI.sideClose = Instance.new("TextButton")
-UI.sideClose.Size = UDim2.new(0,22,0,20); UI.sideClose.Position = UDim2.new(1,-25,0,6); UI.sideClose.Text = "✕"
-UI.sideClose.BackgroundColor3 = Color3.fromRGB(120,15,15); UI.sideClose.TextColor3 = Color3.new(1,1,1)
-UI.sideClose.Font = Enum.Font.Code; UI.sideClose.TextSize = 11; UI.sideClose.BorderSizePixel = 0; UI.sideClose.ZIndex = 12; UI.sideClose.Parent = sideTop
+UI.sideClose.Size = UDim2.new(0,22,0,20); UI.sideClose.Position = UDim2.new(1,-25,0,6); UI.sideClose.Text = "X"
+UI.sideClose.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.sideClose.TextColor3 = Color3.fromRGB(255,255,255)
+UI.sideClose.Font = Enum.Font.GothamSemibold; UI.sideClose.TextSize = 11; UI.sideClose.BorderSizePixel = 0; UI.sideClose.ZIndex = 12; UI.sideClose.Parent = sideTop
 mkCorner(UI.sideClose, 4)
 
 UI.sideMinimize = Instance.new("TextButton")
-UI.sideMinimize.Size = UDim2.new(0,22,0,20); UI.sideMinimize.Position = UDim2.new(1,-50,0,6); UI.sideMinimize.Text = "─"
-UI.sideMinimize.BackgroundColor3 = Color3.fromRGB(0,50,65); UI.sideMinimize.TextColor3 = Color3.fromRGB(0,200,180)
-UI.sideMinimize.Font = Enum.Font.Code; UI.sideMinimize.TextSize = 11; UI.sideMinimize.BorderSizePixel = 0; UI.sideMinimize.ZIndex = 12; UI.sideMinimize.Parent = sideTop
+UI.sideMinimize.Size = UDim2.new(0,22,0,20); UI.sideMinimize.Position = UDim2.new(1,-50,0,6); UI.sideMinimize.Text = "-"
+UI.sideMinimize.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.sideMinimize.TextColor3 = Color3.fromRGB(140,210,145)
+UI.sideMinimize.Font = Enum.Font.GothamSemibold; UI.sideMinimize.TextSize = 11; UI.sideMinimize.BorderSizePixel = 0; UI.sideMinimize.ZIndex = 12; UI.sideMinimize.Parent = sideTop
 mkCorner(UI.sideMinimize, 4)
 
 
 UI.cmdsBtn = Instance.new("TextButton")
 UI.cmdsBtn.Size = UDim2.new(0,44,0,20); UI.cmdsBtn.Position = UDim2.new(1,-97,0,6); UI.cmdsBtn.Text = "cmds"
-UI.cmdsBtn.BackgroundColor3 = Color3.fromRGB(0,45,60); UI.cmdsBtn.TextColor3 = Color3.fromRGB(0,200,180)
-UI.cmdsBtn.Font = Enum.Font.Code; UI.cmdsBtn.TextSize = 11; UI.cmdsBtn.BorderSizePixel = 0; UI.cmdsBtn.ZIndex = 12; UI.cmdsBtn.Parent = sideTop
+UI.cmdsBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.cmdsBtn.TextColor3 = Color3.fromRGB(140,200,240)
+UI.cmdsBtn.Font = Enum.Font.GothamSemibold; UI.cmdsBtn.TextSize = 11; UI.cmdsBtn.BorderSizePixel = 0; UI.cmdsBtn.ZIndex = 12; UI.cmdsBtn.Parent = sideTop
 mkCorner(UI.cmdsBtn, 4)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0,160,180); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.cmdsBtn end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(95,95,95); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.cmdsBtn end
 
 
 UI.cmdsPanel = Instance.new("Frame")
 UI.cmdsPanel.Size = UDim2.new(1,-10,0,210); UI.cmdsPanel.Position = UDim2.new(0,5,0,36)
-UI.cmdsPanel.BackgroundColor3 = Color3.fromRGB(6,10,18); UI.cmdsPanel.BorderSizePixel = 0
+UI.cmdsPanel.BackgroundColor3 = Color3.fromRGB(8,8,8); UI.cmdsPanel.BorderSizePixel = 0
 UI.cmdsPanel.ZIndex = 13; UI.cmdsPanel.Visible = false; UI.cmdsPanel.ClipsDescendants = true; UI.cmdsPanel.Parent = UI.sideFrame
 mkCorner(UI.cmdsPanel, 6)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0,180,160); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.cmdsPanel end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(95,95,95); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.cmdsPanel end
 do
 	local tl = Instance.new("TextLabel")
 	tl.Size = UDim2.new(1,-10,1,-10); tl.Position = UDim2.new(0,6,0,5)
-	tl.BackgroundTransparency = 1; tl.TextColor3 = Color3.fromRGB(0,210,180)
+	tl.BackgroundTransparency = 1; tl.TextColor3 = Color3.fromRGB(160,160,160)
 	tl.TextXAlignment = Enum.TextXAlignment.Left; tl.TextYAlignment = Enum.TextYAlignment.Top
 	tl.TextWrapped = true; tl.Font = Enum.Font.Code; tl.TextSize = 11; tl.ZIndex = 14
 	tl.Text = "COMMANDS (main id box):\npause/freeze  speed [n]  ban [id]\nunban [id]  stop [id]  step [n]\nloop  clear\n\nMACRO (use ; to chain):\nplay [id] [speed] [loop?]\nwait [secs]  stop [id]  speed [n]\n\nEXAMPLE:\nplay 111; wait 0.5; play 222 2 true;\nwait 1; stop 111\n\nHold: ON = temp freeze while held."
@@ -951,75 +995,75 @@ do
 end
 table.insert(Data.connections, UI.cmdsBtn.MouseButton1Click:Connect(function()
 	UI.cmdsPanel.Visible = not UI.cmdsPanel.Visible
-	UI.cmdsBtn.BackgroundColor3 = UI.cmdsPanel.Visible and Color3.fromRGB(0,80,90) or Color3.fromRGB(0,45,60)
+	UI.cmdsBtn.BackgroundColor3 = UI.cmdsPanel.Visible and Color3.fromRGB(65,65,65) or Color3.fromRGB(28,28,28)
 end))
 
 
 UI.cmdsTooltip = Instance.new("Frame")
 UI.cmdsTooltip.Size = UDim2.new(0,1,0,1); UI.cmdsTooltip.Visible = false; UI.cmdsTooltip.Parent = UI.gui
 
-
 local groupBar = Instance.new("Frame")
 groupBar.Name = "GroupBar"
 groupBar.Size = UDim2.new(1,-10,0,26); groupBar.Position = UDim2.new(0,5,0,36)
-groupBar.BackgroundColor3 = Color3.fromRGB(8,12,20); groupBar.BorderSizePixel = 0; groupBar.ZIndex = 11; groupBar.Parent = UI.sideFrame
+groupBar.BackgroundColor3 = Color3.fromRGB(8,8,8); groupBar.BackgroundTransparency = 0.15; groupBar.BorderSizePixel = 0; groupBar.ZIndex = 11; groupBar.Parent = UI.sideFrame
 mkCorner(groupBar, 5)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0,120,140); s.Thickness = 1; s.Transparency = 0.6; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = groupBar end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(95,95,95); s.Thickness = 1; s.Transparency = 0.6; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = groupBar end
 
 UI.groupNameBox = Instance.new("TextBox")
 UI.groupNameBox.PlaceholderText = "group name..."; UI.groupNameBox.Text = ""
 UI.groupNameBox.Size = UDim2.new(1,-106,1,-4); UI.groupNameBox.Position = UDim2.new(0,4,0,2)
-UI.groupNameBox.BackgroundColor3 = Color3.fromRGB(10,14,22); UI.groupNameBox.TextColor3 = Color3.fromRGB(200,240,230)
-UI.groupNameBox.PlaceholderColor3 = Color3.fromRGB(60,100,90); UI.groupNameBox.Font = Enum.Font.Code
+UI.groupNameBox.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.groupNameBox.TextColor3 = Color3.fromRGB(210,210,210)
+UI.groupNameBox.PlaceholderColor3 = Color3.fromRGB(65,65,65); UI.groupNameBox.Font = Enum.Font.Code
 UI.groupNameBox.TextSize = 11; UI.groupNameBox.BorderSizePixel = 0; UI.groupNameBox.ZIndex = 12; UI.groupNameBox.Parent = groupBar
 mkCorner(UI.groupNameBox, 4)
 
 UI.saveGroupBtn = Instance.new("TextButton")
 UI.saveGroupBtn.Text = "Save"; UI.saveGroupBtn.Size = UDim2.new(0,48,1,-4); UI.saveGroupBtn.Position = UDim2.new(1,-102,0,2)
-UI.saveGroupBtn.BackgroundColor3 = Color3.fromRGB(0,55,65); UI.saveGroupBtn.TextColor3 = Color3.fromRGB(0,220,180)
-UI.saveGroupBtn.Font = Enum.Font.Code; UI.saveGroupBtn.TextSize = 11; UI.saveGroupBtn.BorderSizePixel = 0; UI.saveGroupBtn.ZIndex = 12; UI.saveGroupBtn.Parent = groupBar
+UI.saveGroupBtn.BackgroundColor3 = Color3.fromRGB(42,42,42); UI.saveGroupBtn.TextColor3 = Color3.fromRGB(160,160,160)
+UI.saveGroupBtn.Font = Enum.Font.GothamSemibold; UI.saveGroupBtn.TextSize = 11; UI.saveGroupBtn.BorderSizePixel = 0; UI.saveGroupBtn.ZIndex = 12; UI.saveGroupBtn.Parent = groupBar
 mkCorner(UI.saveGroupBtn, 4)
 
 UI.loadGroupBtn = Instance.new("TextButton")
 UI.loadGroupBtn.Text = "Load"; UI.loadGroupBtn.Size = UDim2.new(0,48,1,-4); UI.loadGroupBtn.Position = UDim2.new(1,-50,0,2)
-UI.loadGroupBtn.BackgroundColor3 = Color3.fromRGB(25,15,45); UI.loadGroupBtn.TextColor3 = Color3.fromRGB(180,150,255)
-UI.loadGroupBtn.Font = Enum.Font.Code; UI.loadGroupBtn.TextSize = 11; UI.loadGroupBtn.BorderSizePixel = 0; UI.loadGroupBtn.ZIndex = 12; UI.loadGroupBtn.Parent = groupBar
+UI.loadGroupBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.loadGroupBtn.TextColor3 = Color3.fromRGB(160,160,160)
+UI.loadGroupBtn.Font = Enum.Font.GothamSemibold; UI.loadGroupBtn.TextSize = 11; UI.loadGroupBtn.BorderSizePixel = 0; UI.loadGroupBtn.ZIndex = 12; UI.loadGroupBtn.Parent = groupBar
 mkCorner(UI.loadGroupBtn, 4)
 
 UI.groupDropdown = Instance.new("Frame")
 UI.groupDropdown.Size = UDim2.new(1,-10,0,0); UI.groupDropdown.Position = UDim2.new(0,5,0,66)
-UI.groupDropdown.BackgroundColor3 = Color3.fromRGB(10,14,22); UI.groupDropdown.BorderSizePixel = 0
+UI.groupDropdown.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.groupDropdown.BorderSizePixel = 0
 UI.groupDropdown.ZIndex = 25; UI.groupDropdown.ClipsDescendants = true; UI.groupDropdown.Visible = false; UI.groupDropdown.Parent = UI.sideFrame
 mkCorner(UI.groupDropdown, 5)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(90,60,180); s.Thickness = 1; s.Transparency = 0.4; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.groupDropdown end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(65,65,65); s.Thickness = 1; s.Transparency = 0.4; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.groupDropdown end
 do local l = Instance.new("UIListLayout"); l.Padding = UDim.new(0,2); l.Parent = UI.groupDropdown end
 
 
 local tabBar = Instance.new("Frame")
 tabBar.Name = "TabBar"
 tabBar.Size = UDim2.new(1,-10,0,30); tabBar.Position = UDim2.new(0,5,0,66)
-tabBar.BackgroundColor3 = Color3.fromRGB(7,10,17); tabBar.BorderSizePixel = 0; tabBar.ZIndex = 11; tabBar.Parent = UI.sideFrame
+tabBar.BackgroundColor3 = Color3.fromRGB(8,8,8); tabBar.BackgroundTransparency = 0.15; tabBar.BorderSizePixel = 0; tabBar.ZIndex = 11; tabBar.Parent = UI.sideFrame
 mkCorner(tabBar, 6)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0,120,140); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = tabBar end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(95,95,95); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = tabBar end
 
 
 local sideSearchBox = Instance.new("TextBox")
 sideSearchBox.PlaceholderText = "search binds / repls..."; sideSearchBox.Text = ""
 sideSearchBox.Size = UDim2.new(1,-10,0,24); sideSearchBox.Position = UDim2.new(0,5,0,100)
-sideSearchBox.BackgroundColor3 = Color3.fromRGB(8,12,20); sideSearchBox.TextColor3 = Color3.fromRGB(200,240,230)
-sideSearchBox.PlaceholderColor3 = Color3.fromRGB(60,90,80); sideSearchBox.Font = Enum.Font.Code; sideSearchBox.TextSize = 11
+sideSearchBox.BackgroundColor3 = Color3.fromRGB(8,8,8); sideSearchBox.TextColor3 = Color3.fromRGB(210,210,210)
+sideSearchBox.PlaceholderColor3 = Color3.fromRGB(65,65,65); sideSearchBox.Font = Enum.Font.Code; sideSearchBox.TextSize = 11
 sideSearchBox.BorderSizePixel = 0; sideSearchBox.ZIndex = 11; sideSearchBox.Parent = UI.sideFrame
 mkCorner(sideSearchBox, 5)
-do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,140,160); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=sideSearchBox end
+do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(95,95,95); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=sideSearchBox end
 
 local TAB_NAMES = {"Binds","Repls","Adv"}
 local TAB_COLORS = {
-	active   = {Color3.fromRGB(0,180,160), Color3.fromRGB(180,160,0), Color3.fromRGB(60,130,255)},
-	inactive = {Color3.fromRGB(0,55,65),   Color3.fromRGB(55,50,0),   Color3.fromRGB(20,40,80)},
+	active   = {Color3.fromRGB(220,220,220), Color3.fromRGB(255,215,0), Color3.fromRGB(200,50,50)},
+	inactive = {Color3.fromRGB(20,20,20), Color3.fromRGB(20,20,20), Color3.fromRGB(20,20,20)},
 }
 local sideTabBtns = {}
-local sideTabLists = {}  
+local sideTabLists = {}
 local sideTabLayouts = {}
+local sideTabUnderlines = {}
 local State_sideTab = 1
 
 for i, name in ipairs(TAB_NAMES) do
@@ -1028,15 +1072,24 @@ for i, name in ipairs(TAB_NAMES) do
 	btn.Position = UDim2.new((i-1)/#TAB_NAMES, 2+((i-1)*2), 0, 3)
 	btn.Text = name
 	btn.BackgroundColor3 = i == 1 and TAB_COLORS.active[i] or TAB_COLORS.inactive[i]
-	btn.TextColor3 = i == 1 and Color3.new(1,1,1) or Color3.fromRGB(140,140,140)
+	btn.TextColor3 = i == 1 and Color3.fromRGB(20,20,20) or Color3.fromRGB(95,95,95)
 	btn.Font = Enum.Font.Code; btn.TextSize = 12; btn.BorderSizePixel = 0; btn.ZIndex = 12; btn.Parent = tabBar
 	mkCorner(btn, 5)
+	
+	local underline = Instance.new("Frame")
+	underline.Size = UDim2.new(0.7, 0, 0, 2)
+	underline.Position = UDim2.new(0.15, 0, 1, -3)
+	underline.BackgroundColor3 = i == 1 and Color3.fromRGB(20,20,20) or (i == 2 and Color3.fromRGB(200,170,0) or Color3.fromRGB(180,40,40))
+	underline.BorderSizePixel = 0; underline.ZIndex = 13
+	underline.Visible = i == 1; underline.Parent = btn
+	mkCorner(underline, 1)
 	sideTabBtns[i] = btn
+	sideTabUnderlines[i] = underline
 
 	local sf = Instance.new("ScrollingFrame")
 	sf.Size = UDim2.new(1,-10,1,-164); sf.Position = UDim2.new(0,5,0,128)
 	sf.BackgroundTransparency = 1; sf.BorderSizePixel = 0
-	sf.ScrollBarThickness = 3; sf.ScrollBarImageColor3 = Color3.fromRGB(0,180,160)
+	sf.ScrollBarThickness = 3; sf.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 	sf.CanvasSize = UDim2.new(0,0,0,0); sf.ClipsDescendants = true
 	sf.ZIndex = 11; sf.Visible = i == 1; sf.Parent = UI.sideFrame
 	local layout = Instance.new("UIListLayout"); layout.Padding = UDim.new(0,6); layout.Parent = sf
@@ -1055,10 +1108,15 @@ local function switchSideTab(idx)
 	State_sideTab = idx
 	for i, btn in ipairs(sideTabBtns) do
 		btn.BackgroundColor3 = i == idx and TAB_COLORS.active[i] or TAB_COLORS.inactive[i]
-		btn.TextColor3 = i == idx and Color3.new(1,1,1) or Color3.fromRGB(140,140,140)
+		btn.TextColor3 = i == idx and Color3.fromRGB(20,20,20) or Color3.fromRGB(95,95,95)
 		sideTabLists[i].Visible = i == idx
+		if sideTabUnderlines[i] then 
+			sideTabUnderlines[i].Visible = i == idx
+			sideTabUnderlines[i].BackgroundColor3 = i == 1 and Color3.fromRGB(20,20,20) or (i == 2 and Color3.fromRGB(200,170,0) or Color3.fromRGB(180,40,40))
+		end
 	end
 end
+switchSideTab(1)
 for i in ipairs(TAB_NAMES) do
 	table.insert(Data.connections, sideTabBtns[i].MouseButton1Click:Connect(function() switchSideTab(i) end))
 end
@@ -1066,32 +1124,33 @@ end
 
 local sideBottomBar = Instance.new("Frame")
 sideBottomBar.Size = UDim2.new(1,-10,0,32); sideBottomBar.Position = UDim2.new(0,5,1,-38)
-sideBottomBar.BackgroundColor3 = Color3.fromRGB(7,10,17); sideBottomBar.BorderSizePixel = 0; sideBottomBar.ZIndex = 11; sideBottomBar.Parent = UI.sideFrame
+sideBottomBar.BackgroundColor3 = Color3.fromRGB(8,8,8); sideBottomBar.BackgroundTransparency = 0.15; sideBottomBar.BorderSizePixel = 0; sideBottomBar.ZIndex = 11; sideBottomBar.Parent = UI.sideFrame
 mkCorner(sideBottomBar, 6)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0,120,140); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = sideBottomBar end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(95,95,95); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = sideBottomBar end
 
 UI.addB = Instance.new("TextButton")
 UI.addB.Size = UDim2.new(1,-10,1,-6); UI.addB.Position = UDim2.new(0,5,0,3)
 UI.addB.Text = "＋ Add Bind"
-UI.addB.BackgroundColor3 = Color3.fromRGB(0,70,80); UI.addB.TextColor3 = Color3.fromRGB(0,240,200)
-UI.addB.Font = Enum.Font.Code; UI.addB.TextSize = 13; UI.addB.BorderSizePixel = 0; UI.addB.ZIndex = 12; UI.addB.Parent = sideBottomBar
+UI.addB.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.addB.TextColor3 = Color3.fromRGB(140,210,145)
+UI.addB.Font = Enum.Font.GothamBold; UI.addB.TextSize = 14; UI.addB.BorderSizePixel = 0; UI.addB.ZIndex = 12; UI.addB.Parent = sideBottomBar
 mkCorner(UI.addB, 5)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0,200,180); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.addB end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(45,80,48); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.addB end
 
 UI.addR = Instance.new("TextButton")
 UI.addR.Size = UDim2.new(1,-10,1,-6); UI.addR.Position = UDim2.new(0,5,0,3)
 UI.addR.Text = "＋ Add Replacement"
-UI.addR.BackgroundColor3 = Color3.fromRGB(55,50,0); UI.addR.TextColor3 = Color3.fromRGB(240,220,0)
-UI.addR.Font = Enum.Font.Code; UI.addR.TextSize = 13; UI.addR.BorderSizePixel = 0; UI.addR.ZIndex = 12; UI.addR.Visible = false; UI.addR.Parent = sideBottomBar
+UI.addR.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.addR.TextColor3 = Color3.fromRGB(140,210,145)
+UI.addR.Font = Enum.Font.GothamBold; UI.addR.TextSize = 14; UI.addR.BorderSizePixel = 0; UI.addR.ZIndex = 12; UI.addR.Visible = false; UI.addR.Parent = sideBottomBar
 mkCorner(UI.addR, 5)
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(45,80,48); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.addR end
 
 UI.addAdvReplBtn = Instance.new("TextButton")
 UI.addAdvReplBtn.Size = UDim2.new(1,-10,1,-6); UI.addAdvReplBtn.Position = UDim2.new(0,5,0,3)
 UI.addAdvReplBtn.Text = "＋ Add Adv Replacement"
-UI.addAdvReplBtn.BackgroundColor3 = Color3.fromRGB(15,35,75); UI.addAdvReplBtn.TextColor3 = Color3.fromRGB(100,170,255)
-UI.addAdvReplBtn.Font = Enum.Font.Code; UI.addAdvReplBtn.TextSize = 13; UI.addAdvReplBtn.BorderSizePixel = 0; UI.addAdvReplBtn.ZIndex = 12; UI.addAdvReplBtn.Visible = false; UI.addAdvReplBtn.Parent = sideBottomBar
+UI.addAdvReplBtn.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.addAdvReplBtn.TextColor3 = Color3.fromRGB(255,255,255)
+UI.addAdvReplBtn.Font = Enum.Font.GothamBold; UI.addAdvReplBtn.TextSize = 14; UI.addAdvReplBtn.BorderSizePixel = 0; UI.addAdvReplBtn.ZIndex = 12; UI.addAdvReplBtn.Visible = false; UI.addAdvReplBtn.Parent = sideBottomBar
 mkCorner(UI.addAdvReplBtn, 5)
-do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(60,130,255); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.addAdvReplBtn end
+do local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(180,40,40); s.Thickness = 1; s.Transparency = 0.5; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.addAdvReplBtn end
 
 
 local origSwitchSideTab = switchSideTab
@@ -1147,7 +1206,7 @@ local function refreshGroupDropdown()
 	for name, _ in pairs(Data.keybindGroups) do
 		count += 1
 		local btn = Instance.new("TextButton"); btn.Text = name; btn.Size = UDim2.new(1,0,0,24)
-		btn.BackgroundColor3 = Color3.fromRGB(15,12,30); btn.TextColor3 = Color3.fromRGB(200,180,255)
+		btn.BackgroundColor3 = Color3.fromRGB(14,14,14); btn.TextColor3 = Color3.fromRGB(160,160,160)
 		btn.Font = Enum.Font.Code; btn.TextSize = 11; btn.TextXAlignment = Enum.TextXAlignment.Left; btn.BorderSizePixel = 0; btn.ZIndex = 26; btn.Parent = UI.groupDropdown
 		table.insert(Data.connections, btn.MouseButton1Click:Connect(function()
 			local data = Data.keybindGroups[name]; if not data then return end
@@ -1187,14 +1246,14 @@ table.insert(Data.connections, UI.sideMinimize.MouseButton1Click:Connect(functio
 		tabBar.Visible = false; groupBar.Visible = false; sideBottomBar.Visible = false
 		sideSearchBox.Visible = false
 		UI.sideResizeHandle.Visible = false
-		UI.sideMinimize.Text = "▸"
+		UI.sideMinimize.Text = "+"
 	else
 		UI.sideFrame.Size = UDim2.new(0, UI.sideFrame.AbsoluteSize.X, 0, State.sideFrameLastH or 540)
 		sideTabLists[State_sideTab].Visible = true
 		tabBar.Visible = true; groupBar.Visible = true; sideBottomBar.Visible = true
 		sideSearchBox.Visible = true
 		UI.sideResizeHandle.Visible = true
-		UI.sideMinimize.Text = "─"
+		UI.sideMinimize.Text = "-"
 	end
 end))
 table.insert(Data.connections, UI.sideClose.MouseButton1Click:Connect(function() UI.sideFrame.Visible = false end))
@@ -1202,9 +1261,9 @@ table.insert(Data.connections, UI.sideClose.MouseButton1Click:Connect(function()
 UI.viewportWin = Instance.new("Frame")
 local viewportWin = UI.viewportWin
 viewportWin.Name = "ViewportWindow"; viewportWin.Size = UDim2.new(0,300,0,620); viewportWin.Position = UDim2.new(0,670,0,380)
-viewportWin.BackgroundColor3 = Color3.fromRGB(12,14,18); viewportWin.BorderSizePixel = 0; viewportWin.Active = true
+viewportWin.BackgroundColor3 = Color3.fromRGB(14,14,14); viewportWin.BackgroundTransparency = 0.15; viewportWin.BorderSizePixel = 0; viewportWin.Active = true
 viewportWin.ClipsDescendants = true; viewportWin.ZIndex = 5; viewportWin.Visible = false; viewportWin.Parent = UI.gui
-mkCorner(viewportWin, 6); mkStroke(viewportWin, Color3.fromRGB(0,90,100), 1)
+mkCorner(viewportWin, 10); mkStroke(viewportWin, Color3.fromRGB(65,65,65), 1)
 
 local function dragVP(input)
 	local delta = input.Position - State.dragStartVP
@@ -1229,11 +1288,11 @@ table.insert(Data.connections, Services.RunService.Heartbeat:Connect(function()
 	if State.dragInputVP and State.draggingVP then dragVP(State.dragInputVP) end
 end))
 
-local vpTop = Instance.new("Frame"); vpTop.Size = UDim2.new(1,0,0,25); vpTop.BackgroundColor3 = Color3.fromRGB(8,28,32); vpTop.BorderSizePixel = 0; vpTop.ZIndex = 6; vpTop.Parent = viewportWin
-do local g = Instance.new("UIGradient"); g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(0,55,65)),ColorSequenceKeypoint.new(1,Color3.fromRGB(5,25,30))}); g.Rotation = 90; g.Parent = vpTop end
-UI.vpTitle = Instance.new("TextLabel"); UI.vpTitle.Text = "preview"; UI.vpTitle.Size = UDim2.new(1,-120,1,0); UI.vpTitle.BackgroundTransparency = 1; UI.vpTitle.TextColor3 = Color3.fromRGB(0,220,170); UI.vpTitle.Font = Enum.Font.Code; UI.vpTitle.TextSize = 13; UI.vpTitle.ZIndex = 7; UI.vpTitle.Parent = vpTop
-UI.vpClose = Instance.new("TextButton"); UI.vpClose.Size = UDim2.new(0,25,0,20); UI.vpClose.Position = UDim2.new(1,-27,0,3); UI.vpClose.Text = "X"; UI.vpClose.BackgroundColor3 = Color3.fromRGB(140,20,20); UI.vpClose.TextColor3 = Color3.new(1,1,1); UI.vpClose.BorderSizePixel = 0; UI.vpClose.Font = Enum.Font.Code; UI.vpClose.TextSize = 11; UI.vpClose.ZIndex = 7; UI.vpClose.Parent = vpTop; mkCorner(UI.vpClose,4)
-UI.vpMinimize = Instance.new("TextButton"); UI.vpMinimize.Size = UDim2.new(0,25,0,20); UI.vpMinimize.Position = UDim2.new(1,-54,0,3); UI.vpMinimize.Text = "-"; UI.vpMinimize.BackgroundColor3 = Color3.fromRGB(0,55,65); UI.vpMinimize.TextColor3 = Color3.new(1,1,1); UI.vpMinimize.BorderSizePixel = 0; UI.vpMinimize.Font = Enum.Font.Code; UI.vpMinimize.TextSize = 11; UI.vpMinimize.ZIndex = 7; UI.vpMinimize.Parent = vpTop; mkCorner(UI.vpMinimize,4)
+local vpTop = Instance.new("Frame"); vpTop.Size = UDim2.new(1,0,0,25); vpTop.BackgroundColor3 = Color3.fromRGB(20,20,20); vpTop.BackgroundTransparency = 0; vpTop.BorderSizePixel = 0; vpTop.ZIndex = 6; vpTop.Parent = viewportWin
+do local g = Instance.new("UIGradient"); g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(42,42,42)),ColorSequenceKeypoint.new(1,Color3.fromRGB(20,20,20))}); g.Rotation = 90; g.Parent = vpTop end
+UI.vpTitle = Instance.new("TextLabel"); UI.vpTitle.Text = "preview"; UI.vpTitle.Size = UDim2.new(1,-120,1,0); UI.vpTitle.BackgroundTransparency = 1; UI.vpTitle.TextColor3 = Color3.fromRGB(160,160,160); UI.vpTitle.Font = Enum.Font.Code; UI.vpTitle.TextSize = 13; UI.vpTitle.ZIndex = 7; UI.vpTitle.Parent = vpTop
+UI.vpClose = Instance.new("TextButton"); UI.vpClose.Size = UDim2.new(0,25,0,20); UI.vpClose.Position = UDim2.new(1,-27,0,3); UI.vpClose.Text = "X"; UI.vpClose.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.vpClose.TextColor3 = Color3.fromRGB(255,255,255); UI.vpClose.BorderSizePixel = 0; UI.vpClose.Font = Enum.Font.Code; UI.vpClose.TextSize = 11; UI.vpClose.ZIndex = 7; UI.vpClose.Parent = vpTop; mkCorner(UI.vpClose,4)
+UI.vpMinimize = Instance.new("TextButton"); UI.vpMinimize.Size = UDim2.new(0,25,0,20); UI.vpMinimize.Position = UDim2.new(1,-54,0,3); UI.vpMinimize.Text = "-"; UI.vpMinimize.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpMinimize.TextColor3 = Color3.fromRGB(140,210,145); UI.vpMinimize.BorderSizePixel = 0; UI.vpMinimize.Font = Enum.Font.Code; UI.vpMinimize.TextSize = 11; UI.vpMinimize.ZIndex = 7; UI.vpMinimize.Parent = vpTop; mkCorner(UI.vpMinimize,4)
 table.insert(Data.connections, UI.vpClose.MouseButton1Click:Connect(function() UI.viewportWin.Visible = false end))
 table.insert(Data.connections, UI.vpMinimize.MouseButton1Click:Connect(function()
 	State.vpMinimized = not State.vpMinimized
@@ -1243,31 +1302,32 @@ end))
 
 UI.vpIdInput = Instance.new("TextBox"); UI.vpIdInput.Text = ""; UI.vpIdInput.PlaceholderText = "animation id..."
 UI.vpIdInput.Position = UDim2.new(0,5,0,30); UI.vpIdInput.Size = UDim2.new(1,-55,0,24)
-UI.vpIdInput.BackgroundColor3 = Color3.fromRGB(12,16,22); UI.vpIdInput.TextColor3 = Color3.new(1,1,1); UI.vpIdInput.PlaceholderColor3 = Color3.fromRGB(0,100,80)
+UI.vpIdInput.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.vpIdInput.TextColor3 = Color3.fromRGB(210,210,210); UI.vpIdInput.PlaceholderColor3 = Color3.fromRGB(65,65,65)
 UI.vpIdInput.BorderSizePixel = 0; UI.vpIdInput.Font = Enum.Font.Code; UI.vpIdInput.TextSize = 12; UI.vpIdInput.ZIndex = 7; UI.vpIdInput.Parent = UI.viewportWin
-mkCorner(UI.vpIdInput,4); mkStroke(UI.vpIdInput,Color3.fromRGB(0,90,100),1)
+mkCorner(UI.vpIdInput,4); mkStroke(UI.vpIdInput, Color3.fromRGB(42,42,42), 1)
 
 UI.vpIdGoBtn = Instance.new("TextButton"); UI.vpIdGoBtn.Text = "▶"; UI.vpIdGoBtn.Position = UDim2.new(1,-47,0,30); UI.vpIdGoBtn.Size = UDim2.new(0,42,0,24)
-UI.vpIdGoBtn.BackgroundColor3 = Color3.fromRGB(0,70,75); UI.vpIdGoBtn.TextColor3 = Color3.fromRGB(0,220,170); UI.vpIdGoBtn.BorderSizePixel = 0; UI.vpIdGoBtn.Font = Enum.Font.Code; UI.vpIdGoBtn.TextSize = 13; UI.vpIdGoBtn.ZIndex = 7; UI.vpIdGoBtn.Parent = UI.viewportWin
+UI.vpIdGoBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpIdGoBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpIdGoBtn.BorderSizePixel = 0; UI.vpIdGoBtn.Font = Enum.Font.Code; UI.vpIdGoBtn.TextSize = 13; UI.vpIdGoBtn.ZIndex = 7; UI.vpIdGoBtn.Parent = UI.viewportWin
+mkCorner(UI.vpIdGoBtn, 4)
 
 UI.vpFrame = Instance.new("ViewportFrame"); UI.vpFrame.Size = UDim2.new(1,-10,0,220); UI.vpFrame.Position = UDim2.new(0,5,0,58)
-UI.vpFrame.BackgroundColor3 = Color3.fromRGB(18,20,24); UI.vpFrame.BorderSizePixel = 0; UI.vpFrame.ZIndex = 6; UI.vpFrame.Parent = UI.viewportWin
-mkCorner(UI.vpFrame,4); mkStroke(UI.vpFrame,Color3.fromRGB(0,80,90),1)
+UI.vpFrame.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.vpFrame.BorderSizePixel = 0; UI.vpFrame.ZIndex = 6; UI.vpFrame.Parent = UI.viewportWin
+mkCorner(UI.vpFrame,4); mkStroke(UI.vpFrame, Color3.fromRGB(42,42,42), 1)
 UI.vpCamera = Instance.new("Camera"); UI.vpCamera.Parent = UI.vpFrame; UI.vpFrame.CurrentCamera = UI.vpCamera
 UI.worldModel = Instance.new("WorldModel"); UI.worldModel.Parent = UI.vpFrame
-UI.vpFrame.Ambient = Color3.fromRGB(120,120,120); UI.vpFrame.LightDirection = Vector3.new(-1,-2,-1)
+UI.vpFrame.Ambient = Color3.fromRGB(95,95,95); UI.vpFrame.LightDirection = Vector3.new(-1,-2,-1)
 local worldModel = UI.worldModel
 local vpCamera = UI.vpCamera
 
 UI.vpIdLabel = Instance.new("TextLabel"); UI.vpIdLabel.Text = "no animation selected"; UI.vpIdLabel.Position = UDim2.new(0,5,0,284); UI.vpIdLabel.Size = UDim2.new(1,-10,0,14)
-UI.vpIdLabel.BackgroundTransparency = 1; UI.vpIdLabel.TextColor3 = Color3.fromRGB(80,130,120); UI.vpIdLabel.Font = Enum.Font.Code; UI.vpIdLabel.TextSize = 11; UI.vpIdLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.vpIdLabel.ZIndex = 6; UI.vpIdLabel.Parent = viewportWin
+UI.vpIdLabel.BackgroundTransparency = 1; UI.vpIdLabel.TextColor3 = Color3.fromRGB(95,95,95); UI.vpIdLabel.Font = Enum.Font.Code; UI.vpIdLabel.TextSize = 11; UI.vpIdLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.vpIdLabel.ZIndex = 6; UI.vpIdLabel.Parent = viewportWin
 
 UI.vpTimerLabel = Instance.new("TextLabel"); UI.vpTimerLabel.Text = "-- / --"; UI.vpTimerLabel.Position = UDim2.new(0,5,0,300); UI.vpTimerLabel.Size = UDim2.new(1,-10,0,14)
-UI.vpTimerLabel.BackgroundTransparency = 1; UI.vpTimerLabel.TextColor3 = Color3.fromRGB(0,220,160); UI.vpTimerLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.vpTimerLabel.Font = Enum.Font.Code; UI.vpTimerLabel.TextSize = 11; UI.vpTimerLabel.ZIndex = 6; UI.vpTimerLabel.Parent = viewportWin
+UI.vpTimerLabel.BackgroundTransparency = 1; UI.vpTimerLabel.TextColor3 = Color3.fromRGB(160,160,160); UI.vpTimerLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.vpTimerLabel.Font = Enum.Font.Code; UI.vpTimerLabel.TextSize = 11; UI.vpTimerLabel.ZIndex = 6; UI.vpTimerLabel.Parent = viewportWin
 
 UI.vpScrubBg = Instance.new("Frame"); UI.vpScrubBg.Position = UDim2.new(0,5,0,317); UI.vpScrubBg.Size = UDim2.new(1,-10,0,12)
-UI.vpScrubBg.BackgroundColor3 = Color3.fromRGB(22,26,32); UI.vpScrubBg.BorderSizePixel = 0; UI.vpScrubBg.ZIndex = 6; UI.vpScrubBg.Parent = viewportWin; mkCorner(UI.vpScrubBg,6)
-UI.vpScrubFill = Instance.new("Frame"); UI.vpScrubFill.Size = UDim2.new(0,0,1,0); UI.vpScrubFill.BackgroundColor3 = Color3.fromRGB(0,200,150); UI.vpScrubFill.BorderSizePixel = 0; UI.vpScrubFill.ZIndex = 7; UI.vpScrubFill.Parent = UI.vpScrubBg
+UI.vpScrubBg.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.vpScrubBg.BackgroundTransparency = 0.15; UI.vpScrubBg.BorderSizePixel = 0; UI.vpScrubBg.ZIndex = 6; UI.vpScrubBg.Parent = viewportWin; mkCorner(UI.vpScrubBg,6)
+UI.vpScrubFill = Instance.new("Frame"); UI.vpScrubFill.Size = UDim2.new(0,0,1,0); UI.vpScrubFill.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.vpScrubFill.BorderSizePixel = 0; UI.vpScrubFill.ZIndex = 7; UI.vpScrubFill.Parent = UI.vpScrubBg
 UI.vpScrubBtn = Instance.new("TextButton"); UI.vpScrubBtn.Size = UDim2.new(1,0,1,0); UI.vpScrubBtn.BackgroundTransparency = 1; UI.vpScrubBtn.Text = ""; UI.vpScrubBtn.ZIndex = 8; UI.vpScrubBtn.Parent = UI.vpScrubBg
 
 local function nukeGhost()
@@ -1279,7 +1339,8 @@ local function nukeGhost()
 end
 
 UI.vpPauseBtn = Instance.new("TextButton"); UI.vpPauseBtn.Text = "⏸ Pause"; UI.vpPauseBtn.Position = UDim2.new(0,5,0,328); UI.vpPauseBtn.Size = UDim2.new(1,-10,0,20)
-UI.vpPauseBtn.BackgroundColor3 = Color3.fromRGB(0,50,65); UI.vpPauseBtn.TextColor3 = Color3.new(1,1,1); UI.vpPauseBtn.BorderSizePixel = 0; UI.vpPauseBtn.Font = Enum.Font.Code; UI.vpPauseBtn.TextSize = 11; UI.vpPauseBtn.ZIndex = 6; UI.vpPauseBtn.Parent = UI.viewportWin; mkCorner(UI.vpPauseBtn,4)
+UI.vpPauseBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.vpPauseBtn.TextColor3 = Color3.fromRGB(210,210,210); UI.vpPauseBtn.BorderSizePixel = 0; UI.vpPauseBtn.Font = Enum.Font.Code; UI.vpPauseBtn.TextSize = 11; UI.vpPauseBtn.ZIndex = 6; UI.vpPauseBtn.Parent = UI.viewportWin; mkCorner(UI.vpPauseBtn,4)
+mkStroke(UI.vpPauseBtn, Color3.fromRGB(65,65,65), 1)
 table.insert(Data.connections, UI.vpPauseBtn.MouseButton1Click:Connect(function()
 	if not State.vpPaused and not Data.vpTrack then return end
 	State.vpPaused = not State.vpPaused
@@ -1305,7 +1366,7 @@ table.insert(Data.connections, UI.vpPauseBtn.MouseButton1Click:Connect(function(
 		end
 	end
 	UI.vpPauseBtn.Text = State.vpPaused and "▶ Resume" or "⏸ Pause"
-	UI.vpPauseBtn.BackgroundColor3 = State.vpPaused and Color3.fromRGB(0,80,0) or Color3.fromRGB(0,50,60)
+	UI.vpPauseBtn.BackgroundColor3 = State.vpPaused and Color3.fromRGB(42,42,42) or Color3.fromRGB(28,28,28)
 end))
 
 table.insert(Data.connections, UI.vpScrubBtn.MouseButton1Down:Connect(function()
@@ -1331,92 +1392,100 @@ end))
 
 do
 	local vpSpeedLabel = Instance.new("TextLabel"); vpSpeedLabel.Text = "Speed"; vpSpeedLabel.Position = UDim2.new(0,5,0,353); vpSpeedLabel.Size = UDim2.new(0,40,0,20)
-	vpSpeedLabel.BackgroundTransparency = 1; vpSpeedLabel.TextColor3 = Color3.fromRGB(0,180,140); vpSpeedLabel.Font = Enum.Font.Code; vpSpeedLabel.TextSize = 12; vpSpeedLabel.ZIndex = 6; vpSpeedLabel.Parent = UI.viewportWin
+	vpSpeedLabel.BackgroundTransparency = 1; vpSpeedLabel.TextColor3 = Color3.fromRGB(95,95,95); vpSpeedLabel.Font = Enum.Font.Code; vpSpeedLabel.TextSize = 12; vpSpeedLabel.ZIndex = 6; vpSpeedLabel.Parent = UI.viewportWin
 end
 UI.vpSpeedBox = Instance.new("TextBox"); UI.vpSpeedBox.Text = "1"; UI.vpSpeedBox.PlaceholderText = "speed"
 UI.vpSpeedBox.Position = UDim2.new(0,50,0,353); UI.vpSpeedBox.Size = UDim2.new(0,55,0,20)
-UI.vpSpeedBox.BackgroundColor3 = Color3.fromRGB(12,16,22); UI.vpSpeedBox.TextColor3 = Color3.new(1,1,1); UI.vpSpeedBox.BorderSizePixel = 0; UI.vpSpeedBox.Font = Enum.Font.Code; UI.vpSpeedBox.TextSize = 12; UI.vpSpeedBox.ZIndex = 6; UI.vpSpeedBox.Parent = UI.viewportWin
-mkCorner(UI.vpSpeedBox,3); mkStroke(UI.vpSpeedBox,Color3.fromRGB(0,80,90),1)
+UI.vpSpeedBox.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.vpSpeedBox.TextColor3 = Color3.fromRGB(210,210,210); UI.vpSpeedBox.BorderSizePixel = 0; UI.vpSpeedBox.Font = Enum.Font.Code; UI.vpSpeedBox.TextSize = 12; UI.vpSpeedBox.ZIndex = 6; UI.vpSpeedBox.Parent = UI.viewportWin
+mkCorner(UI.vpSpeedBox,3); mkStroke(UI.vpSpeedBox, Color3.fromRGB(42,42,42), 1)
 
 UI.vpLoopToggle = Instance.new("TextButton"); UI.vpLoopToggle.Text = "Loop: OFF"; UI.vpLoopToggle.Position = UDim2.new(0,113,0,353); UI.vpLoopToggle.Size = UDim2.new(0,80,0,20)
-UI.vpLoopToggle.BackgroundColor3 = Color3.fromRGB(55,0,0); UI.vpLoopToggle.TextColor3 = Color3.fromRGB(255,180,160); UI.vpLoopToggle.BorderSizePixel = 0; UI.vpLoopToggle.Font = Enum.Font.Code; UI.vpLoopToggle.TextSize = 11; UI.vpLoopToggle.ZIndex = 6; UI.vpLoopToggle.Parent = UI.viewportWin; mkCorner(UI.vpLoopToggle,4)
+UI.vpLoopToggle.BackgroundColor3 = Color3.fromRGB(8,8,8); UI.vpLoopToggle.TextColor3 = Color3.fromRGB(210,210,210); UI.vpLoopToggle.BorderSizePixel = 0; UI.vpLoopToggle.Font = Enum.Font.Code; UI.vpLoopToggle.TextSize = 11; UI.vpLoopToggle.ZIndex = 6; UI.vpLoopToggle.Parent = UI.viewportWin; mkCorner(UI.vpLoopToggle,4)
 
 do
 	local vpTimeLabel = Instance.new("TextLabel"); vpTimeLabel.Text = "Time"; vpTimeLabel.Position = UDim2.new(0,200,0,353); vpTimeLabel.Size = UDim2.new(0,35,0,20)
-	vpTimeLabel.BackgroundTransparency = 1; vpTimeLabel.TextColor3 = Color3.fromRGB(0,180,140); vpTimeLabel.Font = Enum.Font.Code; vpTimeLabel.TextSize = 12; vpTimeLabel.ZIndex = 6; vpTimeLabel.Parent = UI.viewportWin
+	vpTimeLabel.BackgroundTransparency = 1; vpTimeLabel.TextColor3 = Color3.fromRGB(95,95,95); vpTimeLabel.Font = Enum.Font.Code; vpTimeLabel.TextSize = 12; vpTimeLabel.ZIndex = 6; vpTimeLabel.Parent = UI.viewportWin
 end
 UI.vpTimeBox = Instance.new("TextBox"); UI.vpTimeBox.Text = "0"; UI.vpTimeBox.PlaceholderText = "time"
 UI.vpTimeBox.Position = UDim2.new(0,238,0,353); UI.vpTimeBox.Size = UDim2.new(0,52,0,20)
-UI.vpTimeBox.BackgroundColor3 = Color3.fromRGB(12,16,22); UI.vpTimeBox.TextColor3 = Color3.new(1,1,1); UI.vpTimeBox.BorderSizePixel = 0; UI.vpTimeBox.Font = Enum.Font.Code; UI.vpTimeBox.TextSize = 12; UI.vpTimeBox.ZIndex = 6; UI.vpTimeBox.Parent = UI.viewportWin
-mkCorner(UI.vpTimeBox,3); mkStroke(UI.vpTimeBox,Color3.fromRGB(0,80,90),1)
+UI.vpTimeBox.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.vpTimeBox.TextColor3 = Color3.fromRGB(210,210,210); UI.vpTimeBox.BorderSizePixel = 0; UI.vpTimeBox.Font = Enum.Font.Code; UI.vpTimeBox.TextSize = 12; UI.vpTimeBox.ZIndex = 6; UI.vpTimeBox.Parent = UI.viewportWin
+mkCorner(UI.vpTimeBox,3); mkStroke(UI.vpTimeBox, Color3.fromRGB(42,42,42), 1)
 
 UI.vpPlayBtn = Instance.new("TextButton"); UI.vpPlayBtn.Text = "▶ Play Preview"; UI.vpPlayBtn.Position = UDim2.new(0,5,0,378); UI.vpPlayBtn.Size = UDim2.new(0.5,-8,0,25)
-UI.vpPlayBtn.BackgroundColor3 = Color3.fromRGB(0,60,70); UI.vpPlayBtn.TextColor3 = Color3.fromRGB(0,220,170); UI.vpPlayBtn.BorderSizePixel = 0; UI.vpPlayBtn.Font = Enum.Font.Code; UI.vpPlayBtn.ZIndex = 6; UI.vpPlayBtn.Parent = UI.viewportWin; mkCorner(UI.vpPlayBtn,4)
+UI.vpPlayBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpPlayBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpPlayBtn.BorderSizePixel = 0; UI.vpPlayBtn.Font = Enum.Font.GothamSemibold; UI.vpPlayBtn.ZIndex = 6; UI.vpPlayBtn.Parent = UI.viewportWin; mkCorner(UI.vpPlayBtn,4)
+mkStroke(UI.vpPlayBtn, Color3.fromRGB(45,80,48), 1)
+
 UI.vpStopBtn = Instance.new("TextButton"); UI.vpStopBtn.Text = "■ Stop Preview"; UI.vpStopBtn.Position = UDim2.new(0.5,3,0,378); UI.vpStopBtn.Size = UDim2.new(0.5,-8,0,25)
-UI.vpStopBtn.BackgroundColor3 = Color3.fromRGB(80,15,15); UI.vpStopBtn.TextColor3 = Color3.fromRGB(255,160,140); UI.vpStopBtn.BorderSizePixel = 0; UI.vpStopBtn.Font = Enum.Font.Code; UI.vpStopBtn.ZIndex = 6; UI.vpStopBtn.Parent = UI.viewportWin; mkCorner(UI.vpStopBtn,4)
+UI.vpStopBtn.BackgroundColor3 = Color3.fromRGB(38,22,22); UI.vpStopBtn.TextColor3 = Color3.fromRGB(210,130,130); UI.vpStopBtn.BorderSizePixel = 0; UI.vpStopBtn.Font = Enum.Font.GothamSemibold; UI.vpStopBtn.ZIndex = 6; UI.vpStopBtn.Parent = UI.viewportWin; mkCorner(UI.vpStopBtn,4)
+mkStroke(UI.vpStopBtn, Color3.fromRGB(75,40,40), 1)
 UI.vpPlaySelfBtn = Instance.new("TextButton"); UI.vpPlaySelfBtn.Text = "★ Play on Self"; UI.vpPlaySelfBtn.Position = UDim2.new(0,5,0,408); UI.vpPlaySelfBtn.Size = UDim2.new(1,-10,0,22)
-UI.vpPlaySelfBtn.BackgroundColor3 = Color3.fromRGB(0,45,75); UI.vpPlaySelfBtn.TextColor3 = Color3.fromRGB(140,190,255); UI.vpPlaySelfBtn.BorderSizePixel = 0; UI.vpPlaySelfBtn.Font = Enum.Font.Code; UI.vpPlaySelfBtn.ZIndex = 6; UI.vpPlaySelfBtn.Parent = UI.viewportWin; mkCorner(UI.vpPlaySelfBtn,4)
+UI.vpPlaySelfBtn.BackgroundColor3 = Color3.fromRGB(180,140,230); UI.vpPlaySelfBtn.TextColor3 = Color3.fromRGB(20,20,20); UI.vpPlaySelfBtn.BorderSizePixel = 0; UI.vpPlaySelfBtn.Font = Enum.Font.Code; UI.vpPlaySelfBtn.ZIndex = 6; UI.vpPlaySelfBtn.Parent = UI.viewportWin; mkCorner(UI.vpPlaySelfBtn,4)
+mkStroke(UI.vpPlaySelfBtn, Color3.fromRGB(140,100,200), 1)
 
 UI.vpRotateCCW = Instance.new("TextButton"); UI.vpRotateCCW.Text = "◄"; UI.vpRotateCCW.Position = UDim2.new(0,5,0,435); UI.vpRotateCCW.Size = UDim2.new(0.22,-4,0,20)
-UI.vpRotateCCW.BackgroundColor3 = Color3.fromRGB(20,22,38); UI.vpRotateCCW.TextColor3 = Color3.fromRGB(160,170,255); UI.vpRotateCCW.BorderSizePixel = 0; UI.vpRotateCCW.Font = Enum.Font.Code; UI.vpRotateCCW.TextSize = 13; UI.vpRotateCCW.ZIndex = 6; UI.vpRotateCCW.Parent = UI.viewportWin; mkCorner(UI.vpRotateCCW,4)
+UI.vpRotateCCW.BackgroundColor3 = Color3.fromRGB(35,60,35); UI.vpRotateCCW.TextColor3 = Color3.fromRGB(160,230,160); UI.vpRotateCCW.BorderSizePixel = 0; UI.vpRotateCCW.Font = Enum.Font.Code; UI.vpRotateCCW.TextSize = 13; UI.vpRotateCCW.ZIndex = 6; UI.vpRotateCCW.Parent = UI.viewportWin; mkCorner(UI.vpRotateCCW,4)
 UI.vpRotateCW = Instance.new("TextButton"); UI.vpRotateCW.Text = "►"; UI.vpRotateCW.Position = UDim2.new(0.78,3,0,435); UI.vpRotateCW.Size = UDim2.new(0.22,-8,0,20)
-UI.vpRotateCW.BackgroundColor3 = Color3.fromRGB(20,22,38); UI.vpRotateCW.TextColor3 = Color3.fromRGB(160,170,255); UI.vpRotateCW.BorderSizePixel = 0; UI.vpRotateCW.Font = Enum.Font.Code; UI.vpRotateCW.TextSize = 13; UI.vpRotateCW.ZIndex = 6; UI.vpRotateCW.Parent = UI.viewportWin; mkCorner(UI.vpRotateCW,4)
+UI.vpRotateCW.BackgroundColor3 = Color3.fromRGB(35,60,35); UI.vpRotateCW.TextColor3 = Color3.fromRGB(160,230,160); UI.vpRotateCW.BorderSizePixel = 0; UI.vpRotateCW.Font = Enum.Font.Code; UI.vpRotateCW.TextSize = 13; UI.vpRotateCW.ZIndex = 6; UI.vpRotateCW.Parent = UI.viewportWin; mkCorner(UI.vpRotateCW,4)
 UI.vpPrecisionBox = Instance.new("TextBox"); UI.vpPrecisionBox.Text = "90"; UI.vpPrecisionBox.PlaceholderText = "step"
 UI.vpPrecisionBox.Position = UDim2.new(0.22,2,0,435); UI.vpPrecisionBox.Size = UDim2.new(0.56,-4,0,20)
-UI.vpPrecisionBox.BackgroundColor3 = Color3.fromRGB(12,16,22); UI.vpPrecisionBox.TextColor3 = Color3.new(1,1,1); UI.vpPrecisionBox.PlaceholderColor3 = Color3.fromRGB(60,65,100)
+UI.vpPrecisionBox.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.vpPrecisionBox.TextColor3 = Color3.fromRGB(210,210,210); UI.vpPrecisionBox.PlaceholderColor3 = Color3.fromRGB(65,65,65)
 UI.vpPrecisionBox.BorderSizePixel = 0; UI.vpPrecisionBox.Font = Enum.Font.Code; UI.vpPrecisionBox.TextSize = 11; UI.vpPrecisionBox.ZIndex = 6; UI.vpPrecisionBox.Parent = UI.viewportWin
-mkCorner(UI.vpPrecisionBox,3); mkStroke(UI.vpPrecisionBox,Color3.fromRGB(60,65,120),1)
+mkCorner(UI.vpPrecisionBox,3); mkStroke(UI.vpPrecisionBox, Color3.fromRGB(65,65,65), 1)
 
 UI.vpZoomIn = Instance.new("TextButton"); UI.vpZoomIn.Text = "+ Zoom"; UI.vpZoomIn.Position = UDim2.new(0,5,0,460); UI.vpZoomIn.Size = UDim2.new(0.5,-8,0,20)
-UI.vpZoomIn.BackgroundColor3 = Color3.fromRGB(15,40,22); UI.vpZoomIn.TextColor3 = Color3.fromRGB(140,230,160); UI.vpZoomIn.BorderSizePixel = 0; UI.vpZoomIn.Font = Enum.Font.Code; UI.vpZoomIn.TextSize = 11; UI.vpZoomIn.ZIndex = 6; UI.vpZoomIn.Parent = UI.viewportWin; mkCorner(UI.vpZoomIn,4)
+UI.vpZoomIn.BackgroundColor3 = Color3.fromRGB(35,60,35); UI.vpZoomIn.TextColor3 = Color3.fromRGB(160,230,160); UI.vpZoomIn.BorderSizePixel = 0; UI.vpZoomIn.Font = Enum.Font.Code; UI.vpZoomIn.TextSize = 11; UI.vpZoomIn.ZIndex = 6; UI.vpZoomIn.Parent = UI.viewportWin; mkCorner(UI.vpZoomIn,4)
+
 UI.vpZoomOut = Instance.new("TextButton"); UI.vpZoomOut.Text = "- Zoom"; UI.vpZoomOut.Position = UDim2.new(0.5,3,0,460); UI.vpZoomOut.Size = UDim2.new(0.5,-8,0,20)
-UI.vpZoomOut.BackgroundColor3 = Color3.fromRGB(40,15,15); UI.vpZoomOut.TextColor3 = Color3.fromRGB(255,160,140); UI.vpZoomOut.BorderSizePixel = 0; UI.vpZoomOut.Font = Enum.Font.Code; UI.vpZoomOut.TextSize = 11; UI.vpZoomOut.ZIndex = 6; UI.vpZoomOut.Parent = UI.viewportWin; mkCorner(UI.vpZoomOut,4)
+UI.vpZoomOut.BackgroundColor3 = Color3.fromRGB(35,60,35); UI.vpZoomOut.TextColor3 = Color3.fromRGB(160,230,160); UI.vpZoomOut.BorderSizePixel = 0; UI.vpZoomOut.Font = Enum.Font.Code; UI.vpZoomOut.TextSize = 11; UI.vpZoomOut.ZIndex = 6; UI.vpZoomOut.Parent = UI.viewportWin; mkCorner(UI.vpZoomOut,4)
 
 local vpSkinLabel = Instance.new("TextLabel"); vpSkinLabel.Text = "username or userid"; vpSkinLabel.Position = UDim2.new(0,5,0,484); vpSkinLabel.Size = UDim2.new(1,-10,0,12)
-vpSkinLabel.BackgroundTransparency = 1; vpSkinLabel.TextColor3 = Color3.fromRGB(0,160,130); vpSkinLabel.TextXAlignment = Enum.TextXAlignment.Left; vpSkinLabel.Font = Enum.Font.Code; vpSkinLabel.TextSize = 10; vpSkinLabel.ZIndex = 6; vpSkinLabel.Parent = UI.viewportWin
+vpSkinLabel.BackgroundTransparency = 1; vpSkinLabel.TextColor3 = Color3.fromRGB(95,95,95); vpSkinLabel.TextXAlignment = Enum.TextXAlignment.Left; vpSkinLabel.Font = Enum.Font.Code; vpSkinLabel.TextSize = 10; vpSkinLabel.ZIndex = 6; vpSkinLabel.Parent = UI.viewportWin
 
 UI.vpSkinInput = Instance.new("TextBox"); UI.vpSkinInput.Text = ""; UI.vpSkinInput.PlaceholderText = "e.g. Builderman or 156"
 UI.vpSkinInput.Position = UDim2.new(0,5,0,498); UI.vpSkinInput.Size = UDim2.new(1,-110,0,22)
-UI.vpSkinInput.BackgroundColor3 = Color3.fromRGB(12,16,22); UI.vpSkinInput.TextColor3 = Color3.new(1,1,1); UI.vpSkinInput.PlaceholderColor3 = Color3.fromRGB(60,80,70)
+UI.vpSkinInput.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.vpSkinInput.TextColor3 = Color3.fromRGB(210,210,210); UI.vpSkinInput.PlaceholderColor3 = Color3.fromRGB(65,65,65)
 UI.vpSkinInput.BorderSizePixel = 0; UI.vpSkinInput.Font = Enum.Font.Code; UI.vpSkinInput.TextSize = 11; UI.vpSkinInput.ZIndex = 6; UI.vpSkinInput.Parent = UI.viewportWin
-mkCorner(UI.vpSkinInput,3); mkStroke(UI.vpSkinInput,Color3.fromRGB(0,80,90),1)
+mkCorner(UI.vpSkinInput,3); mkStroke(UI.vpSkinInput, Color3.fromRGB(42,42,42), 1)
 
 UI.vpSkinLoadBtn = Instance.new("TextButton"); UI.vpSkinLoadBtn.Text = "Load Skin"; UI.vpSkinLoadBtn.Position = UDim2.new(1,-102,0,498); UI.vpSkinLoadBtn.Size = UDim2.new(0,60,0,22)
-UI.vpSkinLoadBtn.BackgroundColor3 = Color3.fromRGB(0,55,75); UI.vpSkinLoadBtn.TextColor3 = Color3.fromRGB(0,210,170); UI.vpSkinLoadBtn.BorderSizePixel = 0; UI.vpSkinLoadBtn.Font = Enum.Font.Code; UI.vpSkinLoadBtn.TextSize = 10; UI.vpSkinLoadBtn.ZIndex = 6; UI.vpSkinLoadBtn.Parent = UI.viewportWin
-mkCorner(UI.vpSkinLoadBtn,3); mkStroke(UI.vpSkinLoadBtn,Color3.fromRGB(0,110,130),1)
+UI.vpSkinLoadBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpSkinLoadBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpSkinLoadBtn.BorderSizePixel = 0; UI.vpSkinLoadBtn.Font = Enum.Font.Code; UI.vpSkinLoadBtn.TextSize = 10; UI.vpSkinLoadBtn.ZIndex = 6; UI.vpSkinLoadBtn.Parent = UI.viewportWin
+mkCorner(UI.vpSkinLoadBtn,3); mkStroke(UI.vpSkinLoadBtn, Color3.fromRGB(45,80,48), 1)
 
 UI.vpSkinResetBtn = Instance.new("TextButton"); UI.vpSkinResetBtn.Text = "Reset"; UI.vpSkinResetBtn.Position = UDim2.new(1,-38,0,498); UI.vpSkinResetBtn.Size = UDim2.new(0,33,0,22)
-UI.vpSkinResetBtn.BackgroundColor3 = Color3.fromRGB(50,20,20); UI.vpSkinResetBtn.TextColor3 = Color3.fromRGB(255,160,140); UI.vpSkinResetBtn.BorderSizePixel = 0; UI.vpSkinResetBtn.Font = Enum.Font.Code; UI.vpSkinResetBtn.TextSize = 10; UI.vpSkinResetBtn.ZIndex = 6; UI.vpSkinResetBtn.Parent = UI.viewportWin
-mkCorner(UI.vpSkinResetBtn,3); mkStroke(UI.vpSkinResetBtn,Color3.fromRGB(120,40,40),1)
+UI.vpSkinResetBtn.BackgroundColor3 = Color3.fromRGB(38,22,22); UI.vpSkinResetBtn.TextColor3 = Color3.fromRGB(210,130,130); UI.vpSkinResetBtn.BorderSizePixel = 0; UI.vpSkinResetBtn.Font = Enum.Font.Code; UI.vpSkinResetBtn.TextSize = 10; UI.vpSkinResetBtn.ZIndex = 6; UI.vpSkinResetBtn.Parent = UI.viewportWin
+mkCorner(UI.vpSkinResetBtn,3); mkStroke(UI.vpSkinResetBtn, Color3.fromRGB(75,40,40), 1)
 
 UI.vpSkinStatusLabel = Instance.new("TextLabel"); UI.vpSkinStatusLabel.Text = ""; UI.vpSkinStatusLabel.Position = UDim2.new(0,5,0,522); UI.vpSkinStatusLabel.Size = UDim2.new(1,-10,0,12)
-UI.vpSkinStatusLabel.BackgroundTransparency = 1; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(0,180,140); UI.vpSkinStatusLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.vpSkinStatusLabel.Font = Enum.Font.Code; UI.vpSkinStatusLabel.TextSize = 10; UI.vpSkinStatusLabel.ZIndex = 6; UI.vpSkinStatusLabel.Parent = UI.viewportWin
+UI.vpSkinStatusLabel.BackgroundTransparency = 1; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(95,95,95); UI.vpSkinStatusLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.vpSkinStatusLabel.Font = Enum.Font.Code; UI.vpSkinStatusLabel.TextSize = 10; UI.vpSkinStatusLabel.ZIndex = 6; UI.vpSkinStatusLabel.Parent = UI.viewportWin
 
 
 local vpDummyDivider = Instance.new("Frame")
 vpDummyDivider.Size = UDim2.new(1,-10,0,1); vpDummyDivider.Position = UDim2.new(0,5,0,540)
-vpDummyDivider.BackgroundColor3 = Color3.fromRGB(0,70,90); vpDummyDivider.BorderSizePixel = 0; vpDummyDivider.ZIndex = 6; vpDummyDivider.Parent = UI.viewportWin
+vpDummyDivider.BackgroundColor3 = Color3.fromRGB(42,42,42); vpDummyDivider.BorderSizePixel = 0; vpDummyDivider.ZIndex = 6; vpDummyDivider.Parent = UI.viewportWin
 
 local vpDummyLabel = Instance.new("TextLabel")
 vpDummyLabel.Size = UDim2.new(1,-10,0,14); vpDummyLabel.Position = UDim2.new(0,5,0,544)
-vpDummyLabel.BackgroundTransparency = 1; vpDummyLabel.TextColor3 = Color3.fromRGB(80,140,255)
+vpDummyLabel.BackgroundTransparency = 1; vpDummyLabel.TextColor3 = Color3.fromRGB(160,160,160)
 vpDummyLabel.Font = Enum.Font.Code; vpDummyLabel.TextSize = 11; vpDummyLabel.TextXAlignment = Enum.TextXAlignment.Left
 vpDummyLabel.Text = "dummy test"; vpDummyLabel.ZIndex = 6; vpDummyLabel.Parent = UI.viewportWin
 
 UI.vpTestDummyBtn = Instance.new("TextButton"); UI.vpTestDummyBtn.Text = "▶ test on dummy"; UI.vpTestDummyBtn.Position = UDim2.new(0,5,0,560); UI.vpTestDummyBtn.Size = UDim2.new(0.5,-7,0,22)
-UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(0,55,85); UI.vpTestDummyBtn.TextColor3 = Color3.fromRGB(100,200,255); UI.vpTestDummyBtn.BorderSizePixel = 0; UI.vpTestDummyBtn.Font = Enum.Font.Code; UI.vpTestDummyBtn.TextSize = 10; UI.vpTestDummyBtn.ZIndex = 6; UI.vpTestDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpTestDummyBtn,4)
+UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpTestDummyBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpTestDummyBtn.BorderSizePixel = 0; UI.vpTestDummyBtn.Font = Enum.Font.Code; UI.vpTestDummyBtn.TextSize = 10; UI.vpTestDummyBtn.ZIndex = 6; UI.vpTestDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpTestDummyBtn,4)
+mkStroke(UI.vpTestDummyBtn, Color3.fromRGB(45,80,48), 1)
 
 UI.vpStopDummyBtn = Instance.new("TextButton"); UI.vpStopDummyBtn.Text = "■ stop dummy"; UI.vpStopDummyBtn.Position = UDim2.new(0.5,2,0,560); UI.vpStopDummyBtn.Size = UDim2.new(0.5,-7,0,22)
-UI.vpStopDummyBtn.BackgroundColor3 = Color3.fromRGB(60,15,15); UI.vpStopDummyBtn.TextColor3 = Color3.fromRGB(255,140,120); UI.vpStopDummyBtn.BorderSizePixel = 0; UI.vpStopDummyBtn.Font = Enum.Font.Code; UI.vpStopDummyBtn.TextSize = 10; UI.vpStopDummyBtn.ZIndex = 6; UI.vpStopDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpStopDummyBtn,4)
+UI.vpStopDummyBtn.BackgroundColor3 = Color3.fromRGB(38,22,22); UI.vpStopDummyBtn.TextColor3 = Color3.fromRGB(210,130,130); UI.vpStopDummyBtn.BorderSizePixel = 0; UI.vpStopDummyBtn.Font = Enum.Font.Code; UI.vpStopDummyBtn.TextSize = 10; UI.vpStopDummyBtn.ZIndex = 6; UI.vpStopDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpStopDummyBtn,4)
+mkStroke(UI.vpStopDummyBtn, Color3.fromRGB(75,40,40), 1)
 
 UI.vpDummyMacroBox = Instance.new("TextBox"); UI.vpDummyMacroBox.PlaceholderText = "macro on dummy... (play id; wait 0.5; stop)"; UI.vpDummyMacroBox.Text = ""
 UI.vpDummyMacroBox.Position = UDim2.new(0,5,0,586); UI.vpDummyMacroBox.Size = UDim2.new(0.75,-7,0,22)
-UI.vpDummyMacroBox.BackgroundColor3 = Color3.fromRGB(10,14,20); UI.vpDummyMacroBox.TextColor3 = Color3.new(1,1,1); UI.vpDummyMacroBox.PlaceholderColor3 = Color3.fromRGB(60,80,70)
+UI.vpDummyMacroBox.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.vpDummyMacroBox.TextColor3 = Color3.fromRGB(210,210,210); UI.vpDummyMacroBox.PlaceholderColor3 = Color3.fromRGB(65,65,65)
 UI.vpDummyMacroBox.BorderSizePixel = 0; UI.vpDummyMacroBox.Font = Enum.Font.Code; UI.vpDummyMacroBox.TextSize = 10; UI.vpDummyMacroBox.ZIndex = 6; UI.vpDummyMacroBox.Parent = UI.viewportWin
-mkCorner(UI.vpDummyMacroBox,3); mkStroke(UI.vpDummyMacroBox,Color3.fromRGB(0,70,100),1)
+mkCorner(UI.vpDummyMacroBox,3); mkStroke(UI.vpDummyMacroBox, Color3.fromRGB(42,42,42), 1)
 
 UI.vpRunDummyMacroBtn = Instance.new("TextButton"); UI.vpRunDummyMacroBtn.Text = "run"; UI.vpRunDummyMacroBtn.Position = UDim2.new(0.75,2,0,586); UI.vpRunDummyMacroBtn.Size = UDim2.new(0.25,-7,0,22)
-UI.vpRunDummyMacroBtn.BackgroundColor3 = Color3.fromRGB(30,50,0); UI.vpRunDummyMacroBtn.TextColor3 = Color3.fromRGB(180,240,80); UI.vpRunDummyMacroBtn.BorderSizePixel = 0; UI.vpRunDummyMacroBtn.Font = Enum.Font.Code; UI.vpRunDummyMacroBtn.TextSize = 10; UI.vpRunDummyMacroBtn.ZIndex = 6; UI.vpRunDummyMacroBtn.Parent = UI.viewportWin; mkCorner(UI.vpRunDummyMacroBtn,4)
+UI.vpRunDummyMacroBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpRunDummyMacroBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpRunDummyMacroBtn.BorderSizePixel = 0; UI.vpRunDummyMacroBtn.Font = Enum.Font.Code; UI.vpRunDummyMacroBtn.TextSize = 10; UI.vpRunDummyMacroBtn.ZIndex = 6; UI.vpRunDummyMacroBtn.Parent = UI.viewportWin; mkCorner(UI.vpRunDummyMacroBtn,4)
+mkStroke(UI.vpRunDummyMacroBtn, Color3.fromRGB(45,80,48), 1)
 
 local function makeRig()
 	local model = Instance.new("Model"); model.Name = "PreviewRig"
@@ -1436,7 +1505,7 @@ local function makeRig()
 	motor("Left Shoulder", torso, lArm, CFrame.new(-1,0.5,0,0,0,-1,0,1,0,1,0,0), CFrame.new(0.5,0.5,0,0,0,-1,0,1,0,1,0,0))
 	motor("Right Hip", torso, rLeg, CFrame.new(1,-1,0,0,0,1,0,1,0,-1,0,0), CFrame.new(0.5,1,0,0,0,1,0,1,0,-1,0,0))
 	motor("Left Hip", torso, lLeg, CFrame.new(-1,-1,0,0,0,-1,0,1,0,1,0,0), CFrame.new(-0.5,1,0,0,0,-1,0,1,0,1,0,0))
-	local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.BrickColor = BrickColor.new("Bright red"); nose.Color = Color3.fromRGB(255,0,0); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = model
+	local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.BrickColor = BrickColor.new("Bright red"); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = model
 	local noseWeld = Instance.new("Weld"); noseWeld.Part0 = head; noseWeld.Part1 = nose; noseWeld.C0 = CFrame.new(0,0,-0.65); noseWeld.Parent = head
 	local headMesh = Instance.new("SpecialMesh"); headMesh.MeshType = Enum.MeshType.Head; headMesh.Scale = Vector3.new(1,1,1); headMesh.Parent = head
 	local function att(parent, name, cf) local a = Instance.new("Attachment"); a.Name = name; a.CFrame = cf; a.Parent = parent end
@@ -1453,7 +1522,7 @@ local function stripRigAppearance(rig)
 	for _, obj in ipairs(rig:GetChildren()) do
 		if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("BodyColors") then obj:Destroy() end
 	end
-	local defaultColor = Color3.fromRGB(163,162,165)
+	local defaultColor = Color3.fromRGB(160,160,160)
 	for _, name in ipairs({"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg"}) do
 		local p = rig:FindFirstChild(name)
 		if p then
@@ -1520,7 +1589,7 @@ end
 local function applyPlayerSkin(query)
 	if not Data.ghostChar then return end
 	local rig = Data.ghostChar
-	UI.vpSkinStatusLabel.Text = "loading..."; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(180,160,0)
+	UI.vpSkinStatusLabel.Text = "loading..."; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
 	task.spawn(function()
 		local resolvedId
 		if tostring(query):match("^%d+$") then
@@ -1528,7 +1597,7 @@ local function applyPlayerSkin(query)
 		else
 			local ok, uid = pcall(function() return Services.Players:GetUserIdFromNameAsync(query) end)
 			if ok and uid then resolvedId = uid
-			else UI.vpSkinStatusLabel.Text = "user not found"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(255,80,80); return end
+			else UI.vpSkinStatusLabel.Text = "user not found"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(65,65,65); return end
 		end
 		local ingameChar = nil
 		for _, p in ipairs(Services.Players:GetPlayers()) do
@@ -1537,24 +1606,24 @@ local function applyPlayerSkin(query)
 		if ingameChar then
 			stripRigAppearance(rig); applyFromChar(rig, ingameChar)
 			State.vpSkinQuery = query; State.vpSkinCache = {type="char", data=ingameChar}
-			UI.vpSkinStatusLabel.Text = "from server: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(0,220,160); return
+			UI.vpSkinStatusLabel.Text = "from server: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return
 		end
 		local desc; local ok, result = pcall(function() desc = Services.Players:GetHumanoidDescriptionFromUserId(resolvedId) end)
 		if ok and desc then
 			stripRigAppearance(rig); local applied = applyFromDescription(rig, desc)
 			if applied then
 				State.vpSkinQuery = query; State.vpSkinCache = {type="desc", data=desc}
-				UI.vpSkinStatusLabel.Text = "from api: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(0,220,160)
-			else UI.vpSkinStatusLabel.Text = "apply failed"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(255,80,80) end
+				UI.vpSkinStatusLabel.Text = "from api: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
+			else UI.vpSkinStatusLabel.Text = "apply failed"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(65,65,65) end
 			return
 		end
 		local appearanceModel; ok, result = pcall(function() appearanceModel = Services.Players:GetCharacterAppearanceAsync(resolvedId) end)
 		if ok and appearanceModel then
 			stripRigAppearance(rig); applyFromChar(rig, appearanceModel)
 			State.vpSkinQuery = query; State.vpSkinCache = {type="char", data=appearanceModel}
-			UI.vpSkinStatusLabel.Text = "from appearance: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(0,220,160); return
+			UI.vpSkinStatusLabel.Text = "from appearance: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return
 		end
-		UI.vpSkinStatusLabel.Text = "failed to load skin"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(255,80,80)
+		UI.vpSkinStatusLabel.Text = "failed to load skin"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(65,65,65)
 	end)
 end
 
@@ -1563,7 +1632,7 @@ local function resetDummySkin()
 	local rig = Data.ghostChar; stripRigAppearance(rig)
 	local head = rig:FindFirstChild("Head")
 	if head and not rig:FindFirstChild("Nose") then
-		local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.BrickColor = BrickColor.new("Bright red"); nose.Color = Color3.fromRGB(255,0,0); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = rig
+		local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.BrickColor = BrickColor.new("Bright red"); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = rig
 		local nw = Instance.new("Weld"); nw.Part0 = head; nw.Part1 = nose; nw.C0 = CFrame.new(0,0,-0.65); nw.Parent = head
 	end
 	UI.vpSkinStatusLabel.Text = "reset to default"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(100,100,100)
@@ -1585,7 +1654,7 @@ end
 
 local function previewAnim(id)
 	if not id or id == "" then return end
-	State.vpPaused = false; UI.vpPauseBtn.Text = "⏸ Pause"; UI.vpPauseBtn.BackgroundColor3 = Color3.fromRGB(0,50,60)
+	State.vpPaused = false; UI.vpPauseBtn.Text = "⏸ Pause"; UI.vpPauseBtn.BackgroundColor3 = Color3.fromRGB(28,28,28)
 	nukeGhost()
 	task.spawn(function()
 		local rig, animator, rootPart = makeRig()
@@ -1622,13 +1691,13 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(functio
 		end
 	end
 	if State.vpPaused and State.vpPausedLength > 0 then
-		UI.vpScrubFill.Size = UDim2.new(math.clamp(State.vpPausedAt/State.vpPausedLength,0,1),0,1,0); UI.vpScrubFill.BackgroundColor3 = Color3.fromRGB(180,120,0)
+		UI.vpScrubFill.Size = UDim2.new(math.clamp(State.vpPausedAt/State.vpPausedLength,0,1),0,1,0); UI.vpScrubFill.BackgroundColor3 = Color3.fromRGB(200,50,50)
 	elseif Data.vpTrack and Data.vpTrack.Length > 0 then
 		UI.vpScrubFill.Size = UDim2.new(math.clamp(Data.vpTrack.TimePosition/Data.vpTrack.Length,0,1),0,1,0)
-		UI.vpScrubFill.BackgroundColor3 = State.vpScrubbing and Color3.fromRGB(0,180,130) or Color3.fromRGB(0,200,150)
+		UI.vpScrubFill.BackgroundColor3 = Color3.fromRGB(200,50,50)
 	elseif not State.vpScrubbing then UI.vpScrubFill.Size = UDim2.new(0,0,1,0) end
 	if State.vpPaused then
-		UI.vpTimerLabel.Text = "⏸ " .. fmtTime(State.vpPausedAt) .. "s / " .. fmtTime(State.vpPausedLength) .. "s"; UI.vpTimerLabel.TextColor3 = Color3.fromRGB(180,120,0)
+		UI.vpTimerLabel.Text = "⏸ " .. fmtTime(State.vpPausedAt) .. "s / " .. fmtTime(State.vpPausedLength) .. "s"; UI.vpTimerLabel.TextColor3 = Color3.fromRGB(95,95,95)
 	elseif Data.vpTrack then
 		local pos = Data.vpTrack.TimePosition; local len = Data.vpTrack.Length
 		if Data.vpTrack.IsPlaying then
@@ -1637,10 +1706,10 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(functio
 			if State.vpLoopFlash > 0 then
 				State.vpLoopFlash = math.max(0, State.vpLoopFlash - 0.016); local t = State.vpLoopFlash/0.25
 				UI.vpTimerLabel.TextColor3 = Color3.fromRGB(math.floor(255*t), math.floor(220+(255-220)*t), math.floor(160+(100-160)*t))
-			else UI.vpTimerLabel.TextColor3 = Color3.fromRGB(0,220,160) end
+			else UI.vpTimerLabel.TextColor3 = Color3.fromRGB(160,160,160) end
 			UI.vpTimerLabel.Text = "▶ " .. fmtTime(pos) .. "s / " .. fmtTime(len) .. "s"
 		else State.vpLastPos = 0; UI.vpTimerLabel.Text = "stopped"; UI.vpTimerLabel.TextColor3 = Color3.fromRGB(100,100,100) end
-	else UI.vpTimerLabel.Text = "-- / --"; UI.vpTimerLabel.TextColor3 = Color3.fromRGB(60,60,60) end
+	else UI.vpTimerLabel.Text = "-- / --"; UI.vpTimerLabel.TextColor3 = Color3.fromRGB(65,65,65) end
 	local activeTrack = nil; local activeCount = 0
 	for t in pairs(Data.scriptTracks) do
 		if t.IsPlaying or (State.mainPaused and Data.scriptTracks[t]) then activeCount += 1; if not activeTrack then activeTrack = t end end
@@ -1652,15 +1721,15 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(functio
 	end
 	if activeTrack and activeTrack.Length > 0 then
 		local pct = math.clamp(activeTrack.TimePosition/activeTrack.Length,0,1)
-		UI.mainScrubFill.Size = UDim2.new(pct,0,1,0); UI.mainScrubFill.BackgroundColor3 = State.mainPaused and Color3.fromRGB(180,120,0) or Color3.fromRGB(0,200,150)
+		UI.mainScrubFill.Size = UDim2.new(pct,0,1,0); UI.mainScrubFill.BackgroundColor3 = Color3.fromRGB(200,50,50)
 	else UI.mainScrubFill.Size = UDim2.new(0,0,1,0) end
 	if activeTrack and activeTrack.Length > 0 then
 		local pos = activeTrack.TimePosition; local len = activeTrack.Length; local id = grabId(activeTrack.Animation.AnimationId) or "?"
 		UI.mainTimerLabel.Text = (State.mainPaused and "⏸ " or "▶ ") .. id .. "  " .. fmtTime(pos) .. "s / " .. fmtTime(len) .. "s" .. (activeCount > 1 and ("  (+" .. (activeCount-1) .. ")") or "")
-		UI.mainTimerLabel.TextColor3 = State.mainPaused and Color3.fromRGB(180,120,0) or Color3.fromRGB(0,220,160)
+		UI.mainTimerLabel.TextColor3 = State.mainPaused and Color3.fromRGB(95,95,95) or Color3.fromRGB(160,160,160)
 	else
-		UI.mainTimerLabel.Text = "no anim playing"; UI.mainTimerLabel.TextColor3 = Color3.fromRGB(60,60,60)
-		if State.mainPaused then State.mainPaused = false; UI.mainPauseBtn.Text = "⏸ Pause"; UI.mainPauseBtn.BackgroundColor3 = Color3.fromRGB(0,55,70) end
+		UI.mainTimerLabel.Text = "no anim playing"; UI.mainTimerLabel.TextColor3 = Color3.fromRGB(65,65,65)
+		if State.mainPaused then State.mainPaused = false; UI.mainPauseBtn.Text = "⏸ Pause"; UI.mainPauseBtn.BackgroundColor3 = Color3.fromRGB(42,42,42) end
 	end
 end))
 
@@ -1710,7 +1779,7 @@ end))
 table.insert(Data.connections, UI.vpLoopToggle.MouseButton1Click:Connect(function()
 	State.vpLooped = not State.vpLooped
 	UI.vpLoopToggle.Text = "Loop: " .. (State.vpLooped and "ON" or "OFF")
-	UI.vpLoopToggle.BackgroundColor3 = State.vpLooped and Color3.fromRGB(0,60,0) or Color3.fromRGB(60,0,0)
+	UI.vpLoopToggle.BackgroundColor3 = State.vpLooped and Color3.fromRGB(28,28,28) or Color3.fromRGB(8,8,8)
 	if Data.vpTrack then Data.vpTrack.Looped = State.vpLooped end
 end))
 table.insert(Data.connections, UI.previewToggle.MouseButton1Click:Connect(function()
@@ -1718,8 +1787,8 @@ table.insert(Data.connections, UI.previewToggle.MouseButton1Click:Connect(functi
 end))
 table.insert(Data.connections, UI.vpSkinLoadBtn.MouseButton1Click:Connect(function()
 	local query = UI.vpSkinInput.Text:match("^%s*(.-)%s*$")
-	if query == "" then UI.vpSkinStatusLabel.Text = "enter a username or userid"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(255,180,80); return end
-	if not Data.ghostChar then UI.vpSkinStatusLabel.Text = "load an animation first"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(255,180,80); return end
+	if query == "" then UI.vpSkinStatusLabel.Text = "enter a username or userid"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return end
+	if not Data.ghostChar then UI.vpSkinStatusLabel.Text = "load an animation first"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return end
 	applyPlayerSkin(query)
 end))
 table.insert(Data.connections, UI.vpSkinInput.FocusLost:Connect(function(enter)
@@ -1731,8 +1800,8 @@ table.insert(Data.connections, UI.vpTestDummyBtn.MouseButton1Click:Connect(funct
 	if not State.vpCurrentId or State.vpCurrentId == "" then flashNotif("no animation loaded"); return end
 	stopAllDummyTracks()
 	playOnDummy(State.vpCurrentId, tonumber(UI.vpSpeedBox.Text) or 1, State.vpLooped, 0, "Action4")
-	UI.vpTestDummyBtn.Text = "▶ playing!"; UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(0,80,0)
-	task.delay(1.5, function() UI.vpTestDummyBtn.Text = "▶ test on dummy"; UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(0,55,85) end)
+	UI.vpTestDummyBtn.Text = "▶ playing!"; UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(42,42,42)
+	task.delay(1.5, function() UI.vpTestDummyBtn.Text = "▶ test on dummy"; UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(42,42,42) end)
 end))
 table.insert(Data.connections, UI.vpStopDummyBtn.MouseButton1Click:Connect(stopAllDummyTracks))
 table.insert(Data.connections, UI.vpRunDummyMacroBtn.MouseButton1Click:Connect(function()
@@ -1822,13 +1891,13 @@ local function addAdvReplUI(ruleData)
 	for i, r in ipairs(Data.advReplacements) do if r == ruleData then ruleIndex = i; break end end
 	if not ruleIndex then table.insert(Data.advReplacements, ruleData); ruleIndex = #Data.advReplacements end
 
-
+	
 	local rFrame = Instance.new("Frame")
 	rFrame.Size = UDim2.new(1,-4,0,10)
-	rFrame.BackgroundColor3 = Color3.fromRGB(13,16,26)
+	rFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 	rFrame.BorderSizePixel = 0; rFrame.ZIndex = 3; rFrame.Parent = sideTabLists[3]
 	mkCorner(rFrame,7)
-	do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(40,100,220); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=rFrame end
+	do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(200,50,50); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=rFrame end
 
 	local innerList = Instance.new("UIListLayout")
 	innerList.Padding = UDim.new(0,5)
@@ -1851,10 +1920,10 @@ local function addAdvReplUI(ruleData)
 	end
 	local function mkInput(parent, text, ph)
 		local b=Instance.new("TextBox"); b.Size=UDim2.new(1,0,1,0); b.Text=text or ""; b.PlaceholderText=ph or ""
-		b.BackgroundColor3=Color3.fromRGB(8,12,22); b.TextColor3=Color3.fromRGB(210,240,230)
-		b.PlaceholderColor3=Color3.fromRGB(60,90,80); b.Font=Enum.Font.Code; b.TextSize=12
+		b.BackgroundColor3=Color3.fromRGB(20,20,20); b.TextColor3=Color3.fromRGB(240,240,240)
+		b.PlaceholderColor3=Color3.fromRGB(65,65,65); b.Font=Enum.Font.Code; b.TextSize=12
 		b.BorderSizePixel=0; b.ZIndex=5; b.Parent=parent; mkCorner(b,4)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,120,180); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(95,95,95); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
 		return b
 	end
 
@@ -1862,47 +1931,47 @@ local function addAdvReplUI(ruleData)
 	do
 		local row=mkRow(24)
 		local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-72,1,0); title.BackgroundTransparency=1
-		title.TextColor3=Color3.fromRGB(100,160,255); title.Font=Enum.Font.Code; title.TextSize=12
+		title.TextColor3=Color3.fromRGB(160,160,160); title.Font=Enum.Font.Code; title.TextSize=12
 		title.TextXAlignment=Enum.TextXAlignment.Left; title.Text="adv replacement"; title.ZIndex=5; title.Parent=row
 		local enableT=Instance.new("TextButton"); enableT.Size=UDim2.new(0,66,1,-2); enableT.Position=UDim2.new(1,-66,0,1)
 		enableT.Text=ruleData.enabled and "● on" or "○ off"
-		enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(0,70,40) or Color3.fromRGB(70,15,15)
-		enableT.TextColor3=ruleData.enabled and Color3.fromRGB(80,255,140) or Color3.fromRGB(255,100,80)
-		enableT.Font=Enum.Font.Code; enableT.TextSize=11; enableT.BorderSizePixel=0; enableT.ZIndex=5; enableT.Parent=row; mkCorner(enableT,4)
+		enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(45,45,45) or Color3.fromRGB(28,28,28)
+		enableT.TextColor3=ruleData.enabled and Color3.fromRGB(240,240,240) or Color3.fromRGB(100,100,100)
+		enableT.Font=Enum.Font.Code; enableT.TextSize=11; enableT.BorderSizePixel=0; enableT.ZIndex=5; enableT.Parent=row; mkCorner(enableT,4); mkStroke(enableT, Color3.fromRGB(42,42,42), 1)
 		table.insert(Data.connections, enableT.MouseButton1Click:Connect(function()
 			ruleData.enabled=not ruleData.enabled
 			enableT.Text=ruleData.enabled and "● on" or "○ off"
-			enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(0,70,40) or Color3.fromRGB(70,15,15)
-			enableT.TextColor3=ruleData.enabled and Color3.fromRGB(80,255,140) or Color3.fromRGB(255,100,80)
+			enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(45,45,45) or Color3.fromRGB(28,28,28)
+			enableT.TextColor3=ruleData.enabled and Color3.fromRGB(240,240,240) or Color3.fromRGB(100,100,100)
 			dumpCfg()
 		end))
 	end
 
-
+	
 	do
 		local lrow=mkRow(14)
 		local l=Instance.new("TextLabel"); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
-		l.TextColor3=Color3.fromRGB(0,180,140); l.Font=Enum.Font.Code; l.TextSize=10
+		l.TextColor3=Color3.fromRGB(95,95,95); l.Font=Enum.Font.Code; l.TextSize=10
 		l.TextXAlignment=Enum.TextXAlignment.Left; l.Text="trigger anim id:"; l.ZIndex=5; l.Parent=lrow
 		local irow=mkRow(26); local trigIdBox=mkInput(irow, ruleData.triggerAnimId or "", "anim id to intercept...")
 		table.insert(Data.connections, trigIdBox:GetPropertyChangedSignal("Text"):Connect(function() ruleData.triggerAnimId=trigIdBox.Text; dumpCfg() end))
 	end
 
-
+	
 	do
 		local lrow=mkRow(14)
 		local l1=Instance.new("TextLabel"); l1.Size=UDim2.new(0.44,0,1,0); l1.BackgroundTransparency=1
-		l1.TextColor3=Color3.fromRGB(0,180,140); l1.Font=Enum.Font.Code; l1.TextSize=10
+		l1.TextColor3=Color3.fromRGB(95,95,95); l1.Font=Enum.Font.Code; l1.TextSize=10
 		l1.TextXAlignment=Enum.TextXAlignment.Left; l1.Text="delay (s):"; l1.ZIndex=5; l1.Parent=lrow
 		local l2=Instance.new("TextLabel"); l2.Size=UDim2.new(0.56,0,1,0); l2.Position=UDim2.new(0.44,0,0,0); l2.BackgroundTransparency=1
-		l2.TextColor3=Color3.fromRGB(0,180,140); l2.Font=Enum.Font.Code; l2.TextSize=10
+		l2.TextColor3=Color3.fromRGB(95,95,95); l2.Font=Enum.Font.Code; l2.TextSize=10
 		l2.TextXAlignment=Enum.TextXAlignment.Left; l2.Text="only if priority:"; l2.ZIndex=5; l2.Parent=lrow
 
 		local vrow=mkRow(26)
 		local dbox=Instance.new("TextBox"); dbox.Size=UDim2.new(0.42,0,1,-2); dbox.Position=UDim2.new(0,0,0,1)
-		dbox.Text=tostring(ruleData.triggerDelay or 0); dbox.BackgroundColor3=Color3.fromRGB(8,12,22)
-		dbox.TextColor3=Color3.fromRGB(210,240,230); dbox.Font=Enum.Font.Code; dbox.TextSize=12; dbox.BorderSizePixel=0; dbox.ZIndex=5; dbox.Parent=vrow
-		mkCorner(dbox,4); do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,120,180); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=dbox end
+		dbox.Text=tostring(ruleData.triggerDelay or 0); dbox.BackgroundColor3=Color3.fromRGB(8,8,8)
+		dbox.TextColor3=Color3.fromRGB(240,240,240); dbox.Font=Enum.Font.Code; dbox.TextSize=12; dbox.BorderSizePixel=0; dbox.ZIndex=5; dbox.Parent=vrow
+		mkCorner(dbox,4); do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(95,95,95); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=dbox end
 		table.insert(Data.connections, dbox:GetPropertyChangedSignal("Text"):Connect(function()
 			local v=tonumber(dbox.Text); if v then ruleData.triggerDelay=v; dumpCfg() end
 		end))
@@ -1911,19 +1980,19 @@ local function addAdvReplUI(ruleData)
 		local priIdx=1
 		for i,v in ipairs(priOpts) do if v==(ruleData.triggerPriority or "any") then priIdx=i; break end end
 		local priBtn=Instance.new("TextButton"); priBtn.Size=UDim2.new(0.58,-6,1,-2); priBtn.Position=UDim2.new(0.42,6,0,1)
-		priBtn.Text=priOpts[priIdx]; priBtn.BackgroundColor3=Color3.fromRGB(16,20,40); priBtn.TextColor3=Color3.fromRGB(140,180,255)
+		priBtn.Text=priOpts[priIdx]; priBtn.BackgroundColor3=Color3.fromRGB(22,38,24); priBtn.TextColor3=Color3.fromRGB(140,210,145)
 		priBtn.Font=Enum.Font.Code; priBtn.TextSize=11; priBtn.BorderSizePixel=0; priBtn.ZIndex=5; priBtn.Parent=vrow; mkCorner(priBtn,4)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(50,80,160); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=priBtn end
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=priBtn end
 		table.insert(Data.connections, priBtn.MouseButton1Click:Connect(function()
 			priIdx=(priIdx%#priOpts)+1; priBtn.Text=priOpts[priIdx]; ruleData.triggerPriority=priOpts[priIdx]; dumpCfg()
 		end))
 	end
 
-
+	
 	do
 		local lrow=mkRow(14)
 		local l=Instance.new("TextLabel"); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
-		l.TextColor3=Color3.fromRGB(0,180,140); l.Font=Enum.Font.Code; l.TextSize=10
+		l.TextColor3=Color3.fromRGB(95,95,95); l.Font=Enum.Font.Code; l.TextSize=10
 		l.TextXAlignment=Enum.TextXAlignment.Left; l.Text="chain → trigger anim id (optional):"; l.ZIndex=5; l.Parent=lrow
 		local irow=mkRow(26)
 		local chainBox=mkInput(irow, ruleData.chainToId or "", "anim id of rule to chain into...")
@@ -1943,9 +2012,9 @@ local function addAdvReplUI(ruleData)
 	end))
 
 	local function buildLayerRow(layerData, layerIdx)
-		local lCard=Instance.new("Frame"); lCard.Size=UDim2.new(1,0,0,10); lCard.BackgroundColor3=Color3.fromRGB(9,13,24)
+		local lCard=Instance.new("Frame"); lCard.Size=UDim2.new(1,0,0,10); lCard.BackgroundColor3=Color3.fromRGB(14,14,14)
 		lCard.BorderSizePixel=0; lCard.ZIndex=5; lCard.Parent=layerHolder; mkCorner(lCard,5)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,80,140); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=lCard end
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(65,65,65); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=lCard end
 
 		local lcList=Instance.new("UIListLayout"); lcList.Padding=UDim.new(0,4)
 		lcList.HorizontalAlignment=Enum.HorizontalAlignment.Center; lcList.SortOrder=Enum.SortOrder.LayoutOrder; lcList.Parent=lCard
@@ -1962,27 +2031,27 @@ local function addAdvReplUI(ruleData)
 		do
 			local hr=lr(18)
 			local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-22,1,0); lbl.BackgroundTransparency=1
-			lbl.TextColor3=Color3.fromRGB(60,130,220); lbl.Font=Enum.Font.Code; lbl.TextSize=10
+			lbl.TextColor3=Color3.fromRGB(95,95,95); lbl.Font=Enum.Font.Code; lbl.TextSize=10
 			lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Text="layer "..layerIdx; lbl.ZIndex=7; lbl.Parent=hr
 			local db=Instance.new("TextButton"); db.Size=UDim2.new(0,18,1,0); db.Position=UDim2.new(1,-18,0,0)
-			db.Text="✕"; db.BackgroundColor3=Color3.fromRGB(80,10,10); db.TextColor3=Color3.fromRGB(255,100,80)
+			db.Text="X"; db.BackgroundColor3=Color3.fromRGB(200,50,50); db.TextColor3=Color3.fromRGB(255,255,255)
 			db.Font=Enum.Font.Code; db.TextSize=9; db.BorderSizePixel=0; db.ZIndex=7; db.Parent=hr; mkCorner(db,3)
 			table.insert(Data.connections, db.MouseButton1Click:Connect(function()
 				table.remove(ruleData.layers, layerIdx); lCard:Destroy(); dumpCfg()
 			end))
 		end
 
-	
+		
 		do
 			local ir=lr(26)
 			local b=Instance.new("TextBox"); b.Size=UDim2.new(1,0,1,0); b.Text=layerData.id or ""
-			b.PlaceholderText="replacement anim id"; b.BackgroundColor3=Color3.fromRGB(8,12,22)
-			b.TextColor3=Color3.fromRGB(210,240,230); b.Font=Enum.Font.Code; b.TextSize=12; b.BorderSizePixel=0; b.ZIndex=7; b.Parent=ir; mkCorner(b,4)
-			do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,100,180); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
+			b.PlaceholderText="replacement anim id"; b.BackgroundColor3=Color3.fromRGB(20,20,20)
+			b.TextColor3=Color3.fromRGB(240,240,240); b.Font=Enum.Font.Code; b.TextSize=12; b.BorderSizePixel=0; b.ZIndex=7; b.Parent=ir; mkCorner(b,4)
+			do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
 			table.insert(Data.connections, b:GetPropertyChangedSignal("Text"):Connect(function() layerData.id=b.Text; dumpCfg() end))
 		end
 
-	
+		
 		do
 			local labrow=lr(12)
 			local valrow=lr(22)
@@ -1992,12 +2061,12 @@ local function addAdvReplUI(ruleData)
 			for i,f in ipairs(fields) do
 				local xs=(i-1)/3
 				local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1/3,-4,1,0); lbl.Position=UDim2.new(xs,2,0,0); lbl.BackgroundTransparency=1
-				lbl.TextColor3=Color3.fromRGB(0,160,130); lbl.Font=Enum.Font.Code; lbl.TextSize=9
+				lbl.TextColor3=Color3.fromRGB(95,95,95); lbl.Font=Enum.Font.Code; lbl.TextSize=9
 				lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Text=f[1]; lbl.ZIndex=7; lbl.Parent=labrow
 				local bx=Instance.new("TextBox"); bx.Size=UDim2.new(1/3,-4,1,0); bx.Position=UDim2.new(xs,2,0,0)
-				bx.Text=tostring(f[2] or 0); bx.BackgroundColor3=Color3.fromRGB(8,12,22)
-				bx.TextColor3=Color3.fromRGB(210,240,230); bx.Font=Enum.Font.Code; bx.TextSize=11; bx.BorderSizePixel=0; bx.ZIndex=7; bx.Parent=valrow; mkCorner(bx,3)
-				do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,90,130); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=bx end
+				bx.Text=tostring(f[2] or 0); bx.BackgroundColor3=Color3.fromRGB(20,20,20)
+				bx.TextColor3=Color3.fromRGB(240,240,240); bx.Font=Enum.Font.Code; bx.TextSize=11; bx.BorderSizePixel=0; bx.ZIndex=7; bx.Parent=valrow; mkCorner(bx,3)
+				do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=bx end
 				local cb=f[3]
 				table.insert(Data.connections, bx:GetPropertyChangedSignal("Text"):Connect(function()
 					local v=tonumber(bx.Text); if v then cb(v); dumpCfg() end
@@ -2005,36 +2074,39 @@ local function addAdvReplUI(ruleData)
 			end
 		end
 
+		
 		do
 			local r4=lr(24)
 			local lp=Instance.new("TextButton"); lp.Size=UDim2.new(0.44,0,1,0)
 			lp.Text=layerData.loop and "loop: ON" or "loop: OFF"
-			lp.BackgroundColor3=layerData.loop and Color3.fromRGB(0,60,30) or Color3.fromRGB(55,10,10)
-			lp.TextColor3=layerData.loop and Color3.fromRGB(80,255,140) or Color3.fromRGB(255,100,80)
+			lp.BackgroundColor3=layerData.loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20)
+			lp.TextColor3=layerData.loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210)
 			lp.Font=Enum.Font.Code; lp.TextSize=10; lp.BorderSizePixel=0; lp.ZIndex=7; lp.Parent=r4; mkCorner(lp,4)
+			local lpStroke = Instance.new("UIStroke"); lpStroke.Color = layerData.loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); lpStroke.Thickness = 1; lpStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; lpStroke.Parent = lp
 			table.insert(Data.connections, lp.MouseButton1Click:Connect(function()
 				layerData.loop=not layerData.loop
 				lp.Text=layerData.loop and "loop: ON" or "loop: OFF"
-				lp.BackgroundColor3=layerData.loop and Color3.fromRGB(0,60,30) or Color3.fromRGB(55,10,10)
-				lp.TextColor3=layerData.loop and Color3.fromRGB(80,255,140) or Color3.fromRGB(255,100,80)
+				lp.BackgroundColor3=layerData.loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20)
+				lp.TextColor3=layerData.loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210)
+				lpStroke.Color = layerData.loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42)
 				dumpCfg()
 			end))
 			local priOpts2=PRIORITY_OPTIONS; local piIdx=1
 			for i,v in ipairs(priOpts2) do if v==(layerData.priority or "Action4") then piIdx=i; break end end
 			local pb=Instance.new("TextButton"); pb.Size=UDim2.new(0.56,-6,1,0); pb.Position=UDim2.new(0.44,6,0,0)
-			pb.Text=priOpts2[piIdx]; pb.BackgroundColor3=Color3.fromRGB(14,18,36); pb.TextColor3=Color3.fromRGB(140,180,255)
+			pb.Text=priOpts2[piIdx]; pb.BackgroundColor3=Color3.fromRGB(22,38,24); pb.TextColor3=Color3.fromRGB(140,210,145)
 			pb.Font=Enum.Font.Code; pb.TextSize=10; pb.BorderSizePixel=0; pb.ZIndex=7; pb.Parent=r4; mkCorner(pb,4)
-			do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(50,80,160); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=pb end
+			do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=pb end
 			table.insert(Data.connections, pb.MouseButton1Click:Connect(function()
 				piIdx=(piIdx%#priOpts2)+1; pb.Text=priOpts2[piIdx]; layerData.priority=priOpts2[piIdx]; dumpCfg()
 			end))
 		end
 
-	
+		
 		do
 			local r5=lr(24)
 			local prev=Instance.new("TextButton"); prev.Size=UDim2.new(0.5,-2,1,0)
-			prev.Text="▶ preview"; prev.BackgroundColor3=Color3.fromRGB(0,45,65); prev.TextColor3=Color3.fromRGB(0,210,180)
+			prev.Text="▶ preview"; prev.BackgroundColor3=Color3.fromRGB(35,35,35); prev.TextColor3=Color3.fromRGB(130,190,240)
 			prev.Font=Enum.Font.Code; prev.TextSize=10; prev.BorderSizePixel=0; prev.ZIndex=7; prev.Parent=r5; mkCorner(prev,4)
 			table.insert(Data.connections, prev.MouseButton1Click:Connect(function()
 				if not layerData.id or layerData.id=="" then return end
@@ -2042,7 +2114,7 @@ local function addAdvReplUI(ruleData)
 				playOnDummy(layerData.id, layerData.speed, layerData.loop, layerData.startOffset, layerData.priority)
 			end))
 			local cp=Instance.new("TextButton"); cp.Size=UDim2.new(0.5,-2,1,0); cp.Position=UDim2.new(0.5,2,0,0)
-			cp.Text="⎘ copy id"; cp.BackgroundColor3=Color3.fromRGB(0,35,55); cp.TextColor3=Color3.fromRGB(0,190,170)
+			cp.Text="⎘ copy id"; cp.BackgroundColor3=Color3.fromRGB(35,35,35); cp.TextColor3=Color3.fromRGB(130,190,240)
 			cp.Font=Enum.Font.Code; cp.TextSize=10; cp.BorderSizePixel=0; cp.ZIndex=7; cp.Parent=r5; mkCorner(cp,4)
 			table.insert(Data.connections, cp.MouseButton1Click:Connect(function() yoink(layerData.id or "") end))
 		end
@@ -2055,20 +2127,20 @@ local function addAdvReplUI(ruleData)
 	do
 		local r=mkRow(28)
 		local btn=Instance.new("TextButton"); btn.Size=UDim2.new(1,0,1,0)
-		btn.Text="＋ add layer"; btn.BackgroundColor3=Color3.fromRGB(0,45,70); btn.TextColor3=Color3.fromRGB(0,220,190)
+		btn.Text="＋ add layer"; btn.BackgroundColor3=Color3.fromRGB(22,38,24); btn.TextColor3=Color3.fromRGB(140,210,145)
 		btn.Font=Enum.Font.Code; btn.TextSize=11; btn.BorderSizePixel=0; btn.ZIndex=5; btn.Parent=r; mkCorner(btn,5)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,150,170); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=btn end
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=btn end
 		table.insert(Data.connections, btn.MouseButton1Click:Connect(function()
 			local ld={id="",speed=1,loop=false,startOffset=0,priority="Action4",weight=1}
 			table.insert(ruleData.layers, ld); buildLayerRow(ld, #ruleData.layers); dumpCfg()
 		end))
 	end
 
-
+	
 	do
 		local r=mkRow(28)
 		local tb=Instance.new("TextButton"); tb.Size=UDim2.new(0.5,-2,1,0)
-		tb.Text="▶ test dummy"; tb.BackgroundColor3=Color3.fromRGB(0,55,90); tb.TextColor3=Color3.fromRGB(100,210,255)
+		tb.Text="▶ test dummy"; tb.BackgroundColor3=Color3.fromRGB(42,42,42); tb.TextColor3=Color3.fromRGB(160,160,160)
 		tb.Font=Enum.Font.Code; tb.TextSize=10; tb.BorderSizePixel=0; tb.ZIndex=5; tb.Parent=r; mkCorner(tb,5)
 		table.insert(Data.connections, tb.MouseButton1Click:Connect(function()
 			if not Data.ghostChar then
@@ -2082,35 +2154,35 @@ local function addAdvReplUI(ruleData)
 					if layer.id and layer.id~="" then playOnDummy(layer.id,layer.speed,layer.loop,layer.startOffset,layer.priority) end
 				end
 			end)
-			tb.Text="fired!"; tb.BackgroundColor3=Color3.fromRGB(0,80,40)
-			task.delay(1.5, function() tb.Text="▶ test dummy"; tb.BackgroundColor3=Color3.fromRGB(0,55,90) end)
+			tb.Text="fired!"; tb.BackgroundColor3=Color3.fromRGB(42,42,42)
+			task.delay(1.5, function() tb.Text="▶ test dummy"; tb.BackgroundColor3=Color3.fromRGB(42,42,42) end)
 		end))
 		local sb=Instance.new("TextButton"); sb.Size=UDim2.new(0.5,-2,1,0); sb.Position=UDim2.new(0.5,2,0,0)
-		sb.Text="■ stop dummy"; sb.BackgroundColor3=Color3.fromRGB(60,12,12); sb.TextColor3=Color3.fromRGB(255,130,110)
+		sb.Text="■ stop dummy"; sb.BackgroundColor3=Color3.fromRGB(14,14,14); sb.TextColor3=Color3.fromRGB(80,80,80)
 		sb.Font=Enum.Font.Code; sb.TextSize=10; sb.BorderSizePixel=0; sb.ZIndex=5; sb.Parent=r; mkCorner(sb,5)
 		table.insert(Data.connections, sb.MouseButton1Click:Connect(stopAllDummyTracks))
 	end
 
-
+	
 	do
 		local r=mkRow(28)
 		local mb=Instance.new("TextBox"); mb.Size=UDim2.new(0.77,-4,1,0); mb.Text=""
-		mb.PlaceholderText="macro on dummy..."; mb.BackgroundColor3=Color3.fromRGB(8,12,22)
-		mb.TextColor3=Color3.fromRGB(210,240,230); mb.Font=Enum.Font.Code; mb.TextSize=10; mb.BorderSizePixel=0; mb.ZIndex=5; mb.Parent=r; mkCorner(mb,4)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(0,90,130); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=mb end
+		mb.PlaceholderText="macro on dummy..."; mb.BackgroundColor3=Color3.fromRGB(8,8,8)
+		mb.TextColor3=Color3.fromRGB(240,240,240); mb.Font=Enum.Font.Code; mb.TextSize=10; mb.BorderSizePixel=0; mb.ZIndex=5; mb.Parent=r; mkCorner(mb,4)
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(65,65,65); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=mb end
 		local rb=Instance.new("TextButton"); rb.Size=UDim2.new(0.23,-4,1,0); rb.Position=UDim2.new(0.77,4,0,0)
-		rb.Text="run"; rb.BackgroundColor3=Color3.fromRGB(25,50,0); rb.TextColor3=Color3.fromRGB(160,240,60)
+		rb.Text="run"; rb.BackgroundColor3=Color3.fromRGB(28,28,28); rb.TextColor3=Color3.fromRGB(210,210,210)
 		rb.Font=Enum.Font.Code; rb.TextSize=11; rb.BorderSizePixel=0; rb.ZIndex=5; rb.Parent=r; mkCorner(rb,4)
 		table.insert(Data.connections, rb.MouseButton1Click:Connect(function()
 			local m=mb.Text:match("^%s*(.-)%s*$"); if m~="" then runMacroOnDummy(m) end
 		end))
 	end
 
-
+	
 	do
 		local r=mkRow(24)
 		local btn=Instance.new("TextButton"); btn.Size=UDim2.new(1,0,1,0)
-		btn.Text="✕ delete rule"; btn.BackgroundColor3=Color3.fromRGB(70,8,8); btn.TextColor3=Color3.fromRGB(255,110,90)
+		btn.Text="X delete rule"; btn.BackgroundColor3=Color3.fromRGB(200,50,50); btn.TextColor3=Color3.fromRGB(255,255,255)
 		btn.Font=Enum.Font.Code; btn.TextSize=11; btn.BorderSizePixel=0; btn.ZIndex=5; btn.Parent=r; mkCorner(btn,5)
 		table.insert(Data.connections, btn.MouseButton1Click:Connect(function()
 			for i,r2 in ipairs(Data.advReplacements) do if r2==ruleData then table.remove(Data.advReplacements,i); break end end
@@ -2125,23 +2197,25 @@ end))
 
 local function addReplUI(id, targetId, speed, loop, enabled)
 	if enabled == nil then enabled = true end
-	local rFrame = Instance.new("Frame"); rFrame.Size = UDim2.new(1,0,0,145); rFrame.BackgroundColor3 = Color3.fromRGB(20,22,30); rFrame.BorderSizePixel = 0; rFrame.ZIndex = 3; rFrame.Parent = sideTabLists[2]
-	mkCorner(rFrame,4); mkStroke(rFrame,Color3.fromRGB(60,60,0),1)
+	local rFrame = Instance.new("Frame"); rFrame.Size = UDim2.new(1,0,0,145); rFrame.BackgroundColor3 = Color3.fromRGB(20,20,20); rFrame.BorderSizePixel = 0; rFrame.ZIndex = 3; rFrame.Parent = sideTabLists[2]
+	mkCorner(rFrame,4); mkStroke(rFrame, Color3.fromRGB(42,42,42), 1)
 	local replaceL = Instance.new("TextBox"); replaceL.Size = UDim2.new(1,-10,0,20); replaceL.Position = UDim2.new(0,5,0,5); replaceL.Text = id or ""
-	replaceL.PlaceholderText = "replace anim id..."; replaceL.BackgroundColor3 = Color3.fromRGB(12,16,22); replaceL.TextColor3 = Color3.new(1,1,1); replaceL.Font = Enum.Font.Code; replaceL.BorderSizePixel = 0; replaceL.ZIndex = 4; replaceL.Parent = rFrame
-	mkCorner(replaceL,3); mkStroke(replaceL,Color3.fromRGB(0,80,90),1)
+	replaceL.PlaceholderText = "replace anim id..."; replaceL.BackgroundColor3 = Color3.fromRGB(14,14,14); replaceL.TextColor3 = Color3.fromRGB(210,210,210); replaceL.Font = Enum.Font.Code; replaceL.BorderSizePixel = 0; replaceL.ZIndex = 4; replaceL.Parent = rFrame
+	mkCorner(replaceL,3); mkStroke(replaceL, Color3.fromRGB(42,42,42), 1)
 	local targetL = Instance.new("TextBox"); targetL.Size = UDim2.new(1,-10,0,20); targetL.Position = UDim2.new(0,5,0,30); targetL.Text = targetId or ""
-	targetL.PlaceholderText = "target anim id..."; targetL.BackgroundColor3 = Color3.fromRGB(12,16,22); targetL.TextColor3 = Color3.new(1,1,1); targetL.Font = Enum.Font.Code; targetL.BorderSizePixel = 0; targetL.ZIndex = 4; targetL.Parent = rFrame
-	mkCorner(targetL,3); mkStroke(targetL,Color3.fromRGB(0,80,90),1)
+	targetL.PlaceholderText = "target anim id..."; targetL.BackgroundColor3 = Color3.fromRGB(14,14,14); targetL.TextColor3 = Color3.fromRGB(210,210,210); targetL.Font = Enum.Font.Code; targetL.BorderSizePixel = 0; targetL.ZIndex = 4; targetL.Parent = rFrame
+	mkCorner(targetL,3); mkStroke(targetL, Color3.fromRGB(42,42,42), 1)
 	local speedL = Instance.new("TextBox"); speedL.Size = UDim2.new(0.5,-10,0,20); speedL.Position = UDim2.new(0,5,0,55); speedL.Text = tostring(speed or 1)
-	speedL.BackgroundColor3 = Color3.fromRGB(12,16,22); speedL.TextColor3 = Color3.new(1,1,1); speedL.BorderSizePixel = 0; speedL.ZIndex = 4; speedL.Parent = rFrame
-	mkCorner(speedL,3); mkStroke(speedL,Color3.fromRGB(0,80,90),1)
+	speedL.BackgroundColor3 = Color3.fromRGB(14,14,14); speedL.TextColor3 = Color3.fromRGB(210,210,210); speedL.BorderSizePixel = 0; speedL.ZIndex = 4; speedL.Parent = rFrame
+	mkCorner(speedL,3); mkStroke(speedL, Color3.fromRGB(42,42,42), 1)
 	local loopT = Instance.new("TextButton"); loopT.Size = UDim2.new(0.5,-10,0,20); loopT.Position = UDim2.new(0.5,5,0,55)
-	loopT.Text = "Loop: " .. (loop and "ON" or "OFF"); loopT.BackgroundColor3 = loop and Color3.fromRGB(0,55,0) or Color3.fromRGB(55,0,0); loopT.TextColor3 = Color3.new(1,1,1); loopT.BorderSizePixel = 0; loopT.ZIndex = 4; loopT.Parent = rFrame; mkCorner(loopT,3)
+	loopT.Text = "Loop: " .. (loop and "ON" or "OFF"); loopT.BackgroundColor3 = loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); loopT.TextColor3 = loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210); loopT.BorderSizePixel = 0; loopT.ZIndex = 4; loopT.Parent = rFrame; mkCorner(loopT,3)
+	local loopTStroke = Instance.new("UIStroke"); loopTStroke.Color = loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); loopTStroke.Thickness = 1; loopTStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; loopTStroke.Parent = loopT
 	local enableT2 = Instance.new("TextButton"); enableT2.Size = UDim2.new(1,-10,0,20); enableT2.Position = UDim2.new(0,5,0,80)
-	enableT2.Text = enabled and "Enabled: ON" or "Enabled: OFF"; enableT2.BackgroundColor3 = enabled and Color3.fromRGB(0,55,0) or Color3.fromRGB(55,0,0); enableT2.TextColor3 = Color3.new(1,1,1); enableT2.Font = Enum.Font.Code; enableT2.TextSize = 11; enableT2.BorderSizePixel = 0; enableT2.ZIndex = 4; enableT2.Parent = rFrame; mkCorner(enableT2,3)
+	enableT2.Text = enabled and "Enabled: ON" or "Enabled: OFF"; enableT2.BackgroundColor3 = enabled and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); enableT2.TextColor3 = enabled and Color3.fromRGB(140,210,145) or Color3.fromRGB(240,240,240); enableT2.Font = Enum.Font.Code; enableT2.TextSize = 11; enableT2.BorderSizePixel = 0; enableT2.ZIndex = 4; enableT2.Parent = rFrame; mkCorner(enableT2,3)
+	local enableT2Stroke = Instance.new("UIStroke"); enableT2Stroke.Color = enabled and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); enableT2Stroke.Thickness = 1; enableT2Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; enableT2Stroke.Parent = enableT2
 	local del = Instance.new("TextButton"); del.Size = UDim2.new(1,-10,0,20); del.Position = UDim2.new(0,5,0,105); del.Text = "Delete Replacement"
-	del.BackgroundColor3 = Color3.fromRGB(120,15,15); del.TextColor3 = Color3.new(1,1,1); del.Font = Enum.Font.Code; del.TextSize = 11; del.BorderSizePixel = 0; del.ZIndex = 5; del.Parent = rFrame; mkCorner(del,3)
+	del.BackgroundColor3 = Color3.fromRGB(200,50,50); del.TextColor3 = Color3.fromRGB(255,255,255); del.Font = Enum.Font.Code; del.TextSize = 11; del.BorderSizePixel = 0; del.ZIndex = 5; del.Parent = rFrame; mkCorner(del,3)
 	local function updateRep()
 		local oldId = id; id = replaceL.Text
 		if oldId and oldId ~= id then Data.replacements[oldId] = nil end
@@ -2151,10 +2225,10 @@ local function addReplUI(id, targetId, speed, loop, enabled)
 	table.insert(Data.connections, targetL:GetPropertyChangedSignal("Text"):Connect(updateRep))
 	table.insert(Data.connections, speedL:GetPropertyChangedSignal("Text"):Connect(updateRep))
 	table.insert(Data.connections, loopT.MouseButton1Click:Connect(function()
-		loop = not loop; loopT.Text = "Loop: " .. (loop and "ON" or "OFF"); loopT.BackgroundColor3 = loop and Color3.fromRGB(0,55,0) or Color3.fromRGB(55,0,0); updateRep()
+		loop = not loop; loopT.Text = "Loop: " .. (loop and "ON" or "OFF"); loopT.BackgroundColor3 = loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); loopT.TextColor3 = loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210); loopTStroke.Color = loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); updateRep()
 	end))
 	table.insert(Data.connections, enableT2.MouseButton1Click:Connect(function()
-		enabled = not enabled; enableT2.Text = enabled and "Enabled: ON" or "Enabled: OFF"; enableT2.BackgroundColor3 = enabled and Color3.fromRGB(0,55,0) or Color3.fromRGB(55,0,0); updateRep()
+		enabled = not enabled; enableT2.Text = enabled and "Enabled: ON" or "Enabled: OFF"; enableT2.BackgroundColor3 = enabled and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); enableT2.TextColor3 = enabled and Color3.fromRGB(140,210,145) or Color3.fromRGB(240,240,240); enableT2Stroke.Color = enabled and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); updateRep()
 	end))
 	table.insert(Data.connections, del.MouseButton1Click:Connect(function()
 		Data.replacements[id] = nil; rFrame:Destroy(); dumpCfg()
@@ -2164,22 +2238,24 @@ table.insert(Data.connections, UI.addR.MouseButton1Click:Connect(function() addR
 
 local sideList = UI.sideList
 local function addBind(bindData)
-	local bFrame = Instance.new("Frame"); bFrame.Size = UDim2.new(1,0,0,190); bFrame.BackgroundColor3 = Color3.fromRGB(16,20,26); bFrame.BorderSizePixel = 0; bFrame.ZIndex = 3; bFrame.Parent = sideList
-	mkCorner(bFrame,5); mkStroke(bFrame,Color3.fromRGB(0,60,70),1)
-	local activeBar = Instance.new("Frame"); activeBar.Name = "ActiveBar"; activeBar.Size = UDim2.new(1,0,0,3); activeBar.Position = UDim2.new(0,0,0,0); activeBar.BackgroundColor3 = Color3.fromRGB(40,40,40); activeBar.BorderSizePixel = 0; activeBar.ZIndex = 5; activeBar.Parent = bFrame
+	local bFrame = Instance.new("Frame"); bFrame.Size = UDim2.new(1,0,0,190); bFrame.BackgroundColor3 = Color3.fromRGB(20,20,20); bFrame.BorderSizePixel = 0; bFrame.ZIndex = 3; bFrame.Parent = sideList
+	mkCorner(bFrame,5); mkStroke(bFrame, Color3.fromRGB(42,42,42), 1)
+	local activeBar = Instance.new("Frame"); activeBar.Name = "ActiveBar"; activeBar.Size = UDim2.new(1,0,0,3); activeBar.Position = UDim2.new(0,0,0,0); activeBar.BackgroundColor3 = Color3.fromRGB(35,35,35); activeBar.BorderSizePixel = 0; activeBar.ZIndex = 5; activeBar.Parent = bFrame
 	local macroHint = Instance.new("TextLabel"); macroHint.Size = UDim2.new(1,-10,0,14); macroHint.Position = UDim2.new(0,5,0,8); macroHint.BackgroundTransparency = 1; macroHint.TextColor3 = Color3.fromRGB(100,100,100); macroHint.Font = Enum.Font.Code; macroHint.TextSize = 10; macroHint.TextXAlignment = Enum.TextXAlignment.Left; macroHint.Text = "ID or macro (play x; wait t; stop)"; macroHint.ZIndex = 4; macroHint.Parent = bFrame
 	local idL = Instance.new("TextBox"); idL.Size = UDim2.new(1,-10,0,22); idL.Position = UDim2.new(0,5,0,25); idL.Text = bindData.id or ""; idL.PlaceholderText = "id or macro..."
-	idL.BackgroundColor3 = Color3.fromRGB(12,16,22); idL.TextColor3 = Color3.new(1,1,1); idL.Font = Enum.Font.Code; idL.TextSize = 12; idL.ZIndex = 4; idL.Parent = bFrame; mkCorner(idL,3); mkStroke(idL,Color3.fromRGB(0,70,80),1)
+	idL.BackgroundColor3 = Color3.fromRGB(14,14,14); idL.TextColor3 = Color3.fromRGB(210,210,210); idL.Font = Enum.Font.Code; idL.TextSize = 12; idL.ZIndex = 4; idL.Parent = bFrame; mkCorner(idL,3); mkStroke(idL, Color3.fromRGB(42,42,42), 1)
 	local keyB = Instance.new("TextButton"); keyB.Size = UDim2.new(1,-10,0,22); keyB.Position = UDim2.new(0,5,0,52)
-	keyB.Text = "Key: " .. (bindData.key and bindData.key.Name or "None"); keyB.BackgroundColor3 = Color3.fromRGB(20,24,32); keyB.TextColor3 = Color3.new(1,1,1); keyB.Font = Enum.Font.Code; keyB.TextSize = 12; keyB.ZIndex = 4; keyB.Parent = bFrame; mkCorner(keyB,3); mkStroke(keyB,Color3.fromRGB(0,60,70),1)
+	keyB.Text = "Key: " .. (bindData.key and bindData.key.Name or "None"); keyB.BackgroundColor3 = Color3.fromRGB(22,38,24); keyB.TextColor3 = Color3.fromRGB(140,210,145); keyB.Font = Enum.Font.Code; keyB.TextSize = 12; keyB.ZIndex = 4; keyB.Parent = bFrame; mkCorner(keyB,3); mkStroke(keyB, Color3.fromRGB(45,80,48), 1)
 	local holdT = Instance.new("TextButton"); holdT.Size = UDim2.new(1,-10,0,20); holdT.Position = UDim2.new(0,5,0,78)
-	holdT.Text = "Hold: " .. (bindData.hold and "ON" or "OFF"); holdT.BackgroundColor3 = bindData.hold and Color3.fromRGB(0,55,0) or Color3.fromRGB(60,0,0); holdT.TextColor3 = Color3.new(1,1,1); holdT.Font = Enum.Font.Code; holdT.TextSize = 12; holdT.ZIndex = 4; holdT.Parent = bFrame; mkCorner(holdT,3)
+	holdT.Text = "Hold: " .. (bindData.hold and "ON" or "OFF"); holdT.BackgroundColor3 = bindData.hold and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); holdT.TextColor3 = bindData.hold and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210); holdT.Font = Enum.Font.Code; holdT.TextSize = 12; holdT.ZIndex = 4; holdT.Parent = bFrame; mkCorner(holdT,3)
+	local holdTStroke = Instance.new("UIStroke"); holdTStroke.Color = bindData.hold and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); holdTStroke.Thickness = 1; holdTStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; holdTStroke.Parent = holdT
 	local speedB = Instance.new("TextBox"); speedB.Size = UDim2.new(1,-10,0,20); speedB.Position = UDim2.new(0,5,0,103)
-	speedB.Text = "Speed: " .. (bindData.speed or 1); speedB.BackgroundColor3 = Color3.fromRGB(12,16,22); speedB.TextColor3 = Color3.new(1,1,1); speedB.Font = Enum.Font.Code; speedB.TextSize = 12; speedB.ZIndex = 4; speedB.Parent = bFrame; mkCorner(speedB,3); mkStroke(speedB,Color3.fromRGB(0,70,80),1)
+	speedB.Text = "Speed: " .. (bindData.speed or 1); speedB.BackgroundColor3 = Color3.fromRGB(14,14,14); speedB.TextColor3 = Color3.fromRGB(210,210,210); speedB.Font = Enum.Font.Code; speedB.TextSize = 12; speedB.ZIndex = 4; speedB.Parent = bFrame; mkCorner(speedB,3); mkStroke(speedB, Color3.fromRGB(42,42,42), 1)
 	local loopT = Instance.new("TextButton"); loopT.Size = UDim2.new(1,-10,0,20); loopT.Position = UDim2.new(0,5,0,128)
-	loopT.Text = "Loop: " .. (bindData.loop and "ON" or "OFF"); loopT.BackgroundColor3 = bindData.loop and Color3.fromRGB(0,55,0) or Color3.fromRGB(60,0,0); loopT.TextColor3 = Color3.new(1,1,1); loopT.Font = Enum.Font.Code; loopT.TextSize = 12; loopT.ZIndex = 4; loopT.Parent = bFrame; mkCorner(loopT,3)
+	loopT.Text = "Loop: " .. (bindData.loop and "ON" or "OFF"); loopT.BackgroundColor3 = bindData.loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); loopT.TextColor3 = bindData.loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210); loopT.Font = Enum.Font.Code; loopT.TextSize = 12; loopT.ZIndex = 4; loopT.Parent = bFrame; mkCorner(loopT,3)
+	local loopTStroke = Instance.new("UIStroke"); loopTStroke.Color = bindData.loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); loopTStroke.Thickness = 1; loopTStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; loopTStroke.Parent = loopT
 	local lastFiredLabel = Instance.new("TextLabel"); lastFiredLabel.Size = UDim2.new(1,-10,0,14); lastFiredLabel.Position = UDim2.new(0,5,0,153); lastFiredLabel.BackgroundTransparency = 1; lastFiredLabel.TextColor3 = Color3.fromRGB(80,80,80); lastFiredLabel.Font = Enum.Font.Code; lastFiredLabel.TextSize = 10; lastFiredLabel.TextXAlignment = Enum.TextXAlignment.Left; lastFiredLabel.Text = "never fired"; lastFiredLabel.ZIndex = 4; lastFiredLabel.Parent = bFrame
-	local del = Instance.new("TextButton"); del.Size = UDim2.new(0,15,0,15); del.Position = UDim2.new(1,-15,0,0); del.Text = "X"; del.BackgroundColor3 = Color3.fromRGB(100,0,0); del.TextColor3 = Color3.new(1,1,1); del.ZIndex = 5; del.Parent = bFrame; mkCorner(del,3)
+	local del = Instance.new("TextButton"); del.Size = UDim2.new(0,15,0,15); del.Position = UDim2.new(1,-15,0,0); del.Text = "X"; del.BackgroundColor3 = Color3.fromRGB(200,50,50); del.TextColor3 = Color3.fromRGB(255,255,255); del.ZIndex = 5; del.Parent = bFrame; mkCorner(del,3)
 	bindData._activeBar = activeBar; bindData._lastFiredLabel = lastFiredLabel
 	table.insert(Data.bindIndicators, bindData)
 	local settingKey = false
@@ -2191,13 +2267,13 @@ local function addBind(bindData)
 	end))
 	table.insert(Data.connections, idL:GetPropertyChangedSignal("Text"):Connect(function() bindData.id = idL.Text; dumpBinds() end))
 	table.insert(Data.connections, holdT.MouseButton1Click:Connect(function()
-		bindData.hold = not bindData.hold; holdT.Text = "Hold: " .. (bindData.hold and "ON" or "OFF"); holdT.BackgroundColor3 = bindData.hold and Color3.fromRGB(0,60,0) or Color3.fromRGB(60,0,0); dumpBinds()
+		bindData.hold = not bindData.hold; holdT.Text = "Hold: " .. (bindData.hold and "ON" or "OFF"); holdT.BackgroundColor3 = bindData.hold and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); holdT.TextColor3 = bindData.hold and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210); holdTStroke.Color = bindData.hold and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); dumpBinds()
 	end))
 	table.insert(Data.connections, speedB:GetPropertyChangedSignal("Text"):Connect(function()
 		bindData.speed = tonumber(speedB.Text:match("[%d%.]+")) or 1; dumpBinds()
 	end))
 	table.insert(Data.connections, loopT.MouseButton1Click:Connect(function()
-		bindData.loop = not bindData.loop; loopT.Text = "Loop: " .. (bindData.loop and "ON" or "OFF"); loopT.BackgroundColor3 = bindData.loop and Color3.fromRGB(0,60,0) or Color3.fromRGB(60,0,0); dumpBinds()
+		bindData.loop = not bindData.loop; loopT.Text = "Loop: " .. (bindData.loop and "ON" or "OFF"); loopT.BackgroundColor3 = bindData.loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20); loopT.TextColor3 = bindData.loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210); loopTStroke.Color = bindData.loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); dumpBinds()
 	end))
 	table.insert(Data.connections, del.MouseButton1Click:Connect(function()
 		killAnim(bindData.id)
@@ -2213,12 +2289,12 @@ end))
 local function addFavRow(id, displayName)
 	if Data.favoriteEntries[id] then return end
 	local fFrame = Instance.new("Frame"); fFrame.Name = "fav_"..id; fFrame.Size = UDim2.new(1,-5,0,25); fFrame.BackgroundTransparency = 1; fFrame.ZIndex = 3; fFrame.Parent = UI.favsList
-	local fBtn = Instance.new("TextButton"); fBtn.Size = UDim2.new(1,-95,1,0); fBtn.BackgroundColor3 = Color3.fromRGB(22,19,5); fBtn.TextColor3 = Color3.fromRGB(220,200,0); fBtn.TextXAlignment = Enum.TextXAlignment.Left
+	local fBtn = Instance.new("TextButton"); fBtn.Size = UDim2.new(1,-95,1,0); fBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); fBtn.TextColor3 = Color3.fromRGB(210,175,60); fBtn.TextXAlignment = Enum.TextXAlignment.Left
 	fBtn.Text = "★ " .. id .. " | " .. (displayName or "Unknown"); fBtn.BorderSizePixel = 0; fBtn.Font = Enum.Font.Code; fBtn.TextSize = 12; fBtn.ZIndex = 4; fBtn.Parent = fFrame; mkCorner(fBtn,3)
 	local fPreviewBtn = Instance.new("TextButton"); fPreviewBtn.Size = UDim2.new(0,42,1,0); fPreviewBtn.Position = UDim2.new(1,-95,0,0)
-	fPreviewBtn.Text = "👁 View"; fPreviewBtn.BackgroundColor3 = Color3.fromRGB(0,48,68); fPreviewBtn.TextColor3 = Color3.new(1,1,1); fPreviewBtn.BorderSizePixel = 0; fPreviewBtn.Font = Enum.Font.Code; fPreviewBtn.TextSize = 11; fPreviewBtn.ZIndex = 4; fPreviewBtn.Parent = fFrame; mkCorner(fPreviewBtn,3)
+	fPreviewBtn.Text = "👁 View"; fPreviewBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); fPreviewBtn.TextColor3 = Color3.fromRGB(210,210,210); fPreviewBtn.BorderSizePixel = 0; fPreviewBtn.Font = Enum.Font.Code; fPreviewBtn.TextSize = 11; fPreviewBtn.ZIndex = 4; fPreviewBtn.Parent = fFrame; mkCorner(fPreviewBtn,3)
 	local fCopyBtn = Instance.new("TextButton"); fCopyBtn.Size = UDim2.new(0,42,1,0); fCopyBtn.Position = UDim2.new(1,-48,0,0)
-	fCopyBtn.Text = "Copy"; fCopyBtn.BackgroundColor3 = Color3.fromRGB(0,55,65); fCopyBtn.TextColor3 = Color3.new(1,1,1); fCopyBtn.BorderSizePixel = 0; fCopyBtn.Font = Enum.Font.Code; fCopyBtn.TextSize = 11; fCopyBtn.ZIndex = 4; fCopyBtn.Parent = fFrame; mkCorner(fCopyBtn,3)
+	fCopyBtn.Text = "Copy"; fCopyBtn.BackgroundColor3 = Color3.fromRGB(42,42,42); fCopyBtn.TextColor3 = Color3.fromRGB(210,210,210); fCopyBtn.BorderSizePixel = 0; fCopyBtn.Font = Enum.Font.Code; fCopyBtn.TextSize = 11; fCopyBtn.ZIndex = 4; fCopyBtn.Parent = fFrame; mkCorner(fCopyBtn,3)
 	local fUnstarBtn = Instance.new("TextButton"); fUnstarBtn.Size = UDim2.new(0,0,1,0); fUnstarBtn.BackgroundTransparency = 1; fUnstarBtn.ZIndex = 1; fUnstarBtn.Text = ""; fUnstarBtn.Parent = fFrame
 	Data.favoriteEntries[id] = fFrame
 	table.insert(Data.connections, fBtn.MouseButton1Click:Connect(function() UI.idBox.Text = id end))
@@ -2235,17 +2311,17 @@ local function addLogRow(id, name, key, priority)
 	local entryFrame = Instance.new("Frame"); entryFrame.Name = key; entryFrame.Size = UDim2.new(1,-5,0,22); entryFrame.ClipsDescendants = true; entryFrame.BackgroundTransparency = 1; entryFrame.ZIndex = 3; entryFrame.Parent = UI.list
 	
 	entryFrame.LayoutOrder = Data.favorites[id] and -Data.logOrder or Data.logOrder
-	local entry = Instance.new("TextButton"); entry.Size = UDim2.new(1,-142,1,0); entry.BackgroundColor3 = Color3.fromRGB(16,20,26); entry.TextColor3 = Color3.fromRGB(0,255,200); entry.TextXAlignment = Enum.TextXAlignment.Left
+	local entry = Instance.new("TextButton"); entry.Size = UDim2.new(1,-142,1,0); entry.BackgroundColor3 = Color3.fromRGB(20,20,20); entry.TextColor3 = Color3.fromRGB(160,160,160); entry.TextXAlignment = Enum.TextXAlignment.Left
 	entry.Text = "(1) [" .. (priority or "N/A") .. "] " .. id .. " | " .. name .. " @" .. (Data.animTimestamps[key] or os.date("%H:%M:%S"))
-	entry.BorderSizePixel = 0; entry.Font = Enum.Font.Code; entry.TextSize = 11; entry.TextTruncate = Enum.TextTruncate.AtEnd; entry.ZIndex = 4; entry.Visible = true; entry.Parent = entryFrame; mkCorner(entry,3)
+	entry.BorderSizePixel = 0; entry.Font = Enum.Font.Code; entry.TextSize = 12; entry.TextTruncate = Enum.TextTruncate.AtEnd; entry.ZIndex = 4; entry.Visible = true; entry.Parent = entryFrame; mkCorner(entry,3)
 	local previewBtn = Instance.new("TextButton"); previewBtn.Size = UDim2.new(0,20,1,0); previewBtn.Position = UDim2.new(1,-140,0,0)
-	previewBtn.BackgroundColor3 = Color3.fromRGB(0,48,68); previewBtn.TextColor3 = Color3.new(1,1,1); previewBtn.Text = "👁"; previewBtn.BorderSizePixel = 0; previewBtn.Font = Enum.Font.Code; previewBtn.TextSize = 12; previewBtn.ZIndex = 4; previewBtn.Visible = true; previewBtn.Parent = entryFrame; mkCorner(previewBtn,3)
+	previewBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); previewBtn.TextColor3 = Color3.fromRGB(210,210,210); previewBtn.Text = "👁"; previewBtn.BorderSizePixel = 0; previewBtn.Font = Enum.Font.GothamSemibold; previewBtn.TextSize = 12; previewBtn.ZIndex = 4; previewBtn.Visible = true; previewBtn.Parent = entryFrame; mkCorner(previewBtn,3)
 	local favBtn = Instance.new("TextButton"); favBtn.Size = UDim2.new(0,20,1,0); favBtn.Position = UDim2.new(1,-118,0,0)
-	favBtn.BackgroundColor3 = Color3.fromRGB(38,36,0); favBtn.TextColor3 = Color3.new(1,1,1); favBtn.Text = Data.favorites[id] and "★" or "☆"; favBtn.BorderSizePixel = 0; favBtn.Font = Enum.Font.Code; favBtn.TextSize = 12; favBtn.ZIndex = 4; favBtn.Visible = true; favBtn.Parent = entryFrame; mkCorner(favBtn,3)
+	favBtn.BackgroundColor3 = Color3.fromRGB(38,38,38); favBtn.TextColor3 = Color3.fromRGB(210,175,60); favBtn.Text = Data.favorites[id] and "★" or "☆"; favBtn.BorderSizePixel = 0; favBtn.Font = Enum.Font.GothamSemibold; favBtn.TextSize = 12; favBtn.ZIndex = 4; favBtn.Visible = true; favBtn.Parent = entryFrame; mkCorner(favBtn,3)
 	local nameBtn = Instance.new("TextButton"); nameBtn.Size = UDim2.new(0,46,1,0); nameBtn.Position = UDim2.new(1,-96,0,0)
-	nameBtn.BackgroundColor3 = Color3.fromRGB(0,38,45); nameBtn.TextColor3 = Color3.new(1,1,1); nameBtn.Text = "Name"; nameBtn.BorderSizePixel = 0; nameBtn.Font = Enum.Font.Code; nameBtn.TextSize = 10; nameBtn.ZIndex = 4; nameBtn.Visible = true; nameBtn.Parent = entryFrame; mkCorner(nameBtn,3)
+	nameBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); nameBtn.TextColor3 = Color3.fromRGB(210,210,210); nameBtn.Text = "Name"; nameBtn.BorderSizePixel = 0; nameBtn.Font = Enum.Font.GothamSemibold; nameBtn.TextSize = 10; nameBtn.ZIndex = 4; nameBtn.Visible = true; nameBtn.Parent = entryFrame; mkCorner(nameBtn,3)
 	local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,46,1,0); copyBtn.Position = UDim2.new(1,-48,0,0)
-	copyBtn.BackgroundColor3 = Color3.fromRGB(0,55,65); copyBtn.TextColor3 = Color3.new(1,1,1); copyBtn.Text = "Copy"; copyBtn.BorderSizePixel = 0; copyBtn.Font = Enum.Font.Code; copyBtn.TextSize = 10; copyBtn.ZIndex = 4; copyBtn.Visible = true; copyBtn.Parent = entryFrame; mkCorner(copyBtn,3)
+	copyBtn.BackgroundColor3 = Color3.fromRGB(42,42,42); copyBtn.TextColor3 = Color3.fromRGB(210,210,210); copyBtn.Text = "Copy"; copyBtn.BorderSizePixel = 0; copyBtn.Font = Enum.Font.GothamSemibold; copyBtn.TextSize = 10; copyBtn.ZIndex = 4; copyBtn.Visible = true; copyBtn.Parent = entryFrame; mkCorner(copyBtn,3)
 	table.insert(Data.connections, entry.MouseButton1Click:Connect(function() UI.idBox.Text = id end))
 	table.insert(Data.connections, previewBtn.MouseButton1Click:Connect(function() popPreview(id) end))
 	table.insert(Data.connections, favBtn.MouseButton1Click:Connect(function()
@@ -2265,13 +2341,13 @@ local function addLogRow(id, name, key, priority)
 		local prefix = Data.loopingAnims[key] and "\xe2\x86\xbb " or ""
 		entry.Text = prefix .. "(" .. (Data.animCounts[key] or 1) .. ") [" .. (priority or "N/A") .. "] " .. id .. " | " .. displayName .. " @" .. (Data.animTimestamps[key] or "?")
 		nameBtn.Text = Data.customNames[id] and "✎" or "Name"
-		nameBtn.BackgroundColor3 = Data.customNames[id] and Color3.fromRGB(0,55,45) or Color3.fromRGB(0,38,45)
-		nameBtn.TextColor3 = Data.customNames[id] and Color3.fromRGB(0,220,170) or Color3.new(1,1,1)
+		nameBtn.BackgroundColor3 = Data.customNames[id] and Color3.fromRGB(25,35,50) or Color3.fromRGB(28,28,28)
+		nameBtn.TextColor3 = Data.customNames[id] and Color3.fromRGB(160,160,160) or Color3.new(1,1,1)
 	end
 	table.insert(Data.connections, nameBtn.MouseButton1Click:Connect(function()
 		local nameInput = Instance.new("TextBox"); nameInput.Text = Data.customNames[id] or ""; nameInput.PlaceholderText = "blank = remove name"
 		nameInput.Size = UDim2.new(1,-114,1,0); nameInput.Position = UDim2.new(0,0,0,0); nameInput.BackgroundColor3 = Color3.fromRGB(20,20,20)
-		nameInput.TextColor3 = Color3.new(1,1,1); nameInput.PlaceholderColor3 = Color3.fromRGB(80,80,80); nameInput.BorderSizePixel = 1; nameInput.BorderColor3 = Color3.fromRGB(0,200,150)
+		nameInput.TextColor3 = Color3.fromRGB(210,210,210); nameInput.PlaceholderColor3 = Color3.fromRGB(65,65,65); nameInput.BorderSizePixel = 1; nameInput.BorderColor3 = Color3.fromRGB(160,160,160)
 		nameInput.Font = Enum.Font.Code; nameInput.TextSize = 11; nameInput.ZIndex = 6; nameInput.Parent = entryFrame; nameInput:CaptureFocus()
 		local function applyName()
 			local newName = nameInput.Text:match("^%s*(.-)%s*$"); nameInput:Destroy()
@@ -2373,11 +2449,11 @@ refreshColors = function()
 	for id, entry in pairs(Data.animFrames) do
 		if id:find("__frame", 1, true) then continue end 
 		local pureId = id:match("^([%d]+)")
-		if Data.trueBanned[pureId] then entry.TextColor3 = Color3.fromRGB(180,0,0)
-		elseif Data.banned[pureId] then entry.TextColor3 = Color3.fromRGB(255,50,50)
-		elseif Data.logBlacklist[pureId] then entry.TextColor3 = Color3.fromRGB(180,100,255)
-		elseif playingIds[pureId] then entry.TextColor3 = Color3.fromRGB(50,255,50)
-		else entry.TextColor3 = Color3.fromRGB(0,255,200) end
+		if Data.trueBanned[pureId] then entry.TextColor3 = Color3.fromRGB(210,70,70)
+		elseif Data.banned[pureId] then entry.TextColor3 = Color3.fromRGB(160,60,60)
+		elseif Data.logBlacklist[pureId] then entry.TextColor3 = Color3.fromRGB(150,100,200)
+		elseif playingIds[pureId] then entry.TextColor3 = Color3.fromRGB(220,240,255)
+		else entry.TextColor3 = Color3.fromRGB(190,190,190) end
 	end
 end
 
@@ -2386,7 +2462,7 @@ task.spawn(function()
 		refreshColors()
 		for _, bind in pairs(Data.bindIndicators) do
 			if bind._activeBar and bind._activeBar.Parent then
-				bind._activeBar.BackgroundColor3 = bind.active and Color3.fromRGB(0,220,100) or Color3.fromRGB(40,40,40)
+				bind._activeBar.BackgroundColor3 = bind.active and Color3.fromRGB(100,190,255) or Color3.fromRGB(35,35,35)
 			end
 		end
 		task.wait(0.1)
@@ -2538,16 +2614,16 @@ task.spawn(function()
 			if isCmdB then continue end 
 
 			if isMacroB then
-
+				
 				if bind.hold and (not bind.macroFlag or not bind.macroFlag.active) then
 					bind.macroFlag = {active=true}; doMacro(idStr, bind, bind.macroFlag)
 				end
-
+				
 				if not bind.hold and (not bind.macroFlag or not bind.macroFlag.active) then
 					bind.macroFlag = {active=true}; doMacro(idStr, bind, bind.macroFlag)
 				end
 			else
-
+				
 				if bind.hold and not Data.banned[bind.id] then
 					local isPlaying = false
 					local animator = grabAnimator()
@@ -2562,7 +2638,7 @@ task.spawn(function()
 					end
 					if not isPlaying then fireAnim(bind.id, bind.speed, bind.loop) end
 				end
-	
+				
 				if not bind.hold and bind.loop and not Data.banned[bind.id] then
 					local isPlaying = false
 					local animator = grabAnimator()
@@ -2648,7 +2724,7 @@ table.insert(Data.connections, Services.UserInputService.InputBegan:Connect(func
 		if bind.key and input.KeyCode == bind.key then
 			local idStr = tostring(bind.id); local timeStr = os.date("%H:%M:%S"); bind._lastFired = timeStr
 			if bind._lastFiredLabel and bind._lastFiredLabel.Parent then
-				bind._lastFiredLabel.Text = "fired: " .. timeStr; bind._lastFiredLabel.TextColor3 = Color3.fromRGB(0,200,150)
+				bind._lastFiredLabel.Text = "fired: " .. timeStr; bind._lastFiredLabel.TextColor3 = Color3.fromRGB(160,160,160)
 			end
 			if isMacro(idStr) then
 				if not bind.macroFlag or not bind.macroFlag.active then bind.macroFlag = {active=true}; doMacro(idStr, bind, bind.macroFlag) end
@@ -2680,11 +2756,11 @@ table.insert(Data.connections, Services.UserInputService.InputEnded:Connect(func
 		if bind.key and input.KeyCode == bind.key then
 			local idStr = tostring(bind.id)
 			if isMacro(idStr) then
-
+				
 				if bind.hold then
 					if bind.macroFlag then bind.macroFlag.active = false; bind.macroFlag = nil end
 					bind.active = false
-
+					
 					for t in pairs(Data.scriptTracks) do Data.scriptTracks[t] = nil; pcall(function() t:Stop(0) end) end
 				end
 			elseif isCmd(idStr) then
