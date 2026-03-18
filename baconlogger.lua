@@ -36,6 +36,9 @@ local Data = {
 	animFireIntervals = {},
 	loopingAnims = {},
 	ghostChar = nil,
+	spawnDummy = nil,
+	spawnDummyAnimator = nil,
+	spawnDummyTrack = nil,
 	vpTrack = nil,
 	vpAnimator = nil,
 	vpRootPart = nil,
@@ -672,12 +675,12 @@ end, Color3.fromRGB(42,20,20), Color3.fromRGB(85,38,38), Color3.fromRGB(220,120,
 
 button("Ban", 360, function()
 	Data.banned[UI.idBox.Text] = true; killAnim(UI.idBox.Text); dumpCfg()
-end, Color3.fromRGB(48,16,16), Color3.fromRGB(90,30,30), Color3.fromRGB(220,100,100))
+end, Color3.fromRGB(48,16,16), Color3.fromRGB(90,30,30), Color3.fromRGB(220,80,80))
 
 button("True Ban", 395, function()
 	local id = UI.idBox.Text; if id == "" then return end
 	Data.trueBanned[id] = true; Data.banned[id] = true; killAnim(id); dumpCfg(); refreshColors()
-end, Color3.fromRGB(55,10,10), Color3.fromRGB(100,25,25), Color3.fromRGB(230,80,80))
+end, Color3.fromRGB(55,10,10), Color3.fromRGB(100,25,25), Color3.fromRGB(180,50,50))
 
 button("Unban", 430, function()
 	local id = UI.idBox.Text; Data.banned[id] = nil; Data.trueBanned[id] = nil; dumpCfg(); refreshColors()
@@ -685,12 +688,12 @@ end, Color3.fromRGB(22,38,24), Color3.fromRGB(45,80,48), Color3.fromRGB(140,210,
 
 button("Log Ban", 465, function()
 	local id = UI.idBox.Text; if id == "" then return end
-	Data.logBlacklist[id] = true; dumpCfg(); refreshColors(); flashNotif("◈ Log-banned " .. id .. " (still plays)")
+	Data.logBlacklist[id] = true; dumpCfg(); refreshColors()
 end, Color3.fromRGB(34,22,48), Color3.fromRGB(70,45,95), Color3.fromRGB(180,140,230))
 
 button("Log Unban", 500, function()
 	local id = UI.idBox.Text; if id == "" then return end
-	Data.logBlacklist[id] = nil; dumpCfg(); refreshColors(); flashNotif("◈ Log-unban " .. id)
+	Data.logBlacklist[id] = nil; dumpCfg(); refreshColors()
 end, Color3.fromRGB(28,18,40), Color3.fromRGB(60,38,80), Color3.fromRGB(160,120,210))
 
 button("Copy ID", 535, function() yoink(UI.idBox.Text) end,
@@ -716,12 +719,13 @@ UI.globalToggle = Instance.new("TextButton")
 UI.globalToggle.Text = "Global Log: OFF"; UI.globalToggle.Position = UDim2.new(0,10,0,597); UI.globalToggle.Size = UDim2.new(1,-20,0,25)
 UI.globalToggle.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.globalToggle.TextColor3 = Color3.fromRGB(140,140,140)
 UI.globalToggle.BorderSizePixel = 0; UI.globalToggle.Font = Enum.Font.GothamSemibold; UI.globalToggle.TextSize = 12; UI.globalToggle.ZIndex = 3; UI.globalToggle.Visible = true; UI.globalToggle.Parent = UI.controls
-mkCorner(UI.globalToggle, 4); mkStroke(UI.globalToggle, Color3.fromRGB(42,42,42), 1)
+mkCorner(UI.globalToggle, 4)
+local globalToggleStroke = Instance.new("UIStroke"); globalToggleStroke.Color = Color3.fromRGB(42,42,42); globalToggleStroke.Thickness = 1; globalToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; globalToggleStroke.Parent = UI.globalToggle
 local function refreshGlobalBtn()
 	UI.globalToggle.Text = "Global Log: " .. (State.globalLogging and "ON" or "OFF")
-	UI.globalToggle.BackgroundColor3 = State.globalLogging and Color3.fromRGB(16,35,35) or Color3.fromRGB(14,14,14)
-	UI.globalToggle.TextColor3 = State.globalLogging and Color3.fromRGB(100,210,200) or Color3.fromRGB(140,140,140)
-	mkStroke(UI.globalToggle, State.globalLogging and Color3.fromRGB(40,100,95) or Color3.fromRGB(42,42,42), 1)
+	UI.globalToggle.BackgroundColor3 = State.globalLogging and Color3.fromRGB(22,38,24) or Color3.fromRGB(14,14,14)
+	UI.globalToggle.TextColor3 = State.globalLogging and Color3.fromRGB(140,210,145) or Color3.fromRGB(140,140,140)
+	globalToggleStroke.Color = State.globalLogging and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42)
 end
 table.insert(Data.connections, UI.globalToggle.MouseButton1Click:Connect(function()
 	State.globalLogging = not State.globalLogging; refreshGlobalBtn(); dumpCfg()
@@ -731,12 +735,13 @@ UI.autoCopyToggle = Instance.new("TextButton")
 UI.autoCopyToggle.Text = "Auto-Copy: OFF"; UI.autoCopyToggle.Position = UDim2.new(0,10,0,625); UI.autoCopyToggle.Size = UDim2.new(1,-20,0,22)
 UI.autoCopyToggle.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.autoCopyToggle.TextColor3 = Color3.fromRGB(140,140,140)
 UI.autoCopyToggle.BorderSizePixel = 0; UI.autoCopyToggle.Font = Enum.Font.GothamSemibold; UI.autoCopyToggle.TextSize = 12; UI.autoCopyToggle.ZIndex = 3; UI.autoCopyToggle.Visible = true; UI.autoCopyToggle.Parent = UI.controls
-mkCorner(UI.autoCopyToggle, 4); mkStroke(UI.autoCopyToggle, Color3.fromRGB(42,42,42), 1)
+mkCorner(UI.autoCopyToggle, 4)
+local autoCopyStroke = Instance.new("UIStroke"); autoCopyStroke.Color = Color3.fromRGB(42,42,42); autoCopyStroke.Thickness = 1; autoCopyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; autoCopyStroke.Parent = UI.autoCopyToggle
 local function refreshAutoCopyBtn()
 	UI.autoCopyToggle.Text = "Auto-Copy: " .. (State.autoCopy and "ON" or "OFF")
 	UI.autoCopyToggle.BackgroundColor3 = State.autoCopy and Color3.fromRGB(22,38,24) or Color3.fromRGB(14,14,14)
 	UI.autoCopyToggle.TextColor3 = State.autoCopy and Color3.fromRGB(140,210,145) or Color3.fromRGB(140,140,140)
-	mkStroke(UI.autoCopyToggle, State.autoCopy and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42), 1)
+	autoCopyStroke.Color = State.autoCopy and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42)
 end
 table.insert(Data.connections, UI.autoCopyToggle.MouseButton1Click:Connect(function()
 	State.autoCopy = not State.autoCopy; refreshAutoCopyBtn(); dumpCfg()
@@ -800,7 +805,7 @@ end))
 
 UI.discordBtn = Instance.new("TextButton")
 UI.discordBtn.Text = "discord"; UI.discordBtn.Size = UDim2.new(0,70,0,18); UI.discordBtn.Position = UDim2.new(0,6,1,-22)
-UI.discordBtn.BackgroundColor3 = Color3.fromRGB(55,60,150); UI.discordBtn.TextColor3 = Color3.fromRGB(180,190,255)
+UI.discordBtn.BackgroundColor3 = Color3.fromRGB(55,60,150); UI.discordBtn.BackgroundTransparency = 0.25; UI.discordBtn.TextColor3 = Color3.fromRGB(180,190,255)
 UI.discordBtn.BorderSizePixel = 0; UI.discordBtn.Font = Enum.Font.Code; UI.discordBtn.TextSize = 10; UI.discordBtn.ZIndex = 3; UI.discordBtn.Parent = UI.mainFrame
 mkCorner(UI.discordBtn, 4); mkStroke(UI.discordBtn, Color3.fromRGB(80,90,200), 1)
 table.insert(Data.connections, UI.discordBtn.MouseButton1Click:Connect(function()
@@ -1260,7 +1265,7 @@ table.insert(Data.connections, UI.sideClose.MouseButton1Click:Connect(function()
 
 UI.viewportWin = Instance.new("Frame")
 local viewportWin = UI.viewportWin
-viewportWin.Name = "ViewportWindow"; viewportWin.Size = UDim2.new(0,300,0,620); viewportWin.Position = UDim2.new(0,670,0,380)
+viewportWin.Name = "ViewportWindow"; viewportWin.Size = UDim2.new(0,300,0,660); viewportWin.Position = UDim2.new(0,670,0,380)
 viewportWin.BackgroundColor3 = Color3.fromRGB(14,14,14); viewportWin.BackgroundTransparency = 0.15; viewportWin.BorderSizePixel = 0; viewportWin.Active = true
 viewportWin.ClipsDescendants = true; viewportWin.ZIndex = 5; viewportWin.Visible = false; viewportWin.Parent = UI.gui
 mkCorner(viewportWin, 10); mkStroke(viewportWin, Color3.fromRGB(65,65,65), 1)
@@ -1296,7 +1301,7 @@ UI.vpMinimize = Instance.new("TextButton"); UI.vpMinimize.Size = UDim2.new(0,25,
 table.insert(Data.connections, UI.vpClose.MouseButton1Click:Connect(function() UI.viewportWin.Visible = false end))
 table.insert(Data.connections, UI.vpMinimize.MouseButton1Click:Connect(function()
 	State.vpMinimized = not State.vpMinimized
-	UI.viewportWin.Size = State.vpMinimized and UDim2.new(0,300,0,28) or UDim2.new(0,300,0,620)
+	UI.viewportWin.Size = State.vpMinimized and UDim2.new(0,300,0,28) or UDim2.new(0,300,0,660)
 	UI.vpMinimize.Text = State.vpMinimized and "+" or "-"
 end))
 
@@ -1341,14 +1346,26 @@ end
 UI.vpPauseBtn = Instance.new("TextButton"); UI.vpPauseBtn.Text = "⏸ Pause"; UI.vpPauseBtn.Position = UDim2.new(0,5,0,328); UI.vpPauseBtn.Size = UDim2.new(1,-10,0,20)
 UI.vpPauseBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.vpPauseBtn.TextColor3 = Color3.fromRGB(210,210,210); UI.vpPauseBtn.BorderSizePixel = 0; UI.vpPauseBtn.Font = Enum.Font.Code; UI.vpPauseBtn.TextSize = 11; UI.vpPauseBtn.ZIndex = 6; UI.vpPauseBtn.Parent = UI.viewportWin; mkCorner(UI.vpPauseBtn,4)
 mkStroke(UI.vpPauseBtn, Color3.fromRGB(65,65,65), 1)
+local spawnDummyPaused = false
+local spawnDummyPausedAt = 0
 table.insert(Data.connections, UI.vpPauseBtn.MouseButton1Click:Connect(function()
-	if not State.vpPaused and not Data.vpTrack then return end
+	if not State.vpPaused and not Data.vpTrack and not Data.spawnDummyTrack then return end
 	State.vpPaused = not State.vpPaused
 	if State.vpPaused then
 		State.vpPausedAt = Data.vpTrack and Data.vpTrack.TimePosition or 0
 		State.vpPausedLength = Data.vpTrack and Data.vpTrack.Length or 0
-		if Data.vpTrack then pcall(function() Data.vpTrack:Stop(0) end); Data.vpTrack = nil end
+		if Data.vpTrack then 
+			local pos = Data.vpTrack.TimePosition
+			pcall(function() Data.vpTrack:Stop(0) end); Data.vpTrack = nil
+			State.vpPausedAt = pos
+		end
 		if Data.vpAnimator then pcall(function() Data.vpAnimator:Destroy() end); Data.vpAnimator = nil end
+		if Data.spawnDummyTrack then
+			spawnDummyPausedAt = Data.spawnDummyTrack.TimePosition
+			spawnDummyPaused = true
+			pcall(function() Data.spawnDummyTrack:Stop(0) end); Data.spawnDummyTrack = nil
+			if Data.spawnDummyAnimator then pcall(function() Data.spawnDummyAnimator:Destroy() end); Data.spawnDummyAnimator = nil end
+		end
 	else
 		if State.vpCurrentId and State.vpCurrentId ~= "" and Data.ghostChar then
 			local hum = Data.ghostChar:FindFirstChildOfClass("Humanoid")
@@ -1363,6 +1380,21 @@ table.insert(Data.connections, UI.vpPauseBtn.MouseButton1Click:Connect(function(
 					task.defer(function() if Data.vpTrack == track then track:AdjustSpeed(tonumber(UI.vpSpeedBox.Text) or 1) end end)
 				end
 			end
+		end
+		if spawnDummyPaused and Data.spawnDummy and State.vpCurrentId then
+			local hum = Data.spawnDummy:FindFirstChildOfClass("Humanoid")
+			if hum then
+				if Data.spawnDummyAnimator then pcall(function() Data.spawnDummyAnimator:Destroy() end) end
+				local animator = Instance.new("Animator"); animator.Parent = hum; Data.spawnDummyAnimator = animator
+				local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. State.vpCurrentId
+				local track; pcall(function() track = animator:LoadAnimation(anim) end)
+				if track then
+					track.Priority = Enum.AnimationPriority.Action4; track.Looped = State.vpLooped
+					track:Play(0,1,0); track.TimePosition = spawnDummyPausedAt; Data.spawnDummyTrack = track
+					task.defer(function() if Data.spawnDummyTrack == track then track:AdjustSpeed(tonumber(UI.vpSpeedBox.Text) or 1) end end)
+				end
+			end
+			spawnDummyPaused = false
 		end
 	end
 	UI.vpPauseBtn.Text = State.vpPaused and "▶ Resume" or "⏸ Pause"
@@ -1383,10 +1415,23 @@ table.insert(Data.connections, UI.vpScrubBtn.MouseButton1Down:Connect(function()
 			end
 		end
 	end
+	if State.vpPaused and Data.spawnDummy and State.vpCurrentId then
+		local hum = Data.spawnDummy:FindFirstChildOfClass("Humanoid")
+		if hum then
+			local animator = Instance.new("Animator"); animator.Parent = hum
+			local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. State.vpCurrentId
+			local track; pcall(function() track = animator:LoadAnimation(anim) end)
+			if track then
+				track.Priority = Enum.AnimationPriority.Action4; track:Play(0,1,0); track.TimePosition = spawnDummyPausedAt
+				Data.tempSpawnScrubTrack = track
+			end
+		end
+	end
 end))
 table.insert(Data.connections, Services.UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 and State.vpScrubbing then
 		State.vpScrubbing = false; Data.vpScrubTrack = nil
+		if Data.tempSpawnScrubTrack then pcall(function() Data.tempSpawnScrubTrack:Stop(0) end); Data.tempSpawnScrubTrack = nil end
 	end
 end))
 
@@ -1486,6 +1531,166 @@ mkCorner(UI.vpDummyMacroBox,3); mkStroke(UI.vpDummyMacroBox, Color3.fromRGB(42,4
 UI.vpRunDummyMacroBtn = Instance.new("TextButton"); UI.vpRunDummyMacroBtn.Text = "run"; UI.vpRunDummyMacroBtn.Position = UDim2.new(0.75,2,0,586); UI.vpRunDummyMacroBtn.Size = UDim2.new(0.25,-7,0,22)
 UI.vpRunDummyMacroBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpRunDummyMacroBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpRunDummyMacroBtn.BorderSizePixel = 0; UI.vpRunDummyMacroBtn.Font = Enum.Font.Code; UI.vpRunDummyMacroBtn.TextSize = 10; UI.vpRunDummyMacroBtn.ZIndex = 6; UI.vpRunDummyMacroBtn.Parent = UI.viewportWin; mkCorner(UI.vpRunDummyMacroBtn,4)
 mkStroke(UI.vpRunDummyMacroBtn, Color3.fromRGB(45,80,48), 1)
+
+local spawnDummySectionY = 610
+UI.vpSpawnDummyBtn = Instance.new("TextButton"); UI.vpSpawnDummyBtn.Text = "＋ Spawn Dummy"; UI.vpSpawnDummyBtn.Position = UDim2.new(0,5,0,spawnDummySectionY); UI.vpSpawnDummyBtn.Size = UDim2.new(0.5,-8,0,22)
+UI.vpSpawnDummyBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpSpawnDummyBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpSpawnDummyBtn.BorderSizePixel = 0; UI.vpSpawnDummyBtn.Font = Enum.Font.Code; UI.vpSpawnDummyBtn.TextSize = 10; UI.vpSpawnDummyBtn.ZIndex = 6; UI.vpSpawnDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpSpawnDummyBtn,4)
+mkStroke(UI.vpSpawnDummyBtn, Color3.fromRGB(45,80,48), 1)
+
+UI.vpDespawnDummyBtn = Instance.new("TextButton"); UI.vpDespawnDummyBtn.Text = "－ Despawn"; UI.vpDespawnDummyBtn.Position = UDim2.new(0.5,3,0,spawnDummySectionY); UI.vpDespawnDummyBtn.Size = UDim2.new(0.5,-8,0,22)
+UI.vpDespawnDummyBtn.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.vpDespawnDummyBtn.TextColor3 = Color3.fromRGB(255,255,255); UI.vpDespawnDummyBtn.BorderSizePixel = 0; UI.vpDespawnDummyBtn.Font = Enum.Font.Code; UI.vpDespawnDummyBtn.TextSize = 10; UI.vpDespawnDummyBtn.ZIndex = 6; UI.vpDespawnDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpDespawnDummyBtn,4)
+
+local function makeSpawnDummy()
+	if Data.spawnDummy then pcall(function() Data.spawnDummy:Destroy() end); Data.spawnDummy = nil; Data.spawnDummyAnimator = nil end
+	local char = Services.Players.LocalPlayer.Character
+	if not char then return end
+	local rootPart = char:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+	local spawnPos = rootPart.CFrame * CFrame.new(0, 0, -6)
+	local model = Instance.new("Model"); model.Name = "SpawnDummy"
+	local function part(name, size)
+		local p = Instance.new("Part"); p.Name = name; p.Size = size; p.BrickColor = BrickColor.new("Medium stone grey")
+		p.Material = Enum.Material.SmoothPlastic; p.Anchored = false; p.CanCollide = false; p.CastShadow = false; p.Parent = model; return p
+	end
+	local root = part("HumanoidRootPart", Vector3.new(2,2,1)); root.Transparency = 1; root.CanCollide = false; local torso = part("Torso", Vector3.new(2,2,1)); local head = part("Head", Vector3.new(2,1,1))
+	local rArm = part("Right Arm", Vector3.new(1,2,1)); local lArm = part("Left Arm", Vector3.new(1,2,1))
+	local rLeg = part("Right Leg", Vector3.new(1,2,1)); local lLeg = part("Left Leg", Vector3.new(1,2,1))
+	root.CFrame = spawnPos; root.Anchored = false; model.PrimaryPart = root
+	local hum = Instance.new("Humanoid"); hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; hum.WalkSpeed = 0; hum.JumpPower = 0; hum.Parent = model
+	local function motor(name, p0, p1, c0, c1) local m = Instance.new("Motor6D"); m.Name = name; m.Part0 = p0; m.Part1 = p1; m.C0 = c0; m.C1 = c1; m.Parent = p0 end
+	motor("RootJoint", root, torso, CFrame.new(0,0,0,-1,0,0,0,0,1,0,1,0), CFrame.new(0,0,0,-1,0,0,0,0,1,0,1,0))
+	motor("Neck", torso, head, CFrame.new(0,1,0,-1,0,0,0,0,1,0,1,0), CFrame.new(0,-0.5,0,-1,0,0,0,0,1,0,1,0))
+	motor("Right Shoulder", torso, rArm, CFrame.new(1,0.5,0,0,0,1,0,1,0,-1,0,0), CFrame.new(-0.5,0.5,0,0,0,1,0,1,0,-1,0,0))
+	motor("Left Shoulder", torso, lArm, CFrame.new(-1,0.5,0,0,0,-1,0,1,0,1,0,0), CFrame.new(0.5,0.5,0,0,0,-1,0,1,0,1,0,0))
+	motor("Right Hip", torso, rLeg, CFrame.new(1,-1,0,0,0,1,0,1,0,-1,0,0), CFrame.new(0.5,1,0,0,0,1,0,1,0,-1,0,0))
+	motor("Left Hip", torso, lLeg, CFrame.new(-1,-1,0,0,0,-1,0,1,0,1,0,0), CFrame.new(-0.5,1,0,0,0,-1,0,1,0,1,0,0))
+	local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.BrickColor = BrickColor.new("Bright red"); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = model
+	local noseWeld = Instance.new("Weld"); noseWeld.Part0 = head; noseWeld.Part1 = nose; noseWeld.C0 = CFrame.new(0,0,-0.65); noseWeld.Parent = head
+	local headMesh = Instance.new("SpecialMesh"); headMesh.MeshType = Enum.MeshType.Head; headMesh.Scale = Vector3.new(1,1,1); headMesh.Parent = head
+	local function att(parent, name, cf) local a = Instance.new("Attachment"); a.Name = name; a.CFrame = cf; a.Parent = parent end
+	att(head,"HatAttachment",CFrame.new(0,0.6,0)); att(head,"HairAttachment",CFrame.new(0,0.6,0)); att(head,"FaceFrontAttachment",CFrame.new(0,0,-0.6)); att(head,"FaceBackAttachment",CFrame.new(0,0,0.6))
+	att(torso,"BodyFrontAttachment",CFrame.new(0,0,-0.5)); att(torso,"BodyBackAttachment",CFrame.new(0,0,0.5)); att(torso,"NeckAttachment",CFrame.new(0,1,0))
+	att(torso,"WaistFrontAttachment",CFrame.new(0,-1,-0.5)); att(torso,"WaistBackAttachment",CFrame.new(0,-1,0.5)); att(torso,"WaistCenterAttachment",CFrame.new(0,-1,0))
+	att(rArm,"RightShoulderAttachment",CFrame.new(0,1,0)); att(lArm,"LeftShoulderAttachment",CFrame.new(0,1,0))
+	model.Parent = workspace
+	local animator = Instance.new("Animator"); animator.Parent = hum
+	Data.spawnDummy = model; Data.spawnDummyAnimator = animator
+end
+
+local function despawnSpawnDummy()
+	if Data.spawnDummy then pcall(function() Data.spawnDummy:Destroy() end); Data.spawnDummy = nil; Data.spawnDummyAnimator = nil end
+end
+
+local function playOnSpawnDummy(animId, speed, loop)
+	if not Data.spawnDummy or not Data.spawnDummyAnimator then return end
+	if Data.spawnDummyTrack then pcall(function() Data.spawnDummyTrack:Stop(0) end); Data.spawnDummyTrack = nil end
+	local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. animId
+	local track; pcall(function() track = Data.spawnDummyAnimator:LoadAnimation(anim) end)
+	if track then
+		track.Priority = Enum.AnimationPriority.Action4; track.Looped = loop ~= false
+		track:Play(0,1,speed or 1); Data.spawnDummyTrack = track
+	end
+end
+
+local function stopSpawnDummyTrack()
+	if Data.spawnDummyTrack then pcall(function() Data.spawnDummyTrack:Stop(0) end); Data.spawnDummyTrack = nil end
+end
+
+table.insert(Data.connections, UI.vpSpawnDummyBtn.MouseButton1Click:Connect(function()
+	makeSpawnDummy()
+	if not Data.spawnDummy then return end
+	if not State.vpSkinCache and State.vpSkinQuery then
+		UI.vpSkinStatusLabel.Text = "skin loading..."; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
+		local checks = 0
+		while not State.vpSkinCache and checks < 30 do task.wait(0.1); checks = checks + 1 end
+	end
+	if State.vpSkinCache then
+		task.wait(0.2)
+		local rig = Data.spawnDummy
+		local function stripRig(rig)
+			for _, obj in ipairs(rig:GetChildren()) do
+				if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("BodyColors") then obj:Destroy() end
+			end
+			local defaultColor = Color3.fromRGB(160,160,160)
+			for _, name in ipairs({"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg"}) do
+				local p = rig:FindFirstChild(name)
+				if p then p.Color = defaultColor
+					for _, m in ipairs(p:GetChildren()) do if m:IsA("SpecialMesh") or m:IsA("BlockMesh") then m:Destroy() end end
+				end
+			end
+			local head = rig:FindFirstChild("Head")
+			if head then local mesh = Instance.new("SpecialMesh"); mesh.MeshType = Enum.MeshType.Head; mesh.Scale = Vector3.new(1,1,1); mesh.Parent = head end
+			local nose = rig:FindFirstChild("Nose"); if nose then nose:Destroy() end
+		end
+		local function applyFromDesc(rig, desc)
+			local hum = rig:FindFirstChildOfClass("Humanoid"); if not hum then return false end
+			local ok = pcall(function() hum:ApplyDescription(desc) end); return ok
+		end
+		local function applyFromCharSource(rig, srcChar)
+			local bc = srcChar:FindFirstChildOfClass("BodyColors")
+			if bc then
+				local colorMap = {Head=bc.HeadColor3,Torso=bc.TorsoColor3,["Left Arm"]=bc.LeftArmColor3,["Right Arm"]=bc.RightArmColor3,["Left Leg"]=bc.LeftLegColor3,["Right Leg"]=bc.RightLegColor3}
+				for partName, color in pairs(colorMap) do local p = rig:FindFirstChild(partName); if p then p.Color = color end end
+				bc:Clone().Parent = rig
+			end
+			local srcHead = srcChar:FindFirstChild("Head"); local dstHead = rig:FindFirstChild("Head")
+			if srcHead and dstHead then
+				dstHead.Color = srcHead.Color
+				for _, m in ipairs(dstHead:GetChildren()) do if m:IsA("SpecialMesh") or m:IsA("BlockMesh") then m:Destroy() end end
+				local srcMesh = srcHead:FindFirstChildOfClass("SpecialMesh")
+				if srcMesh then srcMesh:Clone().Parent = dstHead
+				else local mesh = Instance.new("SpecialMesh"); mesh.MeshType = Enum.MeshType.Head; mesh.Scale = Vector3.new(1,1,1); mesh.Parent = dstHead end
+			end
+			for _, obj in ipairs(srcChar:GetChildren()) do
+				if obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") then obj:Clone().Parent = rig end
+			end
+			for _, obj in ipairs(srcChar:GetChildren()) do
+				if obj:IsA("Accessory") then
+					local acc = obj:Clone(); local handle = acc:FindFirstChild("Handle")
+					if handle then
+						for _, w in ipairs(handle:GetChildren()) do if w:IsA("Weld") or w:IsA("Motor6D") or w:IsA("Snap") then w:Destroy() end end
+						local att = handle:FindFirstChildOfClass("Attachment"); local targetPartName = "Head"
+						if att then
+							local n = att.Name:lower()
+							if n:find("hat") or n:find("hair") or n:find("facefront") or n:find("face") then targetPartName = "Head"
+							elseif n:find("neck") or n:find("bodyfront") or n:find("body") or n:find("torso") then targetPartName = "Torso"
+							elseif n:find("leftarm") or n:find("left_arm") then targetPartName = "Left Arm"
+							elseif n:find("rightarm") or n:find("right_arm") then targetPartName = "Right Arm"
+							elseif n:find("leftleg") or n:find("left_leg") then targetPartName = "Left Leg"
+							elseif n:find("rightleg") or n:find("right_leg") then targetPartName = "Right Leg" end
+						end
+						local targetPart = rig:FindFirstChild(targetPartName)
+						if targetPart then
+							local weld = Instance.new("Weld"); weld.Part0 = targetPart; weld.Part1 = handle
+							if att then local dstAtt = targetPart:FindFirstChild(att.Name); if dstAtt then weld.C0 = dstAtt.CFrame; weld.C1 = att.CFrame end end
+							weld.Parent = handle
+						end
+						handle.Anchored = false; handle.CanCollide = false
+					end
+					acc.Parent = rig
+				end
+			end
+		end
+		stripRig(rig)
+		local cache = State.vpSkinCache
+		if cache and cache.type == "desc" and cache.data then
+			applyFromDesc(rig, cache.data)
+		elseif cache and cache.type == "char" and cache.data then
+			applyFromCharSource(rig, cache.data)
+		end
+		local head = rig:FindFirstChild("Head")
+		if head then
+			local existingNose = rig:FindFirstChild("Nose")
+			if existingNose then existingNose:Destroy() end
+			local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.BrickColor = BrickColor.new("Bright red"); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = rig
+			local noseWeld = Instance.new("Weld"); noseWeld.Part0 = head; noseWeld.Part1 = nose; noseWeld.C0 = CFrame.new(0,0,-0.65); noseWeld.Parent = head
+		end
+	end
+end))
+
+table.insert(Data.connections, UI.vpDespawnDummyBtn.MouseButton1Click:Connect(function()
+	despawnSpawnDummy()
+end))
 
 local function makeRig()
 	local model = Instance.new("Model"); model.Name = "PreviewRig"
@@ -1587,8 +1792,23 @@ local function applyFromDescription(rig, desc)
 end
 
 local function applyPlayerSkin(query)
-	if not Data.ghostChar then return end
-	local rig = Data.ghostChar
+	State.vpSkinQuery = query
+	local rigsToApply = {}
+	if Data.ghostChar then table.insert(rigsToApply, Data.ghostChar) end
+	if Data.spawnDummy then table.insert(rigsToApply, Data.spawnDummy) end
+	if #rigsToApply == 0 then 
+		UI.vpSkinStatusLabel.Text = "waiting for dummy..."; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
+		local checks = 0
+		while checks < 20 do
+			task.wait(0.1)
+			if Data.ghostChar then 
+				table.insert(rigsToApply, Data.ghostChar)
+				break 
+			end
+			checks = checks + 1
+		end
+		if #rigsToApply == 0 then return end
+	end
 	UI.vpSkinStatusLabel.Text = "loading..."; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
 	task.spawn(function()
 		local resolvedId
@@ -1597,32 +1817,33 @@ local function applyPlayerSkin(query)
 		else
 			local ok, uid = pcall(function() return Services.Players:GetUserIdFromNameAsync(query) end)
 			if ok and uid then resolvedId = uid
-			else UI.vpSkinStatusLabel.Text = "user not found"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(65,65,65); return end
+			else UI.vpSkinStatusLabel.Text = "user not found"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(65,65,65); State.vpSkinCache = nil; return end
 		end
 		local ingameChar = nil
 		for _, p in ipairs(Services.Players:GetPlayers()) do
 			if p.UserId == resolvedId and p.Character then ingameChar = p.Character; break end
 		end
 		if ingameChar then
-			stripRigAppearance(rig); applyFromChar(rig, ingameChar)
-			State.vpSkinQuery = query; State.vpSkinCache = {type="char", data=ingameChar}
+			local clonedChar = ingameChar:Clone()
+			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromChar(rig, clonedChar) end
+			State.vpSkinCache = {type="char", data=clonedChar}
 			UI.vpSkinStatusLabel.Text = "from server: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return
 		end
 		local desc; local ok, result = pcall(function() desc = Services.Players:GetHumanoidDescriptionFromUserId(resolvedId) end)
 		if ok and desc then
-			stripRigAppearance(rig); local applied = applyFromDescription(rig, desc)
-			if applied then
-				State.vpSkinQuery = query; State.vpSkinCache = {type="desc", data=desc}
-				UI.vpSkinStatusLabel.Text = "from api: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
-			else UI.vpSkinStatusLabel.Text = "apply failed"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(65,65,65) end
+			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromDescription(rig, desc) end
+			State.vpSkinCache = {type="desc", data=desc}
+			UI.vpSkinStatusLabel.Text = "from api: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
 			return
 		end
 		local appearanceModel; ok, result = pcall(function() appearanceModel = Services.Players:GetCharacterAppearanceAsync(resolvedId) end)
 		if ok and appearanceModel then
-			stripRigAppearance(rig); applyFromChar(rig, appearanceModel)
-			State.vpSkinQuery = query; State.vpSkinCache = {type="char", data=appearanceModel}
+			local clonedAppearance = appearanceModel:Clone()
+			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromChar(rig, clonedAppearance) end
+			State.vpSkinCache = {type="char", data=clonedAppearance}
 			UI.vpSkinStatusLabel.Text = "from appearance: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return
 		end
+		State.vpSkinCache = nil
 		UI.vpSkinStatusLabel.Text = "failed to load skin"; UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(65,65,65)
 	end)
 end
@@ -1662,7 +1883,6 @@ local function previewAnim(id)
 		Data.ghostChar = rig; Data.vpAnimator = animator; Data.vpRootPart = rootPart
 		reapplyCachedSkin(rig)
 		vpCamera.CFrame = CFrame.new(Vector3.new(0,5,State.vpZoomDist), Vector3.new(0,4,0))
-		task.wait(0.1)
 		local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. id
 		local track; pcall(function() track = animator:LoadAnimation(anim) end)
 		if track then
@@ -1688,12 +1908,16 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(functio
 		elseif State.vpPaused and State.vpPausedLength > 0 then
 			State.vpPausedAt = rel * State.vpPausedLength
 			if Data.vpScrubTrack then Data.vpScrubTrack.TimePosition = State.vpPausedAt end
+			spawnDummyPausedAt = rel * (Data.tempSpawnScrubTrack and Data.tempSpawnScrubTrack.Length or 1)
+			if Data.tempSpawnScrubTrack then Data.tempSpawnScrubTrack.TimePosition = spawnDummyPausedAt end
 		end
 	end
+	local trackLen = Data.vpTrack and Data.vpTrack.Length > 0 and Data.vpTrack.Length or (Data.spawnDummyTrack and Data.spawnDummyTrack.Length > 0 and Data.spawnDummyTrack.Length or (Data.tempSpawnScrubTrack and Data.tempSpawnScrubTrack.Length > 0 and Data.tempSpawnScrubTrack.Length or 0))
+	local trackPos = Data.vpTrack and Data.vpTrack.TimePosition or (Data.spawnDummyTrack and Data.spawnDummyTrack.TimePosition or (Data.tempSpawnScrubTrack and Data.tempSpawnScrubTrack.TimePosition or 0))
 	if State.vpPaused and State.vpPausedLength > 0 then
 		UI.vpScrubFill.Size = UDim2.new(math.clamp(State.vpPausedAt/State.vpPausedLength,0,1),0,1,0); UI.vpScrubFill.BackgroundColor3 = Color3.fromRGB(200,50,50)
-	elseif Data.vpTrack and Data.vpTrack.Length > 0 then
-		UI.vpScrubFill.Size = UDim2.new(math.clamp(Data.vpTrack.TimePosition/Data.vpTrack.Length,0,1),0,1,0)
+	elseif trackLen > 0 then
+		UI.vpScrubFill.Size = UDim2.new(math.clamp(trackPos/trackLen,0,1),0,1,0)
 		UI.vpScrubFill.BackgroundColor3 = Color3.fromRGB(200,50,50)
 	elseif not State.vpScrubbing then UI.vpScrubFill.Size = UDim2.new(0,0,1,0) end
 	if State.vpPaused then
@@ -1736,6 +1960,7 @@ end))
 local function popPreview(id)
 	State.vpCurrentId = id; UI.vpIdLabel.Text = "ID: " .. id; UI.vpTitle.Text = "preview — " .. id
 	UI.vpIdInput.Text = id; UI.viewportWin.Visible = true; previewAnim(id)
+	if Data.spawnDummy and id then playOnSpawnDummy(id, tonumber(UI.vpSpeedBox.Text) or 1, State.vpLooped) end
 end
 table.insert(Data.connections, UI.vpIdGoBtn.MouseButton1Click:Connect(function()
 	local id = grabId(UI.vpIdInput.Text); if id and id ~= "" then popPreview(id) end
@@ -1745,9 +1970,12 @@ table.insert(Data.connections, UI.vpIdInput.FocusLost:Connect(function(enter)
 end))
 table.insert(Data.connections, UI.vpPlayBtn.MouseButton1Click:Connect(function()
 	if State.vpCurrentId then previewAnim(State.vpCurrentId) end
+	if Data.spawnDummy and State.vpCurrentId then playOnSpawnDummy(State.vpCurrentId, tonumber(UI.vpSpeedBox.Text) or 1, State.vpLooped) end
 end))
 table.insert(Data.connections, UI.vpStopBtn.MouseButton1Click:Connect(function()
 	if Data.vpTrack then pcall(function() Data.vpTrack:Stop(0) end); Data.vpTrack = nil end; nukeGhost()
+	for _, track in ipairs(Data.spawnDummyAnimator and Data.spawnDummyAnimator:GetPlayingAnimationTracks() or {}) do track:Stop(0) end
+	Data.spawnDummyTrack = nil
 end))
 table.insert(Data.connections, UI.vpPlaySelfBtn.MouseButton1Click:Connect(function()
 	if State.vpCurrentId then fireAnim(State.vpCurrentId, tonumber(UI.vpSpeedBox.Text) or 1, State.vpLooped) end
@@ -1771,16 +1999,19 @@ end))
 table.insert(Data.connections, UI.vpSpeedBox:GetPropertyChangedSignal("Text"):Connect(function()
 	local num = tonumber(UI.vpSpeedBox.Text:match("[%d%.]+"))
 	if num and Data.vpTrack and Data.vpTrack.IsPlaying then Data.vpTrack:AdjustSpeed(num) end
+	if num and Data.spawnDummyTrack and Data.spawnDummyTrack.IsPlaying then Data.spawnDummyTrack:AdjustSpeed(num) end
 end))
 table.insert(Data.connections, UI.vpTimeBox:GetPropertyChangedSignal("Text"):Connect(function()
 	local num = tonumber(UI.vpTimeBox.Text:match("[%d%.]+"))
 	if num and Data.vpTrack and Data.vpTrack.IsPlaying then Data.vpTrack.TimePosition = math.clamp(num,0,Data.vpTrack.Length) end
+	if num and Data.spawnDummyTrack and Data.spawnDummyTrack.IsPlaying then Data.spawnDummyTrack.TimePosition = math.clamp(num,0,Data.spawnDummyTrack.Length) end
 end))
 table.insert(Data.connections, UI.vpLoopToggle.MouseButton1Click:Connect(function()
 	State.vpLooped = not State.vpLooped
 	UI.vpLoopToggle.Text = "Loop: " .. (State.vpLooped and "ON" or "OFF")
 	UI.vpLoopToggle.BackgroundColor3 = State.vpLooped and Color3.fromRGB(28,28,28) or Color3.fromRGB(8,8,8)
 	if Data.vpTrack then Data.vpTrack.Looped = State.vpLooped end
+	if Data.spawnDummyTrack then Data.spawnDummyTrack.Looped = State.vpLooped end
 end))
 table.insert(Data.connections, UI.previewToggle.MouseButton1Click:Connect(function()
 	UI.viewportWin.Visible = not UI.viewportWin.Visible
@@ -2437,7 +2668,6 @@ local function logIt(id, name, playerName, priority)
 					entryFrame.LayoutOrder = -Data.logOrder 
 				end
 				
-				UI.list.CanvasPosition = Vector2.new(0, 0)
 			end
 		end
 	end
@@ -2449,8 +2679,8 @@ refreshColors = function()
 	for id, entry in pairs(Data.animFrames) do
 		if id:find("__frame", 1, true) then continue end 
 		local pureId = id:match("^([%d]+)")
-		if Data.trueBanned[pureId] then entry.TextColor3 = Color3.fromRGB(210,70,70)
-		elseif Data.banned[pureId] then entry.TextColor3 = Color3.fromRGB(160,60,60)
+		if Data.trueBanned[pureId] then entry.TextColor3 = Color3.fromRGB(139,0,0)
+		elseif Data.banned[pureId] then entry.TextColor3 = Color3.fromRGB(200,50,50)
 		elseif Data.logBlacklist[pureId] then entry.TextColor3 = Color3.fromRGB(150,100,200)
 		elseif playingIds[pureId] then entry.TextColor3 = Color3.fromRGB(220,240,255)
 		else entry.TextColor3 = Color3.fromRGB(190,190,190) end
