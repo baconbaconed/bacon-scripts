@@ -832,11 +832,6 @@ table.insert(Data.connections, UI.minimize.MouseButton1Click:Connect(function()
 		UI.minimize.Text = "-"
 	end
 end))
-table.insert(Data.connections, UI.closeButton.MouseButton1Click:Connect(function()
-	State.running = false
-	for _, connection in pairs(Data.connections) do connection:Disconnect() end
-	UI.gui:Destroy()
-end))
 
 local function doFilter()
 	local query = UI.searchBox.Text:lower(); local pf = UI.playerFilterBox.Text:lower(); local priF = UI.priorityFilterBox.Text:lower()
@@ -1537,8 +1532,9 @@ UI.vpSpawnDummyBtn = Instance.new("TextButton"); UI.vpSpawnDummyBtn.Text = "＋ 
 UI.vpSpawnDummyBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpSpawnDummyBtn.TextColor3 = Color3.fromRGB(140,210,145); UI.vpSpawnDummyBtn.BorderSizePixel = 0; UI.vpSpawnDummyBtn.Font = Enum.Font.Code; UI.vpSpawnDummyBtn.TextSize = 10; UI.vpSpawnDummyBtn.ZIndex = 6; UI.vpSpawnDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpSpawnDummyBtn,4)
 mkStroke(UI.vpSpawnDummyBtn, Color3.fromRGB(45,80,48), 1)
 
-UI.vpDespawnDummyBtn = Instance.new("TextButton"); UI.vpDespawnDummyBtn.Text = "－ Despawn"; UI.vpDespawnDummyBtn.Position = UDim2.new(0.5,3,0,spawnDummySectionY); UI.vpDespawnDummyBtn.Size = UDim2.new(0.5,-8,0,22)
-UI.vpDespawnDummyBtn.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.vpDespawnDummyBtn.TextColor3 = Color3.fromRGB(255,255,255); UI.vpDespawnDummyBtn.BorderSizePixel = 0; UI.vpDespawnDummyBtn.Font = Enum.Font.Code; UI.vpDespawnDummyBtn.TextSize = 10; UI.vpDespawnDummyBtn.ZIndex = 6; UI.vpDespawnDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpDespawnDummyBtn,4)
+UI.vpDespawnDummyBtn = Instance.new("TextButton"); UI.vpDespawnDummyBtn.Text = "- despawn"; UI.vpDespawnDummyBtn.Position = UDim2.new(0.5,3,0,spawnDummySectionY); UI.vpDespawnDummyBtn.Size = UDim2.new(0.5,-8,0,22)
+UI.vpDespawnDummyBtn.BackgroundColor3 = Color3.fromRGB(38,22,22); UI.vpDespawnDummyBtn.TextColor3 = Color3.fromRGB(210,130,130); UI.vpDespawnDummyBtn.BorderSizePixel = 0; UI.vpDespawnDummyBtn.Font = Enum.Font.Code; UI.vpDespawnDummyBtn.TextSize = 10; UI.vpDespawnDummyBtn.ZIndex = 6; UI.vpDespawnDummyBtn.Parent = UI.viewportWin; mkCorner(UI.vpDespawnDummyBtn,4)
+mkStroke(UI.vpDespawnDummyBtn, Color3.fromRGB(75,40,40), 1)
 
 local function makeSpawnDummy()
 	if Data.spawnDummy then pcall(function() Data.spawnDummy:Destroy() end); Data.spawnDummy = nil; Data.spawnDummyAnimator = nil end
@@ -1580,6 +1576,13 @@ end
 local function despawnSpawnDummy()
 	if Data.spawnDummy then pcall(function() Data.spawnDummy:Destroy() end); Data.spawnDummy = nil; Data.spawnDummyAnimator = nil end
 end
+
+table.insert(Data.connections, UI.closeButton.MouseButton1Click:Connect(function()
+	State.running = false
+	despawnSpawnDummy()
+	for _, connection in pairs(Data.connections) do connection:Disconnect() end
+	UI.gui:Destroy()
+end))
 
 local function playOnSpawnDummy(animId, speed, loop)
 	if not Data.spawnDummy or not Data.spawnDummyAnimator then return end
