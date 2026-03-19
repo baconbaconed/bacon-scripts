@@ -50,6 +50,20 @@ local Data = {
     
 }
 
+local function cleanupOldUI()
+	local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
+	if success and coreGui then
+		local existing = coreGui:FindFirstChild("BaconLoggerGui")
+		if existing then pcall(function() existing:Destroy() end) end
+	end
+	local success2, playerGui = pcall(function() return game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui") end)
+	if success2 and playerGui then
+		local existing = playerGui:FindFirstChild("BaconLoggerGui")
+		if existing then pcall(function() existing:Destroy() end) end
+	end
+end
+cleanupOldUI()
+
 local State = {
 	replacementFrozen = false,
 	looped = false,
