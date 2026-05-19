@@ -20,7 +20,7 @@ local Data = {
 	scriptTracks = {},
 	keybinds = {},
 	replacements = {},
-	advReplacements = {},  -- new: { id, triggerDelay, priorityFilter, layers[], enabled }
+	advReplacements = {},  
 	favorites = {},
 	customNames = {},
 	favoriteEntries = {},
@@ -35,7 +35,7 @@ local Data = {
 	vpAnimator = nil,
 	vpRootPart = nil,
 	vpScrubTrack = nil,
-	vpLayerTracks = {},  -- tracks playing on dummy for adv replacement test
+	vpLayerTracks = {},  
 }
 local State = {
 	replacementFrozen = false,
@@ -167,7 +167,7 @@ local function killAnim(id)
 	end
 end
 
--- clear table in-place to avoid upvalue reference bugs
+
 local function clearTable(t)
 	for k in pairs(t) do t[k] = nil end
 end
@@ -532,7 +532,7 @@ local function button(text, y, callback, bgColor, borderColor)
 	table.insert(Data.connections, b.MouseButton1Click:Connect(callback))
 end
 
-local function refreshColors() end -- forward ref, defined later
+local function refreshColors() end 
 
 button("Play", 255, function()
 	local id = UI.idBox.Text; local speed = tonumber(UI.speedBox.Text) or 1; local scrub = tonumber(UI.timeBox.Text) or 0
@@ -699,7 +699,7 @@ table.insert(Data.connections, UI.searchBox:GetPropertyChangedSignal("Text"):Con
 table.insert(Data.connections, UI.playerFilterBox:GetPropertyChangedSignal("Text"):Connect(doFilter))
 table.insert(Data.connections, UI.priorityFilterBox:GetPropertyChangedSignal("Text"):Connect(doFilter))
 
--- side frame
+
 UI.sideFrame = Instance.new("Frame"); UI.sideFrame.Name = "SideFrame"
 UI.sideFrame.Size = UDim2.new(0,200,0,480); UI.sideFrame.Position = UDim2.new(0,655,0,50)
 UI.sideFrame.BackgroundColor3 = Color3.fromRGB(12,14,18); UI.sideFrame.BorderSizePixel = 0
@@ -764,7 +764,7 @@ UI.groupDropdown.BorderSizePixel = 0; UI.groupDropdown.ZIndex = 20; UI.groupDrop
 UI.groupDropdown.Visible = false; UI.groupDropdown.Parent = UI.sideFrame; mkCorner(UI.groupDropdown,4); mkStroke(UI.groupDropdown,Color3.fromRGB(90,60,180),1)
 do local l = Instance.new("UIListLayout"); l.Padding = UDim.new(0,1); l.Parent = UI.groupDropdown end
 
-local addBind -- forward ref
+local addBind 
 local function refreshGroupDropdown()
 	for _, c in ipairs(UI.groupDropdown:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
 	local count = 0
@@ -865,7 +865,7 @@ table.insert(Data.connections, UI.sideMinimize.MouseButton1Click:Connect(functio
 end))
 table.insert(Data.connections, UI.sideClose.MouseButton1Click:Connect(function() UI.sideFrame.Visible = false end))
 
--- viewport
+
 UI.viewportWin = Instance.new("Frame"); local viewportWin = UI.viewportWin
 viewportWin.Name = "ViewportWindow"; viewportWin.Size = UDim2.new(0,300,0,538)
 viewportWin.Position = UDim2.new(0,670,0,380); viewportWin.BackgroundColor3 = Color3.fromRGB(12,14,18)
@@ -1075,7 +1075,7 @@ UI.vpZoomOut.Position = UDim2.new(0.5,3,0,460); UI.vpZoomOut.Size = UDim2.new(0.
 UI.vpZoomOut.BackgroundColor3 = Color3.fromRGB(40,15,15); UI.vpZoomOut.TextColor3 = Color3.fromRGB(255,160,140)
 UI.vpZoomOut.BorderSizePixel = 0; UI.vpZoomOut.Font = Enum.Font.Code; UI.vpZoomOut.TextSize = 11; UI.vpZoomOut.ZIndex = 6; UI.vpZoomOut.Parent = UI.viewportWin; mkCorner(UI.vpZoomOut,4)
 
--- skin section
+
 local vpSkinLabel = Instance.new("TextLabel"); vpSkinLabel.Text = "username or userid"
 vpSkinLabel.Position = UDim2.new(0,5,0,484); vpSkinLabel.Size = UDim2.new(1,-10,0,12)
 vpSkinLabel.BackgroundTransparency = 1; vpSkinLabel.TextColor3 = Color3.fromRGB(0,160,130)
@@ -1102,7 +1102,7 @@ UI.vpSkinStatusLabel.BackgroundTransparency = 1; UI.vpSkinStatusLabel.TextColor3
 UI.vpSkinStatusLabel.TextXAlignment = Enum.TextXAlignment.Left; UI.vpSkinStatusLabel.Font = Enum.Font.Code
 UI.vpSkinStatusLabel.TextSize = 10; UI.vpSkinStatusLabel.ZIndex = 6; UI.vpSkinStatusLabel.Parent = UI.viewportWin
 
--- rig builder
+
 local function makeRig()
 	local model = Instance.new("Model"); model.Name = "PreviewRig"
 	local function part(name, size)
@@ -1300,7 +1300,7 @@ local function previewAnim(id)
 	end)
 end
 
--- dummy macro execution
+
 local function runMacroOnDummy(macroStr)
 	if not Data.ghostChar or not Data.vpAnimator then
 		flashNotif("load an animation on the dummy first"); return
@@ -1342,7 +1342,7 @@ local function runMacroOnDummy(macroStr)
 	end)
 end
 
--- dummy macro input box, inside viewport window
+
 local vpMacroLabel = Instance.new("TextLabel"); vpMacroLabel.Text = "dummy macro"
 vpMacroLabel.Position = UDim2.new(0,5,0,484); vpMacroLabel.Size = UDim2.new(1,-10,0,12)
 vpMacroLabel.BackgroundTransparency=1; vpMacroLabel.TextColor3=Color3.fromRGB(0,160,130)
@@ -1487,10 +1487,7 @@ table.insert(Data.connections, UI.vpSkinInput.FocusLost:Connect(function(enter)
 	if enter then local query=UI.vpSkinInput.Text:match("^%s*(.-)%s*$"); if query ~= "" and Data.ghostChar then applyPlayerSkin(query) end end end))
 table.insert(Data.connections, UI.vpSkinResetBtn.MouseButton1Click:Connect(function() resetDummySkin() end))
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- ADVANCED REPLACEMENT BUILDER
--- window: separate frame, opened from binds side panel
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 local PRIORITY_ENUM_MAP = {
 	any="any", idle="Idle", movement="Movement", action="Action",
@@ -1555,7 +1552,7 @@ advTestBtn.BackgroundColor3=Color3.fromRGB(0,45,70); advTestBtn.TextColor3=Color
 advTestBtn.BorderSizePixel=0; advTestBtn.Font=Enum.Font.Code; advTestBtn.TextSize=12; advTestBtn.ZIndex=9; advTestBtn.Parent=advReplWin
 mkCorner(advTestBtn,4); mkStroke(advTestBtn,Color3.fromRGB(0,90,140),1)
 
-local currentAdvRule = nil  -- the rule being tested/selected
+local currentAdvRule = nil  
 
 local function buildAdvRuleUI(rule)
 	local ruleFrame = Instance.new("Frame"); ruleFrame.Size=UDim2.new(1,-4,0,0)
@@ -1600,7 +1597,7 @@ local function buildAdvRuleUI(rule)
 		priBtn.Text = priOptions[priIdx]; rule.priorityFilter = priOptions[priIdx]; dumpCfg()
 	end))
 
-	-- enabled toggle
+
 	local enableBtn = Instance.new("TextButton"); enableBtn.Text=rule.enabled~=false and "enabled: ON" or "enabled: OFF"
 	enableBtn.Position=UDim2.new(0,5,0,81); enableBtn.Size=UDim2.new(1,-10,0,18)
 	enableBtn.BackgroundColor3=rule.enabled~=false and Color3.fromRGB(0,45,25) or Color3.fromRGB(45,10,10)
@@ -1614,7 +1611,7 @@ local function buildAdvRuleUI(rule)
 		dumpCfg()
 	end))
 
-	-- layers
+
 	lbl("layers (each plays on top, with timing)", 104, Color3.fromRGB(180,160,0))
 
 	local layerContainer = Instance.new("Frame"); layerContainer.Position=UDim2.new(0,5,0,118)
@@ -1646,7 +1643,7 @@ local function buildAdvRuleUI(rule)
 		llbl("anim id", 4, 2, 80, nil); llbl("speed", 90, 2, 40, nil); llbl("start offset", 136, 2, 55, nil); llbl("weight", 197, 2, 40, nil)
 		local idB  = lbox("id",     0,4,  14, 0.5,-6, layer.id     or "")
 		local spdB = lbox("spd",    0.5,4,14, 0.25,-6,tostring(layer.speed or 1))
-		-- priority dropdown for layer
+
 		local lpriIdx = 1; for i,v in ipairs(PRIORITY_OPTIONS) do if v==(layer.priority or "action4") then lpriIdx=i; break end end
 		local lpriBtn = Instance.new("TextButton"); lpriBtn.Text=PRIORITY_OPTIONS[lpriIdx]
 		lpriBtn.Position=UDim2.new(0.75,4,0,14); lpriBtn.Size=UDim2.new(0.25,-8,0,18)
@@ -1688,7 +1685,7 @@ local function buildAdvRuleUI(rule)
 
 	for _, layer in ipairs(rule.layers or {}) do addLayerRow(layer) end
 
-	-- add layer button, delete rule button — positioned below layerContainer dynamically
+
 	local addLayerBtn = Instance.new("TextButton"); addLayerBtn.Text="+ add layer"
 	addLayerBtn.BackgroundColor3=Color3.fromRGB(0,40,30); addLayerBtn.TextColor3=Color3.fromRGB(0,200,150)
 	addLayerBtn.BorderSizePixel=0; addLayerBtn.Font=Enum.Font.Code; addLayerBtn.TextSize=11; addLayerBtn.ZIndex=11; addLayerBtn.Parent=ruleFrame; mkCorner(addLayerBtn,3)
@@ -1699,7 +1696,7 @@ local function buildAdvRuleUI(rule)
 	selectBtn.BackgroundColor3=Color3.fromRGB(0,35,55); selectBtn.TextColor3=Color3.fromRGB(100,180,255)
 	selectBtn.BorderSizePixel=0; selectBtn.Font=Enum.Font.Code; selectBtn.TextSize=11; selectBtn.ZIndex=11; selectBtn.Parent=ruleFrame; mkCorner(selectBtn,3)
 
-	-- layout bottom buttons dynamically below layerContainer
+
 	local function updateBottomBtns()
 		local top = 118 + layerLayout.AbsoluteContentSize.Y + 6
 		addLayerBtn.Position=UDim2.new(0,5,0,top); addLayerBtn.Size=UDim2.new(0.33,-6,0,22)
@@ -1763,18 +1760,15 @@ table.insert(Data.connections, advTestBtn.MouseButton1Click:Connect(function()
 	flashNotif("testing rule on dummy...")
 end))
 
--- open adv builder button in side panel bottom row
+
 local advReplOpenBtn = Instance.new("TextButton"); advReplOpenBtn.Text="Adv Repl"
 advReplOpenBtn.Size=UDim2.new(1,-10,0,22); advReplOpenBtn.Position=UDim2.new(0,5,1,-56)
 advReplOpenBtn.BackgroundColor3=Color3.fromRGB(0,50,40); advReplOpenBtn.TextColor3=Color3.fromRGB(0,210,160)
 advReplOpenBtn.ZIndex=3; advReplOpenBtn.Parent=UI.sideFrame; mkCorner(advReplOpenBtn,4); mkStroke(advReplOpenBtn,Color3.fromRGB(0,110,90),1)
 table.insert(Data.connections, advReplOpenBtn.MouseButton1Click:Connect(function() advReplWin.Visible=not advReplWin.Visible end))
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- adv replacement runtime engine
--- fires when a trigger anim is detected playing on the local player
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local advActiveThreads = {}  -- id -> thread token, prevents double-fire
+
+local advActiveThreads = {}  
 
 local function fireAdvReplacement(rule)
 	local ruleId = tostring(rule)
@@ -1826,14 +1820,14 @@ local function checkAdvReplacements(track, playerName)
 	end
 end
 
--- clean up stale adv threads when trigger anim stops
+
 local function onAdvTrackStopped(id)
 	for _, rule in ipairs(Data.advReplacements) do
 		if rule.id == id then advActiveThreads[tostring(rule)] = nil end
 	end
 end
 
--- simple replacement system (original)
+
 local function addReplUI(id, targetId, speed, loop, enabled)
 	if enabled == nil then enabled = true end
 	local rFrame=Instance.new("Frame"); rFrame.Size=UDim2.new(1,0,0,145); rFrame.BackgroundColor3=Color3.fromRGB(20,22,30)
@@ -2104,7 +2098,7 @@ local function trackSeen(track, playerName)
 		local rep=Data.replacements[id]
 		if rep.enabled ~= false then stopTrack(track); Data.seenTracks[track]=true; fireReplacement(id,rep); return end
 	end
-	-- check adv replacements
+
 	checkAdvReplacements(track, playerName)
 	if playerName ~= player.Name and not State.globalLogging then return end
 	if Data.seenTracks[track] then return end
