@@ -1863,8 +1863,8 @@ local function takeNPC(model)
         if npcTarget then
           local mp=UserInputService:GetMouseLocation()
           if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            npcCam.yaw=npcCam.yaw-(mp.X-npcCam._lastMouse.X)*0.005
-            npcCam.pitch=math.clamp(npcCam.pitch-(mp.Y-npcCam._lastMouse.Y)*0.005,-1.2,0.4)
+            npcCam.yaw=npcCam.yaw+(mp.X-npcCam._lastMouse.X)*0.005
+            npcCam.pitch=math.clamp(npcCam.pitch+(mp.Y-npcCam._lastMouse.Y)*0.005,-1.2,0.4)
           end
           npcCam._lastMouse=mp
         end
@@ -1899,8 +1899,8 @@ local function takeNPC(model)
     local mc=UserInputService.InputChanged:Connect(function(inp)
         if inp.UserInputType==Enum.UserInputType.MouseMovement then
           if rotating and false then -- handled in camera loop via polled mouse deltas
-            npcCam.yaw=npcCam.yaw-inp.Delta.X*0.005
-            npcCam.pitch=math.clamp(npcCam.pitch-inp.Delta.Y*0.005,-1.2,0.4)
+            npcCam.yaw=npcCam.yaw+inp.Delta.X*0.005
+            npcCam.pitch=math.clamp(npcCam.pitch+inp.Delta.Y*0.005,-1.2,0.4)
           end
         elseif inp.UserInputType==Enum.UserInputType.MouseWheel then
             npcCam.dist = math.clamp(npcCam.dist - inp.Delta.Z*2, 3, 40)
@@ -1914,8 +1914,8 @@ local function takeNPC(model)
         local nr=npcTarget:FindFirstChild("HumanoidRootPart")
         if not nh or not nr then return end
         local mx,mz=0,0
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then mz-=1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then mz+=1 end
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then mz+=1 end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then mz-=1 end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then mx-=1 end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then mx+=1 end
         if mx~=0 or mz~=0 then
