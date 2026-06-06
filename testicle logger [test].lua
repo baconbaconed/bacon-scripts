@@ -2130,8 +2130,8 @@ end
 table.insert(Data.connections, viewportWin.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not UI.activeDragger then
 		UI.activeDragger = "vp"; State.draggingVP = true; State.dragStartVP = input.Position; State.startPosVP = viewportWin.Position
-		do local m = Services.UserInputService:GetMouseLocation(); local fp = UI.vpFrame.AbsolutePosition; local fs = UI.vpFrame.AbsoluteSize
-			if m.X >= fp.X and m.X <= fp.X + fs.X and m.Y >= fp.Y and m.Y <= fp.Y + fs.Y then State.draggingVP = false; if UI.activeDragger == "vp" then UI.activeDragger = nil end; return end
+		do local px, py = input.Position.X, input.Position.Y; local fp = UI.vpFrame.AbsolutePosition; local fs = UI.vpFrame.AbsoluteSize
+			if px >= fp.X and px <= fp.X + fs.X and py >= fp.Y and py <= fp.Y + fs.Y then State.draggingVP = false; if UI.activeDragger == "vp" then UI.activeDragger = nil end; return end
 		end
 		table.insert(Data.connections, input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
@@ -2916,8 +2916,8 @@ table.insert(Data.connections, Services.UserInputService.InputChanged:Connect(fu
 		local mouse = Services.UserInputService:GetMouseLocation()
 		local deltaX = mouse.X - vpCamState.lastMouseX
 		local deltaY = mouse.Y - vpCamState.lastMouseY
-		State.vpYaw = State.vpYaw - math.rad(deltaX * 0.5)
-		State.vpPitch = math.clamp((State.vpPitch or 0) + math.rad(deltaY * 0.5), -math.pi/2.5, math.pi/2.5)
+		State.vpYaw = State.vpYaw - math.rad(deltaX * 0.65)
+		State.vpPitch = math.clamp((State.vpPitch or 0) + math.rad(deltaY * 0.65), -math.pi/2.5, math.pi/2.5)
 		vpCamState.lastMouseX = mouse.X; vpCamState.lastMouseY = mouse.Y
 	end
 end))
