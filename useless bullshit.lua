@@ -2783,7 +2783,7 @@ local npcSTabLL = Instance.new("UIListLayout",npcSTabRow)
 npcSTabLL.FillDirection=Enum.FillDirection.Horizontal; npcSTabLL.Padding=UDim.new(0,2)
 Instance.new("UIPadding",npcSTabRow).PaddingLeft=UDim.new(0,3)
 
-local npcSTabs = {"Control","Auras","Tools"}
+local npcSTabs = {"Control","Auras","Guns"}
 local npcSBtns = {}
 local npcSPanels = {}
 
@@ -2824,7 +2824,7 @@ npcToolsPanel.Size=UDim2.new(1,0,1,0); npcToolsPanel.BackgroundTransparency=1
 npcToolsPanel.BorderSizePixel=0; npcToolsPanel.ScrollBarThickness=2
 npcToolsPanel.ScrollBarImageColor3=ACC2; npcToolsPanel.Visible=false
 npcToolsPanel.Parent=npcSpCont
-npcSPanels["Tools"]=npcToolsPanel
+npcSPanels["Guns"]=npcToolsPanel
 local npcToolsLL = Instance.new("UIListLayout", npcToolsPanel)
 npcToolsLL.SortOrder = Enum.SortOrder.LayoutOrder
 npcToolsLL.Padding = UDim.new(0, 6)
