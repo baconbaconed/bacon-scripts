@@ -127,6 +127,7 @@ local State = {
 	vpPausedAt = 0,
 	vpPausedLength = 0,
 	vpYaw = 0,
+	vpPitch = 0,
 	vpZoomDist = 11,
 	vpRigType = "R6",
 	vpCurrentId = nil,
@@ -2129,6 +2130,9 @@ end
 table.insert(Data.connections, viewportWin.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not UI.activeDragger then
 		UI.activeDragger = "vp"; State.draggingVP = true; State.dragStartVP = input.Position; State.startPosVP = viewportWin.Position
+		do local m = Services.UserInputService:GetMouseLocation(); local fp = UI.vpFrame.AbsolutePosition; local fs = UI.vpFrame.AbsoluteSize
+			if m.X >= fp.X and m.X <= fp.X + fs.X and m.Y >= fp.Y and m.Y <= fp.Y + fs.Y then State.draggingVP = false; if UI.activeDragger == "vp" then UI.activeDragger = nil end; return end
+		end
 		table.insert(Data.connections, input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				State.draggingVP = false; if UI.activeDragger == "vp" then UI.activeDragger = nil end
@@ -2581,7 +2585,7 @@ local function makeRig()
 			if r15root and r15hum then
 				r15hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; r15hum.WalkSpeed = 0; r15hum.JumpPower = 0
 				r15root.Anchored = true; r15root.Transparency = 1; r15.PrimaryPart = r15root
-				r15root.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0, State.vpYaw, 0)
+				r15root.CFrame = CFrame.new(0,5,0)
 				local r15head = r15:FindFirstChild("Head")
 				if r15head then
 					local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = r15
@@ -2604,7 +2608,7 @@ local function makeRig()
 	local root = part("HumanoidRootPart", Vector3.new(2,2,1)); local torso = part("Torso", Vector3.new(2,2,1)); local head = part("Head", Vector3.new(2,1,1))
 	local rArm = part("Right Arm", Vector3.new(1,2,1)); local lArm = part("Left Arm", Vector3.new(1,2,1))
 	local rLeg = part("Right Leg", Vector3.new(1,2,1)); local lLeg = part("Left Leg", Vector3.new(1,2,1))
-	root.Anchored = true; root.Transparency = 1; root.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0,State.vpYaw,0); model.PrimaryPart = root
+	root.Anchored = true; root.Transparency = 1; root.CFrame = CFrame.new(0,5,0); model.PrimaryPart = root
 	local hum = Instance.new("Humanoid"); hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; hum.WalkSpeed = 0; hum.JumpPower = 0; hum.Parent = model
 	local function motor(name, p0, p1, c0, c1) local m = Instance.new("Motor6D"); m.Name = name; m.Part0 = p0; m.Part1 = p1; m.C0 = c0; m.C1 = c1; m.Parent = p0 end
 	motor("RootJoint", root, torso, CFrame.new(0,0,0,-1,0,0,0,0,1,0,1,0), CFrame.new(0,0,0,-1,0,0,0,0,1,0,1,0))
@@ -2823,7 +2827,7 @@ local function fmtTime(n) return string.format("%.2f", n) end
 table.insert(Data.connections, Services.RunService.RenderStepped:Connect(function()
 	local mouse = Services.UserInputService:GetMouseLocation()
 	if UI.viewportWin.Visible and Data.ghostChar then
-		local camPitch = (vpCamState and vpCamState.camPitchOffset) or 0
+		local camPitch = State.vpPitch or 0
 
 
 		local offsetX = State.vpCamOffsetX or 0
@@ -2888,41 +2892,33 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(functio
 	end
 end))
 
-local vpCamState = {orbiting = false, panning = false, lastMouseX = 0, lastMouseY = 0, camPitchOffset = 0}
+local vpCamState = {orbiting = false, lastMouseX = 0, lastMouseY = 0}
 
-
-table.insert(Data.connections, Services.UserInputService.InputBegan:Connect(function(input, processed)
-	if processed then return end
-	if UI.viewportWin.Visible and Data.ghostChar then
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
-			local mouse = Services.UserInputService:GetMouseLocation()
-			local framePos = UI.vpFrame.AbsolutePosition
-			local frameSize = UI.vpFrame.AbsoluteSize
-			if mouse.X >= framePos.X and mouse.X <= framePos.X + frameSize.X and mouse.Y >= framePos.Y and mouse.Y <= framePos.Y + frameSize.Y then
-				vpCamState.orbiting = true; vpCamState.lastMouseX = mouse.X; vpCamState.lastMouseY = mouse.Y
-			end
-		end
+-- start orbit from clicks directly on the viewport frame (reliable GUI input, either mouse button)
+table.insert(Data.connections, UI.vpFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+		local m = Services.UserInputService:GetMouseLocation()
+		vpCamState.orbiting = true; vpCamState.lastMouseX = m.X; vpCamState.lastMouseY = m.Y
+	end
+end))
+-- zoom via scroll wheel over the viewport (MouseWheel arrives through InputChanged, not InputBegan)
+table.insert(Data.connections, UI.vpFrame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseWheel then
+		local scrollDir = input.Position.Z > 0 and 1 or -1
+		State.vpZoomDist = math.clamp(State.vpZoomDist - (scrollDir * 2), 1, 200)
 	end
 end))
 table.insert(Data.connections, Services.UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then vpCamState.orbiting = false end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then vpCamState.orbiting = false end
 end))
 table.insert(Data.connections, Services.UserInputService.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement and UI.viewportWin.Visible and Data.ghostChar then
+	if vpCamState.orbiting and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local mouse = Services.UserInputService:GetMouseLocation()
-		if vpCamState.orbiting then
-			local deltaX = mouse.X - vpCamState.lastMouseX
-			local deltaY = mouse.Y - vpCamState.lastMouseY
-			State.vpYaw = State.vpYaw - math.rad(deltaX * 0.5)
-			vpCamState.camPitchOffset = math.clamp(vpCamState.camPitchOffset + math.rad(deltaY * 0.5), -math.pi/2.5, math.pi/2.5)
-			vpCamState.lastMouseX = mouse.X; vpCamState.lastMouseY = mouse.Y
-		end
-	end
-end))
-table.insert(Data.connections, Services.UserInputService.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseWheel and UI.viewportWin.Visible and Data.ghostChar then
-		local scrollDir = input.Position.Z > 0 and 1 or -1
-		State.vpZoomDist = math.max(1, State.vpZoomDist - (scrollDir * 2))
+		local deltaX = mouse.X - vpCamState.lastMouseX
+		local deltaY = mouse.Y - vpCamState.lastMouseY
+		State.vpYaw = State.vpYaw - math.rad(deltaX * 0.5)
+		State.vpPitch = math.clamp((State.vpPitch or 0) + math.rad(deltaY * 0.5), -math.pi/2.5, math.pi/2.5)
+		vpCamState.lastMouseX = mouse.X; vpCamState.lastMouseY = mouse.Y
 	end
 end))
 
@@ -2960,19 +2956,15 @@ table.insert(Data.connections, UI.vpRigToggle.MouseButton1Click:Connect(function
 end))
 table.insert(Data.connections, UI.vpRotateCCW.MouseButton1Click:Connect(function()
 	local deg = tonumber(UI.vpPrecisionBox.Text) or 90; State.vpYaw = State.vpYaw + math.rad(deg)
-	if Data.vpRootPart then Data.vpRootPart.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0,State.vpYaw,0) end
 end))
 table.insert(Data.connections, UI.vpRotateCW.MouseButton1Click:Connect(function()
 	local deg = tonumber(UI.vpPrecisionBox.Text) or 90; State.vpYaw = State.vpYaw - math.rad(deg)
-	if Data.vpRootPart then Data.vpRootPart.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0,State.vpYaw,0) end
 end))
 table.insert(Data.connections, UI.vpZoomIn.MouseButton1Click:Connect(function()
-	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = State.vpZoomDist - step
-	vpCamera.CFrame = CFrame.new(Vector3.new(0,5,State.vpZoomDist), Vector3.new(0,4,0))
+	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = math.clamp(State.vpZoomDist - step, 1, 200)
 end))
 table.insert(Data.connections, UI.vpZoomOut.MouseButton1Click:Connect(function()
-	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = State.vpZoomDist + step
-	vpCamera.CFrame = CFrame.new(Vector3.new(0,5,State.vpZoomDist), Vector3.new(0,4,0))
+	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = math.clamp(State.vpZoomDist + step, 1, 200)
 end))
 table.insert(Data.connections, UI.vpSpeedBox:GetPropertyChangedSignal("Text"):Connect(function()
 	local num = tonumber(UI.vpSpeedBox.Text:match("[%d%.]+"))
