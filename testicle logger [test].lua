@@ -128,6 +128,7 @@ local State = {
 	vpPausedLength = 0,
 	vpYaw = 0,
 	vpZoomDist = 11,
+	vpRigType = "R6",
 	vpCurrentId = nil,
 	vpSkinQuery = nil,
 	vpSkinCache = nil,
@@ -2146,7 +2147,7 @@ end))
 
 local vpTop = Instance.new("Frame"); vpTop.Size = UDim2.new(1,0,0,25); vpTop.BackgroundColor3 = Color3.fromRGB(20,20,20); vpTop.BackgroundTransparency = 0; vpTop.BorderSizePixel = 0; vpTop.ZIndex = 6; vpTop.Parent = viewportWin
 do local g = Instance.new("UIGradient"); g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(42,42,42)),ColorSequenceKeypoint.new(1,Color3.fromRGB(20,20,20))}); g.Rotation = 90; g.Parent = vpTop end
-UI.vpTitle = Instance.new("TextLabel"); UI.vpTitle.Text = "preview"; UI.vpTitle.Size = UDim2.new(1,-120,1,0); UI.vpTitle.BackgroundTransparency = 1; UI.vpTitle.TextColor3 = Color3.fromRGB(160,160,160); UI.vpTitle.Font = Enum.Font.Code; UI.vpTitle.TextSize = 13; UI.vpTitle.ZIndex = 7; UI.vpTitle.Parent = vpTop
+UI.vpTitle = Instance.new("TextLabel"); UI.vpTitle.Text = "preview"; UI.vpTitle.Position = UDim2.new(0,55,0,0); UI.vpTitle.Size = UDim2.new(1,-175,1,0); UI.vpTitle.BackgroundTransparency = 1; UI.vpTitle.TextColor3 = Color3.fromRGB(160,160,160); UI.vpTitle.Font = Enum.Font.Code; UI.vpTitle.TextSize = 13; UI.vpTitle.ZIndex = 7; UI.vpTitle.Parent = vpTop
 UI.vpClose = Instance.new("TextButton"); UI.vpClose.Size = UDim2.new(0,25,0,20); UI.vpClose.Position = UDim2.new(1,-27,0,3); UI.vpClose.Text = "X"; UI.vpClose.BackgroundColor3 = Color3.fromRGB(120,30,30); UI.vpClose.TextColor3 = Color3.fromRGB(255,255,255); UI.vpClose.BorderSizePixel = 0; UI.vpClose.Font = Enum.Font.Code; UI.vpClose.TextSize = 11; UI.vpClose.ZIndex = 7; UI.vpClose.Parent = vpTop; mkCorner(UI.vpClose,4); mkStroke(UI.vpClose, Color3.fromRGB(200,50,50), 1)
 UI.vpMinimize = Instance.new("TextButton"); UI.vpMinimize.Size = UDim2.new(0,25,0,20); UI.vpMinimize.Position = UDim2.new(1,-54,0,3); UI.vpMinimize.Text = "-"; UI.vpMinimize.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpMinimize.TextColor3 = Color3.fromRGB(140,210,145); UI.vpMinimize.BorderSizePixel = 0; UI.vpMinimize.Font = Enum.Font.Code; UI.vpMinimize.TextSize = 11; UI.vpMinimize.ZIndex = 7; UI.vpMinimize.Parent = vpTop; mkCorner(UI.vpMinimize,4); mkStroke(UI.vpMinimize, Color3.fromRGB(45,80,48), 1)
 table.insert(Data.connections, UI.vpClose.MouseButton1Click:Connect(function() UI.viewportWin.Visible = false end))
@@ -2568,6 +2569,33 @@ table.insert(Data.connections, UI.vpDespawnDummyBtn.MouseButton1Click:Connect(fu
 end))
 
 local function makeRig()
+	if State.vpRigType == "R15" then
+		local r15
+		local okR15 = pcall(function()
+			r15 = Services.Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
+		end)
+		if okR15 and r15 then
+			r15.Name = "PreviewRig"
+			local r15root = r15:FindFirstChild("HumanoidRootPart")
+			local r15hum = r15:FindFirstChildOfClass("Humanoid")
+			if r15root and r15hum then
+				r15hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; r15hum.WalkSpeed = 0; r15hum.JumpPower = 0
+				r15root.Anchored = true; r15root.Transparency = 1; r15.PrimaryPart = r15root
+				r15root.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0, State.vpYaw, 0)
+				local r15head = r15:FindFirstChild("Head")
+				if r15head then
+					local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = r15
+					local nw = Instance.new("Weld"); nw.Part0 = r15head; nw.Part1 = nose; nw.C0 = CFrame.new(0,0,-0.65); nw.Parent = r15head
+				end
+				local r15anim = r15hum:FindFirstChildOfClass("Animator"); if not r15anim then r15anim = Instance.new("Animator"); r15anim.Parent = r15hum end
+				r15.Parent = worldModel
+				return r15, r15anim, r15root
+			elseif r15 then
+				pcall(function() r15:Destroy() end)
+			end
+		end
+		-- R15 build failed; fall back to R6 rig below
+	end
 	local model = Instance.new("Model"); model.Name = "PreviewRig"
 	local function part(name, size)
 		local p = Instance.new("Part"); p.Name = name; p.Size = size; p.BrickColor = BrickColor.new("Medium stone grey")
@@ -2920,6 +2948,15 @@ table.insert(Data.connections, UI.vpStopBtn.MouseButton1Click:Connect(function()
 end))
 table.insert(Data.connections, UI.vpPlaySelfBtn.MouseButton1Click:Connect(function()
 	if State.vpCurrentId then fireAnim(State.vpCurrentId, tonumber(UI.vpSpeedBox.Text) or 1, State.vpLooped) end
+end))
+UI.vpRigToggle = Instance.new("TextButton"); UI.vpRigToggle.Size = UDim2.new(0,46,0,20); UI.vpRigToggle.Position = UDim2.new(0,5,0,3)
+UI.vpRigToggle.Text = State.vpRigType; UI.vpRigToggle.BackgroundColor3 = Color3.fromRGB(28,40,55); UI.vpRigToggle.TextColor3 = Color3.fromRGB(150,190,235)
+UI.vpRigToggle.BorderSizePixel = 0; UI.vpRigToggle.Font = Enum.Font.Code; UI.vpRigToggle.TextSize = 11; UI.vpRigToggle.ZIndex = 7; UI.vpRigToggle.Parent = vpTop
+mkCorner(UI.vpRigToggle,4); mkStroke(UI.vpRigToggle, Color3.fromRGB(55,90,125), 1)
+table.insert(Data.connections, UI.vpRigToggle.MouseButton1Click:Connect(function()
+	State.vpRigType = (State.vpRigType == "R15") and "R6" or "R15"
+	UI.vpRigToggle.Text = State.vpRigType
+	if State.vpCurrentId and State.vpCurrentId ~= "" then previewAnim(State.vpCurrentId) end
 end))
 table.insert(Data.connections, UI.vpRotateCCW.MouseButton1Click:Connect(function()
 	local deg = tonumber(UI.vpPrecisionBox.Text) or 90; State.vpYaw = State.vpYaw + math.rad(deg)
