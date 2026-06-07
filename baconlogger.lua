@@ -339,8 +339,7 @@ local function flashNotif(msg, duration, color, level)
 		error = Color3.fromRGB(210,130,130)
 	}
 	color = color or levelColors[level] or Color3.fromRGB(210,210,210)
-	local levelPrefix = "[" .. level:upper() .. "] "
-	UI.notifLabel.Text = levelPrefix .. tostring(msg)
+	UI.notifLabel.Text = tostring(msg)
 	UI.notifLabel.TextColor3 = color
 	UI.notifLabel.BackgroundTransparency = 0
 	UI.notifLabel.Visible = true
@@ -3619,10 +3618,40 @@ local function addAdvReplUI(ruleData)
 		local triggerOpts={"animId","animName","player","priority","anyAnim"}
 		local typeIdx=1
 		for i,v in ipairs(triggerOpts) do if v==(triggerData.type or "animId") then typeIdx=i; break end end
+		local openMenu = nil
 		local typeBtn=mkBtn(tr(24), triggerOpts[typeIdx], Color3.fromRGB(50,50,80), Color3.fromRGB(180,180,220))
 		table.insert(Data.connections, typeBtn.MouseButton1Click:Connect(function()
-			typeIdx=(typeIdx%#triggerOpts)+1; triggerData.type=triggerOpts[typeIdx]; typeBtn.Text=triggerOpts[typeIdx]
-			dumpCfg()
+			if openMenu and openMenu.Parent then openMenu:Destroy(); openMenu = nil; return end
+			local menu = Instance.new("Frame")
+			menu.Size = UDim2.new(0, 120, 0, #triggerOpts * 22 + 4)
+			menu.BackgroundColor3 = Color3.fromRGB(28,28,40)
+			menu.BorderSizePixel = 0; menu.ZIndex = 50
+			mkCorner(menu, 4); mkStroke(menu, Color3.fromRGB(80,80,120), 1)
+			local menuList = Instance.new("UIListLayout"); menuList.Padding = UDim.new(0,2)
+			local menuPad = Instance.new("UIPadding")
+			menuPad.PaddingTop = UDim.new(0,2); menuPad.PaddingBottom = UDim.new(0,2)
+			menuPad.PaddingLeft = UDim.new(0,2); menuPad.PaddingRight = UDim.new(0,2)
+			menuList.Parent = menu; menuPad.Parent = menu
+			local absPos = typeBtn.AbsolutePosition
+			local absSize = typeBtn.AbsoluteSize
+			menu.Position = UDim2.new(0, absPos.X, 0, absPos.Y + absSize.Y + 2)
+			menu.Parent = UI.gui
+			openMenu = menu
+			for _, opt in ipairs(triggerOpts) do
+				local item = Instance.new("TextButton")
+				item.Size = UDim2.new(1,0,0,20)
+				item.BackgroundColor3 = opt == triggerOpts[typeIdx] and Color3.fromRGB(55,55,90) or Color3.fromRGB(35,35,55)
+				item.TextColor3 = Color3.fromRGB(200,200,230)
+				item.Font = Enum.Font.Code; item.TextSize = 10
+				item.Text = opt; item.BorderSizePixel = 0; item.ZIndex = 51
+				item.Parent = menu; mkCorner(item, 3)
+				table.insert(Data.connections, item.MouseButton1Click:Connect(function()
+					for i,v in ipairs(triggerOpts) do if v==opt then typeIdx=i; break end end
+					triggerData.type = opt; typeBtn.Text = opt
+					if openMenu then openMenu:Destroy(); openMenu = nil end
+					dumpCfg()
+				end))
+			end
 		end))
 
 		local valBox=mkInput(tr(24), triggerData.value or "", "value/pattern...")
@@ -3684,10 +3713,40 @@ local function addAdvReplUI(ruleData)
 		local actionOpts={"play","stop","speed","priority","weight","fade","wait","macro","var","flash"}
 		local typeIdx=1
 		for i,v in ipairs(actionOpts) do if v==(actionData.type or "play") then typeIdx=i; break end end
+		local openMenu = nil
 		local typeBtn=mkBtn(ar(24), actionOpts[typeIdx], Color3.fromRGB(50,70,50), Color3.fromRGB(150,200,150))
 		table.insert(Data.connections, typeBtn.MouseButton1Click:Connect(function()
-			typeIdx=(typeIdx%#actionOpts)+1; actionData.type=actionOpts[typeIdx]; typeBtn.Text=actionOpts[typeIdx]
-			dumpCfg()
+			if openMenu and openMenu.Parent then openMenu:Destroy(); openMenu = nil; return end
+			local menu = Instance.new("Frame")
+			menu.Size = UDim2.new(0, 110, 0, #actionOpts * 22 + 4)
+			menu.BackgroundColor3 = Color3.fromRGB(28,40,28)
+			menu.BorderSizePixel = 0; menu.ZIndex = 50
+			mkCorner(menu, 4); mkStroke(menu, Color3.fromRGB(60,100,60), 1)
+			local menuList = Instance.new("UIListLayout"); menuList.Padding = UDim.new(0,2)
+			local menuPad = Instance.new("UIPadding")
+			menuPad.PaddingTop = UDim.new(0,2); menuPad.PaddingBottom = UDim.new(0,2)
+			menuPad.PaddingLeft = UDim.new(0,2); menuPad.PaddingRight = UDim.new(0,2)
+			menuList.Parent = menu; menuPad.Parent = menu
+			local absPos = typeBtn.AbsolutePosition
+			local absSize = typeBtn.AbsoluteSize
+			menu.Position = UDim2.new(0, absPos.X, 0, absPos.Y + absSize.Y + 2)
+			menu.Parent = UI.gui
+			openMenu = menu
+			for _, opt in ipairs(actionOpts) do
+				local item = Instance.new("TextButton")
+				item.Size = UDim2.new(1,0,0,20)
+				item.BackgroundColor3 = opt == actionOpts[typeIdx] and Color3.fromRGB(50,80,50) or Color3.fromRGB(32,48,32)
+				item.TextColor3 = Color3.fromRGB(160,210,160)
+				item.Font = Enum.Font.Code; item.TextSize = 10
+				item.Text = opt; item.BorderSizePixel = 0; item.ZIndex = 51
+				item.Parent = menu; mkCorner(item, 3)
+				table.insert(Data.connections, item.MouseButton1Click:Connect(function()
+					for i,v in ipairs(actionOpts) do if v==opt then typeIdx=i; break end end
+					actionData.type = opt; typeBtn.Text = opt
+					if openMenu then openMenu:Destroy(); openMenu = nil end
+					dumpCfg()
+				end))
+			end
 		end))
 
 		local paramBox=mkInput(ar(24), actionData.param or "", "parameters...")
@@ -4141,9 +4200,26 @@ local function fireAdvReplacement(rule, triggerInfo)
 				local parts = {}
 				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
 				local msg = parts[1] or "Rule fired!"
-				local duration = tonumber(parts[2]) or 2
-				local color = parts[3] or "blue"
-				flashNotif(msg, duration, color)
+				local duration = tonumber(parts[2]) or 5
+				local colorArg = (parts[3] or ""):match("^%s*(.-)%s*$")
+				local color
+
+				local r, g, b = colorArg:match("^(%d+)[%s,]+(%d+)[%s,]+(%d+)$")
+				if r then
+					color = Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b))
+				else
+					local colorMap = {
+						blue   = Color3.fromRGB(100,150,255),
+						red    = Color3.fromRGB(210,130,130),
+						green  = Color3.fromRGB(140,210,145),
+						yellow = Color3.fromRGB(230,190,120),
+						orange = Color3.fromRGB(230,160,80),
+						white  = Color3.fromRGB(220,220,220),
+						purple = Color3.fromRGB(180,140,220),
+					}
+					color = colorMap[colorArg:lower()] or colorMap["blue"]
+				end
+				flashNotif("[rpl] " .. msg, duration, color)
 			end
 		end
 
@@ -4813,4 +4889,4 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(tickLoo
 migrateAdvReplacements()
 if dumpCfg then dumpCfg() end
 print("baconlogger finished loading, enjoy the script dude,")
--- typeshit
+-- soooo tuff 67 phonk sigma trollface trollge cool sonion fart
