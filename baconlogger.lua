@@ -2598,7 +2598,7 @@ local function makeRig()
 				pcall(function() r15:Destroy() end)
 			end
 		end
-		-- R15 build failed; fall back to R6 rig below
+
 	end
 	local model = Instance.new("Model"); model.Name = "PreviewRig"
 	local function part(name, size)
@@ -2894,14 +2894,14 @@ end))
 
 local vpCamState = {orbiting = false, lastMouseX = 0, lastMouseY = 0}
 
--- start orbit from clicks directly on the viewport frame (reliable GUI input, either mouse button)
+
 table.insert(Data.connections, UI.vpFrame.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
 		local m = Services.UserInputService:GetMouseLocation()
 		vpCamState.orbiting = true; vpCamState.lastMouseX = m.X; vpCamState.lastMouseY = m.Y
 	end
 end))
--- zoom via scroll wheel over the viewport (MouseWheel arrives through InputChanged, not InputBegan)
+
 table.insert(Data.connections, UI.vpFrame.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseWheel then
 		local scrollDir = input.Position.Z > 0 and 1 or -1
