@@ -187,17 +187,13 @@ local grabbedNPC  = nil
 local grabbedRoot = nil
 local localGrabArmed = false
 
--- Telekinesis Hold gun (press to grab + float NPC, release to toss)
-local tkGunEnabled   = false
-local tkHeld         = nil   -- currently held NPC model
-local tkHeldRoot     = nil   -- its HumanoidRootPart
-local tkSavedPlatform= nil   -- prior PlatformStand to restore on release
-local TK_FLOAT_Y     = 6     -- studs above the cursor hit point to hover
-local TK_DRAG        = 16    -- follow strength toward the cursor
-
--- Freeze gun (click to stun/freeze an NPC, click again to release)
-local freezeGunEnabled = false
-local frozenNPCs       = {}  -- [model] = { ws, jp, jh, ar, ps } saved stats
+-- Telekinesis + Freeze gun state (single table to conserve main-chunk local registers)
+local NX = {
+    tkGun = false, held = nil, root = nil, savedPS = nil,  -- telekinesis hold gun
+    FLOAT_Y = 6, DRAG = 16,                                -- hover offset / follow strength
+    freezeGun = false, frozen = {},                        -- freeze gun + frozen NPC saved stats
+    dead = false,                                          -- script-unload guard (was 'NX.dead')
+}
 
 -- Targeting helpers for tools
 local _npcToolsRayParams = RaycastParams.new()
@@ -2163,10 +2159,9 @@ local function stampGui(obj, z)
 end
 
 local function reg(c) table.insert(connections,c); return c end
-local unloaded = false
 local function unloadScript()
-    if unloaded then return end
-    unloaded = true
+    if NX.dead then return end
+    NX.dead = true
 
     autoSelectAll = false
     autoSelectNear = false
@@ -2190,14 +2185,14 @@ local function unloadScript()
     grabbedRoot = nil
     localGrabArmed = false
 
-    tkGunEnabled = false
-    freezeGunEnabled = false
-    if tkHeld then
-        local h = tkHeld:FindFirstChildOfClass("Humanoid")
-        if h then pcall(function() h.PlatformStand = (tkSavedPlatform == true) end) end
+    NX.tkGun = false
+    NX.freezeGun = false
+    if NX.held then
+        local h = NX.held:FindFirstChildOfClass("Humanoid")
+        if h then pcall(function() h.PlatformStand = (NX.savedPS == true) end) end
     end
-    tkHeld = nil; tkHeldRoot = nil; tkSavedPlatform = nil
-    for model, s in pairs(frozenNPCs) do
+    NX.held = nil; NX.root = nil; NX.savedPS = nil
+    for model, s in pairs(NX.frozen) do
         local h = model and model:FindFirstChildOfClass("Humanoid")
         if h then pcall(function()
             h.WalkSpeed = s.ws; h.JumpPower = s.jp
@@ -2205,7 +2200,7 @@ local function unloadScript()
             h.AutoRotate = s.ar; h.PlatformStand = s.ps
         end) end
     end
-    frozenNPCs = {}
+    NX.frozen = {}
 
     if _G._setNPCPick then pcall(function() _G._setNPCPick(false) end) end
     _G._setNPCPick = nil
@@ -2834,6 +2829,7 @@ npcControlLL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 -- ── NPC SEARCH BOX (pins to top of Control panel via negative LayoutOrder) ──
+do  -- NPC search UI scope
 local npcSearchBox = Instance.new("TextBox")
 npcSearchBox.Size = UDim2.new(1,0,0,24)
 npcSearchBox.BackgroundColor3 = B_DEF
@@ -2918,6 +2914,7 @@ end
 npcSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     _runNPCSearch(npcSearchBox.Text)
 end)
+end  -- end NPC search UI scope
 
 -- Auras panel (scrollable for overflow)
 local npcAurasPanel=Instance.new("ScrollingFrame")
@@ -3198,30 +3195,32 @@ sitGunBtn.MouseButton1Click:Connect(function()
     sitGunBtn.Text = "Sit Gun: "..(sitGunEnabled and "ON ✓" or "OFF")
 end)
 
+do  -- TK/Freeze gun buttons scope
 local tkGunBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=B_DEF,
     Text="Telekinesis Gun: OFF",TextColor3=T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=4},npcToolsPanel)
 local freezeGunBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=B_DEF,
     Text="Freeze Gun: OFF",TextColor3=T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=5},npcToolsPanel)
 
 local function refreshTKFreezeBtns()
-    tkGunBtn.BackgroundColor3 = tkGunEnabled and Color3.fromRGB(90,40,120) or B_DEF
-    tkGunBtn.TextColor3       = tkGunEnabled and Color3.fromRGB(220,170,255) or T1
-    tkGunBtn.Text = "Telekinesis Gun: "..(tkGunEnabled and "ON ✓" or "OFF")
-    freezeGunBtn.BackgroundColor3 = freezeGunEnabled and Color3.fromRGB(20,70,120) or B_DEF
-    freezeGunBtn.TextColor3       = freezeGunEnabled and Color3.fromRGB(150,210,255) or T1
-    freezeGunBtn.Text = "Freeze Gun: "..(freezeGunEnabled and "ON ✓" or "OFF")
+    tkGunBtn.BackgroundColor3 = NX.tkGun and Color3.fromRGB(90,40,120) or B_DEF
+    tkGunBtn.TextColor3       = NX.tkGun and Color3.fromRGB(220,170,255) or T1
+    tkGunBtn.Text = "Telekinesis Gun: "..(NX.tkGun and "ON ✓" or "OFF")
+    freezeGunBtn.BackgroundColor3 = NX.freezeGun and Color3.fromRGB(20,70,120) or B_DEF
+    freezeGunBtn.TextColor3       = NX.freezeGun and Color3.fromRGB(150,210,255) or T1
+    freezeGunBtn.Text = "Freeze Gun: "..(NX.freezeGun and "ON ✓" or "OFF")
 end
 
 tkGunBtn.MouseButton1Click:Connect(function()
-    tkGunEnabled = not tkGunEnabled
-    if tkGunEnabled then freezeGunEnabled = false end   -- both use LMB; keep one active
+    NX.tkGun = not NX.tkGun
+    if NX.tkGun then NX.freezeGun = false end   -- both use LMB; keep one active
     refreshTKFreezeBtns()
 end)
 freezeGunBtn.MouseButton1Click:Connect(function()
-    freezeGunEnabled = not freezeGunEnabled
-    if freezeGunEnabled then tkGunEnabled = false end
+    NX.freezeGun = not NX.freezeGun
+    if NX.freezeGun then NX.tkGun = false end
     refreshTKFreezeBtns()
 end)
+end  -- end TK/Freeze gun buttons scope
 
 local npcActiveSTab = "Control"
 local function setNpcSTab(name)
@@ -3260,9 +3259,9 @@ if hasFileSystem then saveConfig(true) end
 -- ─────────────────────────────────────────────────────────────
 -- Telekinesis: release LMB to toss the held NPC toward the cursor
 reg(Mouse.Button1Up:Connect(function()
-    if not tkHeld then return end
-    local model, root = tkHeld, tkHeldRoot
-    tkHeld = nil; tkHeldRoot = nil
+    if not NX.held then return end
+    local model, root = NX.held, NX.root
+    NX.held = nil; NX.root = nil
     if root and root.Parent then
         local dir = currentMouseHit - root.Position
         if dir.Magnitude > 0.001 then
@@ -3273,30 +3272,30 @@ reg(Mouse.Button1Up:Connect(function()
     end
     if model then
         local h = model:FindFirstChildOfClass("Humanoid")
-        if h then pcall(function() h.PlatformStand = (tkSavedPlatform == true) end) end
+        if h then pcall(function() h.PlatformStand = (NX.savedPS == true) end) end
     end
-    tkSavedPlatform = nil
+    NX.savedPS = nil
 end))
 
 -- Per-frame enforcement: float a telekinesis-held NPC, and keep frozen NPCs pinned
 reg(RunService.Heartbeat:Connect(function()
     -- Telekinesis float toward the cursor hit point
-    if tkHeld then
-        local root = tkHeldRoot
+    if NX.held then
+        local root = NX.root
         if not root or not root.Parent then
-            tkHeld = nil; tkHeldRoot = nil
+            NX.held = nil; NX.root = nil
         else
-            local target = currentMouseHit + Vector3.new(0, TK_FLOAT_Y, 0)
+            local target = currentMouseHit + Vector3.new(0, NX.FLOAT_Y, 0)
             pcall(function()
-                root.AssemblyLinearVelocity = (target - root.Position) * TK_DRAG
+                root.AssemblyLinearVelocity = (target - root.Position) * NX.DRAG
                 root.AssemblyAngularVelocity = Vector3.zero
             end)
         end
     end
     -- Keep every frozen NPC at zero velocity, stunned, walk/jump disabled
-    for model, _ in pairs(frozenNPCs) do
+    for model, _ in pairs(NX.frozen) do
         if not model.Parent then
-            frozenNPCs[model] = nil
+            NX.frozen[model] = nil
         else
             local root = model:FindFirstChild("HumanoidRootPart")
             local h = model:FindFirstChildOfClass("Humanoid")
@@ -3389,7 +3388,7 @@ reg(Mouse.Button1Down:Connect(function()
     end
 
     -- Telekinesis Hold Gun: press to grab & float an NPC (release tosses it)
-    if tkGunEnabled then
+    if NX.tkGun then
         local origin = Camera.CFrame.Position
         local dir = (currentMouseHit - origin)
         if dir.Magnitude > 0.001 then
@@ -3397,11 +3396,11 @@ reg(Mouse.Button1Down:Connect(function()
             if hit and hit.Instance then
                 local model = hit.Instance:FindFirstAncestorOfClass("Model") or hit.Instance.Parent
                 if model and isNPCModel(model) then
-                    tkHeld     = model
-                    tkHeldRoot = model:FindFirstChild("HumanoidRootPart")
+                    NX.held     = model
+                    NX.root = model:FindFirstChild("HumanoidRootPart")
                     local h = model:FindFirstChildOfClass("Humanoid")
-                    if h then tkSavedPlatform = h.PlatformStand; pcall(function() h.PlatformStand = true end) end
-                    if tkHeldRoot then pcall(function() tkHeldRoot.AssemblyLinearVelocity = Vector3.zero end) end
+                    if h then NX.savedPS = h.PlatformStand; pcall(function() h.PlatformStand = true end) end
+                    if NX.root then pcall(function() NX.root.AssemblyLinearVelocity = Vector3.zero end) end
                 end
             end
         end
@@ -3409,7 +3408,7 @@ reg(Mouse.Button1Down:Connect(function()
     end
 
     -- Freeze Gun: click an NPC to stun/freeze it; click again to release it
-    if freezeGunEnabled then
+    if NX.freezeGun then
         local origin = Camera.CFrame.Position
         local dir = (currentMouseHit - origin)
         if dir.Magnitude > 0.001 then
@@ -3418,19 +3417,19 @@ reg(Mouse.Button1Down:Connect(function()
                 local model = hit.Instance:FindFirstAncestorOfClass("Model") or hit.Instance.Parent
                 if model and isNPCModel(model) then
                     local h = model:FindFirstChildOfClass("Humanoid")
-                    if frozenNPCs[model] then
+                    if NX.frozen[model] then
                         -- already frozen → restore saved stats and release
-                        local s = frozenNPCs[model]
+                        local s = NX.frozen[model]
                         if h then pcall(function()
                             h.WalkSpeed = s.ws; h.JumpPower = s.jp
                             pcall(function() h.JumpHeight = s.jh end)
                             h.AutoRotate = s.ar; h.PlatformStand = s.ps
                         end) end
-                        frozenNPCs[model] = nil
+                        NX.frozen[model] = nil
                     elseif h then
                         -- freeze → save current stats, then zero everything + stun
                         local jh = 0; pcall(function() jh = h.JumpHeight end)
-                        frozenNPCs[model] = {ws=h.WalkSpeed, jp=h.JumpPower, jh=jh, ar=h.AutoRotate, ps=h.PlatformStand}
+                        NX.frozen[model] = {ws=h.WalkSpeed, jp=h.JumpPower, jh=jh, ar=h.AutoRotate, ps=h.PlatformStand}
                         pcall(function()
                             h.WalkSpeed = 0; h.JumpPower = 0
                             pcall(function() h.JumpHeight = 0 end)
