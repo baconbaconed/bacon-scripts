@@ -72,6 +72,44 @@ local State = {
 	autoCopy = false,
 	filterPlayer = "",
 	filterPriority = "",
+	advancedFilters = {
+		enabled = false,
+		currentPreset = "Default",
+		presets = {
+			["Default"] = {
+				name = "Default",
+				filters = {
+					{type = "search", param = "", enabled = true},
+					{type = "player", param = "", enabled = true},
+					{type = "priority", param = "", enabled = true}
+				},
+				logic = "AND"
+			}
+		},
+		activeFilters = {
+			{type = "search", param = "", enabled = true},
+			{type = "player", param = "", enabled = true},
+			{type = "priority", param = "", enabled = true}
+		},
+		logic = "AND"
+	},
+	performance = {
+		enabled = true,
+		frameTimes = {},
+		fps = 0,
+		avgFrameTime = 0,
+		activeScriptTracks = 0,
+		peakScriptTracks = 0,
+		totalScriptTracks = 0,
+		animTrackCount = 0,
+		totalLogs = 0,
+		logRate = 0,
+		frameCount = 0,
+		droppedFrames = 0,
+		logTickStart = tick(),
+		lastLogTick = tick(),
+		history = {}
+	},
 	configFile = "bacon_logger_config.json",
 	keybindFile = "bacon_logger_binds.json",
 	keybindGroupsFile = "bacon_logger_groups.json",
@@ -89,7 +127,9 @@ local State = {
 	vpPausedAt = 0,
 	vpPausedLength = 0,
 	vpYaw = 0,
+	vpPitch = 0,
 	vpZoomDist = 11,
+	vpRigType = "R6",
 	vpCurrentId = nil,
 	vpSkinQuery = nil,
 	vpSkinCache = nil,
@@ -289,14 +329,48 @@ do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 5); c.Parent = UI.notifLabel
 	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(65,65,65); s.Thickness = 1; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = UI.notifLabel
 end
-local function flashNotif(msg)
-	UI.notifLabel.Text = msg
+local function flashNotif(msg, duration, color, level)
+	duration = duration or 3
+	level = (level or "info"):lower()
+	local levelColors = {
+		info = Color3.fromRGB(170,170,170),
+		success = Color3.fromRGB(140,210,145),
+		warn = Color3.fromRGB(230,190,120),
+		error = Color3.fromRGB(210,130,130)
+	}
+	color = color or levelColors[level] or Color3.fromRGB(210,210,210)
+	local levelPrefix = "[" .. level:upper() .. "] "
+	UI.notifLabel.Text = levelPrefix .. tostring(msg)
+	UI.notifLabel.TextColor3 = color
 	UI.notifLabel.BackgroundTransparency = 0
 	UI.notifLabel.Visible = true
 	if UI.notifThread then task.cancel(UI.notifThread) end
-	UI.notifThread = task.delay(3, function()
+	local startTime = tick()
+	UI.notifThread = task.spawn(function()
+		local fadeIn = 0.2
+		local fadeOut = 0.3
+		local hold = duration - fadeIn - fadeOut
+		if hold < 0 then hold = 0 end
+		local elapsed = 0
+		while elapsed < fadeIn do
+			elapsed = tick() - startTime
+			local t = elapsed / fadeIn
+			UI.notifLabel.BackgroundTransparency = 1 - t
+			task.wait()
+		end
+		task.wait(hold)
+		local fadeStart = tick()
+		while elapsed < duration do
+			elapsed = tick() - startTime
+			local t = (elapsed - (duration - fadeOut)) / fadeOut
+			if t > 0 then
+				UI.notifLabel.BackgroundTransparency = t
+			end
+			task.wait()
+		end
 		UI.notifLabel.Visible = false
 		UI.notifLabel.Text = ""
+		UI.notifLabel.BackgroundTransparency = 1
 	end)
 end
 
@@ -364,7 +438,7 @@ do
 	g.Rotation = 90; g.Parent = UI.top
 end
 UI.title = Instance.new("TextLabel")
-UI.title.Text = "bacon\'s advanced logger"
+UI.title.Text = "bacons advanced logger or wtv"
 UI.title.Size = UDim2.new(1,-220,1,0); UI.title.Position = UDim2.new(0,10,0,0)
 UI.title.BackgroundTransparency = 1; UI.title.TextColor3 = Color3.fromRGB(210,210,210)
 UI.title.Font = Enum.Font.GothamBold; UI.title.TextSize = 15; UI.title.TextXAlignment = Enum.TextXAlignment.Left
@@ -372,7 +446,7 @@ UI.title.ZIndex = 3; UI.title.Parent = UI.top
 
 UI.closeButton = Instance.new("TextButton")
 UI.closeButton.Size = UDim2.new(0,26,0,20); UI.closeButton.Position = UDim2.new(1,-28,0,4)
-UI.closeButton.Text = "X"; UI.closeButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
+UI.closeButton.Text = "X"; UI.closeButton.BackgroundColor3 = Color3.fromRGB(120,30,30)
 UI.closeButton.TextColor3 = Color3.fromRGB(255,255,255); UI.closeButton.BorderSizePixel = 0
 UI.closeButton.Font = Enum.Font.GothamSemibold; UI.closeButton.TextSize = 13; UI.closeButton.ZIndex = 3; UI.closeButton.Parent = UI.top
 mkCorner(UI.closeButton, 4)
@@ -382,21 +456,21 @@ UI.minimize.Size = UDim2.new(0,26,0,20); UI.minimize.Position = UDim2.new(1,-56,
 UI.minimize.Text = "-"; UI.minimize.BackgroundColor3 = Color3.fromRGB(22,38,24)
 UI.minimize.TextColor3 = Color3.fromRGB(140,210,145); UI.minimize.BorderSizePixel = 0
 UI.minimize.Font = Enum.Font.GothamSemibold; UI.minimize.TextSize = 13; UI.minimize.ZIndex = 3; UI.minimize.Parent = UI.top
-mkCorner(UI.minimize, 4)
+mkCorner(UI.minimize, 4); mkStroke(UI.minimize, Color3.fromRGB(45,80,48), 1)
 
 UI.openSide = Instance.new("TextButton")
 UI.openSide.Size = UDim2.new(0,52,0,20); UI.openSide.Position = UDim2.new(1,-110,0,4)
-UI.openSide.Text = "Binds"; UI.openSide.BackgroundColor3 = Color3.fromRGB(42,42,42)
+UI.openSide.Text = "Binds"; UI.openSide.BackgroundColor3 = Color3.fromRGB(28,28,28)
 UI.openSide.TextColor3 = Color3.fromRGB(160,160,160); UI.openSide.BorderSizePixel = 0
 UI.openSide.Font = Enum.Font.GothamSemibold; UI.openSide.TextSize = 13; UI.openSide.ZIndex = 3; UI.openSide.Parent = UI.top
-mkCorner(UI.openSide, 4)
+mkCorner(UI.openSide, 4); mkStroke(UI.openSide, Color3.fromRGB(65,65,65), 1)
 
 UI.previewToggle = Instance.new("TextButton")
 UI.previewToggle.Size = UDim2.new(0,60,0,20); UI.previewToggle.Position = UDim2.new(1,-174,0,4)
-UI.previewToggle.Text = "Preview"; UI.previewToggle.BackgroundColor3 = Color3.fromRGB(42,42,42)
+UI.previewToggle.Text = "Preview"; UI.previewToggle.BackgroundColor3 = Color3.fromRGB(28,28,28)
 UI.previewToggle.TextColor3 = Color3.fromRGB(160,160,160); UI.previewToggle.BorderSizePixel = 0
 UI.previewToggle.Font = Enum.Font.GothamSemibold; UI.previewToggle.TextSize = 13; UI.previewToggle.ZIndex = 3; UI.previewToggle.Parent = UI.top
-mkCorner(UI.previewToggle, 4)
+mkCorner(UI.previewToggle, 4); mkStroke(UI.previewToggle, Color3.fromRGB(65,65,65), 1)
 
 UI.searchBox = Instance.new("TextBox")
 UI.searchBox.Text = ""; UI.searchBox.PlaceholderText = "Search animations..."
@@ -423,19 +497,19 @@ UI.priorityFilterBox.Font = Enum.Font.Code; UI.priorityFilterBox.TextSize = 12; 
 mkCorner(UI.priorityFilterBox, 4); mkStroke(UI.priorityFilterBox, Color3.fromRGB(65,65,65), 1)
 
 UI.logTabBtn = Instance.new("TextButton")
-UI.logTabBtn.Text = "[ Log ]"; UI.logTabBtn.Position = UDim2.new(0,5,0,78); UI.logTabBtn.Size = UDim2.new(0.20,-4,0,18)
+UI.logTabBtn.Text = "[ Log ]"; UI.logTabBtn.Position = UDim2.new(0,5,0,102); UI.logTabBtn.Size = UDim2.new(0.20,-4,0,18)
 UI.logTabBtn.BackgroundColor3 = Color3.fromRGB(220,220,220); UI.logTabBtn.TextColor3 = Color3.fromRGB(20,20,20)
 UI.logTabBtn.Font = Enum.Font.GothamSemibold; UI.logTabBtn.TextSize = 13; UI.logTabBtn.BorderSizePixel = 0; UI.logTabBtn.ZIndex = 2; UI.logTabBtn.Parent = UI.mainFrame
 mkCorner(UI.logTabBtn, 4)
 
 UI.favsTabBtn = Instance.new("TextButton")
-UI.favsTabBtn.Text = "[ Favs ]"; UI.favsTabBtn.Position = UDim2.new(0.20,2,0,78); UI.favsTabBtn.Size = UDim2.new(0.20,-4,0,18)
+UI.favsTabBtn.Text = "[ Favs ]"; UI.favsTabBtn.Position = UDim2.new(0.20,2,0,102); UI.favsTabBtn.Size = UDim2.new(0.20,-4,0,18)
 UI.favsTabBtn.BackgroundColor3 = Color3.fromRGB(255,215,0); UI.favsTabBtn.TextColor3 = Color3.fromRGB(20,20,20)
 UI.favsTabBtn.Font = Enum.Font.GothamSemibold; UI.favsTabBtn.TextSize = 13; UI.favsTabBtn.BorderSizePixel = 0; UI.favsTabBtn.ZIndex = 2; UI.favsTabBtn.Parent = UI.mainFrame
 mkCorner(UI.favsTabBtn, 4)
 
 UI.bannedTabBtn = Instance.new("TextButton")
-UI.bannedTabBtn.Text = "[ Banned ]"; UI.bannedTabBtn.Position = UDim2.new(0.40,2,0,78); UI.bannedTabBtn.Size = UDim2.new(0.20,-6,0,18)
+UI.bannedTabBtn.Text = "[ Banned ]"; UI.bannedTabBtn.Position = UDim2.new(0.40,2,0,102); UI.bannedTabBtn.Size = UDim2.new(0.20,-6,0,18)
 UI.bannedTabBtn.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.bannedTabBtn.TextColor3 = Color3.fromRGB(255,255,255)
 UI.bannedTabBtn.Font = Enum.Font.GothamSemibold; UI.bannedTabBtn.TextSize = 13; UI.bannedTabBtn.BorderSizePixel = 0; UI.bannedTabBtn.ZIndex = 2; UI.bannedTabBtn.Parent = UI.mainFrame
 mkCorner(UI.bannedTabBtn, 4)
@@ -446,8 +520,57 @@ UI.logCountLabel.BackgroundTransparency = 1; UI.logCountLabel.TextColor3 = Color
 UI.logCountLabel.TextXAlignment = Enum.TextXAlignment.Right; UI.logCountLabel.Font = Enum.Font.Gotham
 UI.logCountLabel.TextSize = 11; UI.logCountLabel.ZIndex = 2; UI.logCountLabel.Parent = UI.mainFrame
 
+UI.commandBar = Instance.new("TextBox")
+UI.commandBar.Text = ""; UI.commandBar.PlaceholderText = "cmd bar... (/capture, /ban 123, play 123; wait 0.3; stop)"
+UI.commandBar.Position = UDim2.new(0,6,0,78); UI.commandBar.Size = UDim2.new(0.60,-74,0,22)
+UI.commandBar.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.commandBar.TextColor3 = Color3.fromRGB(210,210,210)
+UI.commandBar.PlaceholderColor3 = Color3.fromRGB(65,65,65); UI.commandBar.BorderSizePixel = 0
+UI.commandBar.Font = Enum.Font.Code; UI.commandBar.TextSize = 12; UI.commandBar.ZIndex = 2; UI.commandBar.Parent = UI.mainFrame
+mkCorner(UI.commandBar, 4); mkStroke(UI.commandBar, Color3.fromRGB(42,42,42), 1)
+
+UI.commandPaletteBtn = Instance.new("TextButton")
+UI.commandPaletteBtn.Text = "⌘"; UI.commandPaletteBtn.Position = UDim2.new(0.60,-56,0,78); UI.commandPaletteBtn.Size = UDim2.new(0,26,0,22)
+UI.commandPaletteBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.commandPaletteBtn.TextColor3 = Color3.fromRGB(180,180,180)
+UI.commandPaletteBtn.Font = Enum.Font.Code; UI.commandPaletteBtn.TextSize = 12; UI.commandPaletteBtn.BorderSizePixel = 0; UI.commandPaletteBtn.ZIndex = 2; UI.commandPaletteBtn.Parent = UI.mainFrame
+mkCorner(UI.commandPaletteBtn, 4); mkStroke(UI.commandPaletteBtn, Color3.fromRGB(65,65,65), 1)
+
+UI.commandRunBtn = Instance.new("TextButton")
+UI.commandRunBtn.Text = "Run"; UI.commandRunBtn.Position = UDim2.new(0.60,-28,0,78); UI.commandRunBtn.Size = UDim2.new(0,30,0,22)
+UI.commandRunBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.commandRunBtn.TextColor3 = Color3.fromRGB(140,210,145)
+UI.commandRunBtn.Font = Enum.Font.Code; UI.commandRunBtn.TextSize = 10; UI.commandRunBtn.BorderSizePixel = 0; UI.commandRunBtn.ZIndex = 2; UI.commandRunBtn.Parent = UI.mainFrame
+mkCorner(UI.commandRunBtn, 4); mkStroke(UI.commandRunBtn, Color3.fromRGB(45,80,48), 1)
+
+UI.commandPalette = Instance.new("Frame")
+UI.commandPalette.Size = UDim2.new(0.60,-10,0,122); UI.commandPalette.Position = UDim2.new(0,5,0,124)
+UI.commandPalette.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.commandPalette.BackgroundTransparency = 0.08
+UI.commandPalette.BorderSizePixel = 0; UI.commandPalette.ZIndex = 20; UI.commandPalette.Visible = false; UI.commandPalette.Parent = UI.mainFrame
+mkCorner(UI.commandPalette, 5); mkStroke(UI.commandPalette, Color3.fromRGB(60,60,60), 1)
+
+local paletteLayout = Instance.new("UIListLayout"); paletteLayout.Padding = UDim.new(0,3); paletteLayout.Parent = UI.commandPalette
+local palettePad = Instance.new("UIPadding"); palettePad.PaddingTop = UDim.new(0,4); palettePad.PaddingBottom = UDim.new(0,4); palettePad.PaddingLeft = UDim.new(0,4); palettePad.PaddingRight = UDim.new(0,4); palettePad.Parent = UI.commandPalette
+for _, item in ipairs({
+	{label = "Capture Current", cmd = "/capture"},
+	{label = "Toggle Loop", cmd = "loop"},
+	{label = "Toggle Freeze", cmd = "freeze"},
+	{label = "Export Log", cmd = "export"},
+	{label = "Import Names", cmd = "import"}
+}) do
+	local b = Instance.new("TextButton")
+	b.Name = item.cmd
+	b.Text = item.label
+	b.Size = UDim2.new(1,0,0,20)
+	b.BackgroundColor3 = Color3.fromRGB(22,22,22)
+	b.TextColor3 = Color3.fromRGB(200,200,200)
+	b.Font = Enum.Font.Code
+	b.TextSize = 10
+	b.BorderSizePixel = 0
+	b.ZIndex = 21
+	b.Parent = UI.commandPalette
+	mkCorner(b, 3); mkStroke(b, Color3.fromRGB(55,55,55), 1)
+end
+
 UI.list = Instance.new("ScrollingFrame")
-UI.list.Name = "AnimList"; UI.list.Position = UDim2.new(0,5,0,100); UI.list.Size = UDim2.new(0.60,-10,1,-105)
+UI.list.Name = "AnimList"; UI.list.Position = UDim2.new(0,5,0,124); UI.list.Size = UDim2.new(0.60,-10,1,-129)
 UI.list.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.list.BackgroundTransparency = 0.15; UI.list.BorderSizePixel = 0
 UI.list.ScrollBarThickness = 4; UI.list.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 UI.list.CanvasSize = UDim2.new(0,0,0,0); UI.list.ClipsDescendants = true; UI.list.ZIndex = 2; UI.list.Visible = true; UI.list.Parent = UI.mainFrame
@@ -462,7 +585,7 @@ do
 end
 
 UI.favsList = Instance.new("ScrollingFrame")
-UI.favsList.Name = "FavsList"; UI.favsList.Position = UDim2.new(0,5,0,100); UI.favsList.Size = UDim2.new(0.60,-10,1,-105)
+UI.favsList.Name = "FavsList"; UI.favsList.Position = UDim2.new(0,5,0,124); UI.favsList.Size = UDim2.new(0.60,-10,1,-129)
 UI.favsList.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.favsList.BackgroundTransparency = 0.15; UI.favsList.BorderSizePixel = 0
 UI.favsList.ScrollBarThickness = 4; UI.favsList.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 UI.favsList.CanvasSize = UDim2.new(0,0,0,0); UI.favsList.ClipsDescendants = true; UI.favsList.ZIndex = 2; UI.favsList.Visible = false; UI.favsList.Parent = UI.mainFrame
@@ -475,7 +598,7 @@ do
 end
 
 UI.bannedList = Instance.new("ScrollingFrame")
-UI.bannedList.Name = "BannedList"; UI.bannedList.Position = UDim2.new(0,5,0,100); UI.bannedList.Size = UDim2.new(0.60,-10,1,-105)
+UI.bannedList.Name = "BannedList"; UI.bannedList.Position = UDim2.new(0,5,0,124); UI.bannedList.Size = UDim2.new(0.60,-10,1,-129)
 UI.bannedList.BackgroundColor3 = Color3.fromRGB(8,8,8); UI.bannedList.BackgroundTransparency = 0.15; UI.bannedList.BorderSizePixel = 0
 UI.bannedList.ScrollBarThickness = 4; UI.bannedList.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
 UI.bannedList.CanvasSize = UDim2.new(0,0,0,0); UI.bannedList.ClipsDescendants = true; UI.bannedList.ZIndex = 2; UI.bannedList.Visible = false; UI.bannedList.Parent = UI.mainFrame
@@ -488,11 +611,12 @@ do
 end
 
 local function rebuildBannedList()
+	local query = ""
 	for _, child in ipairs(UI.bannedList:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
 	end
 	for id, isBanned in pairs(Data.banned) do
-		if isBanned then
+		if isBanned and (query == "" or tostring(id):lower():find(query, 1, true)) then
 			local row = Instance.new("Frame"); row.Size = UDim2.new(1,-5,0,22); row.BackgroundTransparency = 1; row.ZIndex = 3; row.Parent = UI.bannedList
 			local label = Instance.new("TextButton")
 			label.Size = UDim2.new(1,-110,1,0); label.BackgroundColor3 = Color3.fromRGB(8,8,8)
@@ -500,11 +624,11 @@ local function rebuildBannedList()
 			label.Text = (Data.trueBanned[id] and "⬛ " or "") .. id
 			label.Font = Enum.Font.Code; label.TextSize = 11; label.BorderSizePixel = 0; label.ZIndex = 4; label.TextTruncate = Enum.TextTruncate.AtEnd; label.Parent = row
 			mkCorner(label, 3)
-			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,50,1,0); copyBtn.Position = UDim2.new(1,-85,0,0)
+			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,50,1,0); copyBtn.Position = UDim2.new(1,-105,0,0)
 			copyBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); copyBtn.TextColor3 = Color3.fromRGB(210,210,210); copyBtn.Text = "Copy"
 			copyBtn.Font = Enum.Font.GothamSemibold; copyBtn.TextSize = 10; copyBtn.BorderSizePixel = 0; copyBtn.ZIndex = 4; copyBtn.Parent = row
 			mkCorner(copyBtn, 3)
-			local unbanBtn = Instance.new("TextButton"); unbanBtn.Size = UDim2.new(0,50,1,0); unbanBtn.Position = UDim2.new(1,-30,0,0)
+			local unbanBtn = Instance.new("TextButton"); unbanBtn.Size = UDim2.new(0,50,1,0); unbanBtn.Position = UDim2.new(1,-55,0,0)
 			unbanBtn.BackgroundColor3 = Color3.fromRGB(22,38,24); unbanBtn.TextColor3 = Color3.fromRGB(140,210,145); unbanBtn.Text = "Unban"
 			unbanBtn.Font = Enum.Font.Code; unbanBtn.TextSize = 10; unbanBtn.BorderSizePixel = 0; unbanBtn.ZIndex = 4; unbanBtn.Parent = row
 			mkCorner(unbanBtn, 3)
@@ -516,7 +640,7 @@ local function rebuildBannedList()
 		end
 	end
 	for id, isLogBanned in pairs(Data.logBlacklist) do
-		if isLogBanned then
+		if isLogBanned and (query == "" or tostring(id):lower():find(query, 1, true)) then
 			local row = Instance.new("Frame"); row.Size = UDim2.new(1,-5,0,22); row.BackgroundTransparency = 1; row.ZIndex = 3; row.Parent = UI.bannedList
 			local label = Instance.new("TextButton")
 			label.Size = UDim2.new(1,-110,1,0); label.BackgroundColor3 = Color3.fromRGB(14,14,14)
@@ -524,11 +648,11 @@ local function rebuildBannedList()
 			label.Text = "◈ " .. id
 			label.Font = Enum.Font.Code; label.TextSize = 11; label.BorderSizePixel = 0; label.ZIndex = 4; label.TextTruncate = Enum.TextTruncate.AtEnd; label.Parent = row
 			mkCorner(label, 3); mkStroke(label, Color3.fromRGB(65,65,65), 1)
-			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,50,1,0); copyBtn.Position = UDim2.new(1,-85,0,0)
+			local copyBtn = Instance.new("TextButton"); copyBtn.Size = UDim2.new(0,50,1,0); copyBtn.Position = UDim2.new(1,-105,0,0)
 			copyBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); copyBtn.TextColor3 = Color3.fromRGB(160,160,160); copyBtn.Text = "Copy"
 			copyBtn.Font = Enum.Font.GothamSemibold; copyBtn.TextSize = 10; copyBtn.BorderSizePixel = 0; copyBtn.ZIndex = 4; copyBtn.Parent = row
 			mkCorner(copyBtn, 3)
-			local unlogbanBtn = Instance.new("TextButton"); unlogbanBtn.Size = UDim2.new(0,50,1,0); unlogbanBtn.Position = UDim2.new(1,-30,0,0)
+			local unlogbanBtn = Instance.new("TextButton"); unlogbanBtn.Size = UDim2.new(0,50,1,0); unlogbanBtn.Position = UDim2.new(1,-55,0,0)
 			unlogbanBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); unlogbanBtn.TextColor3 = Color3.fromRGB(160,160,160); unlogbanBtn.Text = "Unban"
 			unlogbanBtn.Font = Enum.Font.Code; unlogbanBtn.TextSize = 10; unlogbanBtn.BorderSizePixel = 0; unlogbanBtn.ZIndex = 4; unlogbanBtn.Parent = row
 			mkCorner(unlogbanBtn, 3)
@@ -561,7 +685,7 @@ UI.controls = Instance.new("ScrollingFrame")
 UI.controls.Name = "Controls"; UI.controls.Position = UDim2.new(0.60,5,0,30); UI.controls.Size = UDim2.new(0.40,-10,1,-35)
 UI.controls.BackgroundColor3 = Color3.fromRGB(20,20,20); UI.controls.BackgroundTransparency = 0.15; UI.controls.BorderSizePixel = 0; UI.controls.ClipsDescendants = true
 UI.controls.ScrollBarThickness = 3; UI.controls.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
-UI.controls.CanvasSize = UDim2.new(0,0,0,820); UI.controls.ZIndex = 2; UI.controls.Visible = true; UI.controls.Parent = UI.mainFrame
+UI.controls.CanvasSize = UDim2.new(0,0,0,1130); UI.controls.ZIndex = 2; UI.controls.Visible = true; UI.controls.Parent = UI.mainFrame
 mkCorner(UI.controls, 5); mkStroke(UI.controls, Color3.fromRGB(42,42,42), 1)
 
 local function mkLabel(text, y)
@@ -701,12 +825,14 @@ button("Unban", 430, function()
 end, Color3.fromRGB(22,38,24), Color3.fromRGB(45,80,48), Color3.fromRGB(140,210,145))
 
 button("Log Ban", 465, function()
-	local id = UI.idBox.Text; if id == "" then return end
+	local id = grabId(UI.idBox.Text)
+	if not id or id == "" then return end
 	Data.logBlacklist[id] = true; dumpCfg(); refreshColors()
 end, Color3.fromRGB(34,22,48), Color3.fromRGB(70,45,95), Color3.fromRGB(180,140,230))
 
 button("Log Unban", 500, function()
-	local id = UI.idBox.Text; if id == "" then return end
+	local id = grabId(UI.idBox.Text)
+	if not id or id == "" then return end
 	Data.logBlacklist[id] = nil; dumpCfg(); refreshColors()
 end, Color3.fromRGB(28,18,40), Color3.fromRGB(60,38,80), Color3.fromRGB(160,120,210))
 
@@ -800,8 +926,693 @@ table.insert(Data.connections, UI.exportBtn.MouseButton1Click:Connect(function()
 	end
 end))
 
+
+UI.advancedFiltersToggle = Instance.new("TextButton")
+UI.advancedFiltersToggle.Text = "Advanced Filters: OFF"; UI.advancedFiltersToggle.Position = UDim2.new(0,10,0,880); UI.advancedFiltersToggle.Size = UDim2.new(1,-20,0,25)
+UI.advancedFiltersToggle.BackgroundColor3 = Color3.fromRGB(14,14,14); UI.advancedFiltersToggle.TextColor3 = Color3.fromRGB(140,140,140)
+UI.advancedFiltersToggle.BorderSizePixel = 0; UI.advancedFiltersToggle.Font = Enum.Font.GothamSemibold; UI.advancedFiltersToggle.TextSize = 12; UI.advancedFiltersToggle.ZIndex = 3; UI.advancedFiltersToggle.Visible = true; UI.advancedFiltersToggle.Parent = UI.controls
+mkCorner(UI.advancedFiltersToggle, 4)
+local advancedFiltersStroke = Instance.new("UIStroke"); advancedFiltersStroke.Color = Color3.fromRGB(42,42,42); advancedFiltersStroke.Thickness = 1; advancedFiltersStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; advancedFiltersStroke.Parent = UI.advancedFiltersToggle
+
+local function refreshAdvancedFiltersBtn()
+	UI.advancedFiltersToggle.Text = "Advanced Filters: " .. (State.advancedFilters.enabled and "ON" or "OFF")
+	UI.advancedFiltersToggle.BackgroundColor3 = State.advancedFilters.enabled and Color3.fromRGB(22,38,24) or Color3.fromRGB(14,14,14)
+	UI.advancedFiltersToggle.TextColor3 = State.advancedFilters.enabled and Color3.fromRGB(140,210,145) or Color3.fromRGB(140,140,140)
+	advancedFiltersStroke.Color = State.advancedFilters.enabled and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42)
+end
+
+table.insert(Data.connections, UI.advancedFiltersToggle.MouseButton1Click:Connect(function()
+	State.advancedFilters.enabled = not State.advancedFilters.enabled
+	refreshAdvancedFiltersBtn()
+	doFilter()
+	if dumpCfg then dumpCfg() end
+end))
+
+
+UI.advancedFiltersPanel = Instance.new("Frame")
+UI.advancedFiltersPanel.Size = UDim2.new(1, -20, 0, 200)
+UI.advancedFiltersPanel.Position = UDim2.new(0, 10, 0, 910)
+UI.advancedFiltersPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+UI.advancedFiltersPanel.BackgroundTransparency = 0.1
+UI.advancedFiltersPanel.BorderSizePixel = 0
+UI.advancedFiltersPanel.ZIndex = 3
+UI.advancedFiltersPanel.Visible = false
+UI.advancedFiltersPanel.Parent = UI.controls
+mkCorner(UI.advancedFiltersPanel, 6)
+mkStroke(UI.advancedFiltersPanel, Color3.fromRGB(60, 60, 60), 1)
+
+
+UI.filterPresetLabel = Instance.new("TextLabel")
+UI.filterPresetLabel.Text = "Preset:"
+UI.filterPresetLabel.Size = UDim2.new(0, 50, 0, 20)
+UI.filterPresetLabel.Position = UDim2.new(0, 10, 0, 10)
+UI.filterPresetLabel.BackgroundTransparency = 1
+UI.filterPresetLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+UI.filterPresetLabel.Font = Enum.Font.Code
+UI.filterPresetLabel.TextSize = 11
+UI.filterPresetLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.filterPresetLabel.ZIndex = 4
+UI.filterPresetLabel.Parent = UI.advancedFiltersPanel
+
+UI.filterPresetDropdown = Instance.new("TextButton")
+UI.filterPresetDropdown.Size = UDim2.new(0, 120, 0, 20)
+UI.filterPresetDropdown.Position = UDim2.new(0, 60, 0, 10)
+UI.filterPresetDropdown.Text = State.advancedFilters.currentPreset
+UI.filterPresetDropdown.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+UI.filterPresetDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
+UI.filterPresetDropdown.Font = Enum.Font.Code
+UI.filterPresetDropdown.TextSize = 10
+UI.filterPresetDropdown.ZIndex = 4
+UI.filterPresetDropdown.Parent = UI.advancedFiltersPanel
+mkCorner(UI.filterPresetDropdown, 3)
+
+
+UI.filterLogicLabel = Instance.new("TextLabel")
+UI.filterLogicLabel.Text = "Logic:"
+UI.filterLogicLabel.Size = UDim2.new(0, 40, 0, 20)
+UI.filterLogicLabel.Position = UDim2.new(0, 190, 0, 10)
+UI.filterLogicLabel.BackgroundTransparency = 1
+UI.filterLogicLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+UI.filterLogicLabel.Font = Enum.Font.Code
+UI.filterLogicLabel.TextSize = 11
+UI.filterLogicLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.filterLogicLabel.ZIndex = 4
+UI.filterLogicLabel.Parent = UI.advancedFiltersPanel
+
+UI.filterLogicDropdown = Instance.new("TextButton")
+UI.filterLogicDropdown.Size = UDim2.new(0, 50, 0, 20)
+UI.filterLogicDropdown.Position = UDim2.new(0, 230, 0, 10)
+UI.filterLogicDropdown.Text = State.advancedFilters.logic
+UI.filterLogicDropdown.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+UI.filterLogicDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
+UI.filterLogicDropdown.Font = Enum.Font.Code
+UI.filterLogicDropdown.TextSize = 10
+UI.filterLogicDropdown.ZIndex = 4
+UI.filterLogicDropdown.Parent = UI.advancedFiltersPanel
+mkCorner(UI.filterLogicDropdown, 3)
+
+
+UI.saveFilterPresetBtn = Instance.new("TextButton")
+UI.saveFilterPresetBtn.Size = UDim2.new(0, 40, 0, 20)
+UI.saveFilterPresetBtn.Position = UDim2.new(0, 290, 0, 10)
+UI.saveFilterPresetBtn.Text = "Save"
+UI.saveFilterPresetBtn.BackgroundColor3 = Color3.fromRGB(22, 38, 24)
+UI.saveFilterPresetBtn.TextColor3 = Color3.fromRGB(140, 210, 145)
+UI.saveFilterPresetBtn.Font = Enum.Font.Code
+UI.saveFilterPresetBtn.TextSize = 10
+UI.saveFilterPresetBtn.ZIndex = 4
+UI.saveFilterPresetBtn.Parent = UI.advancedFiltersPanel
+mkCorner(UI.saveFilterPresetBtn, 3)
+
+UI.loadFilterPresetBtn = Instance.new("TextButton")
+UI.loadFilterPresetBtn.Size = UDim2.new(0, 40, 0, 20)
+UI.loadFilterPresetBtn.Position = UDim2.new(0, 335, 0, 10)
+UI.loadFilterPresetBtn.Text = "Load"
+UI.loadFilterPresetBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+UI.loadFilterPresetBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+UI.loadFilterPresetBtn.Font = Enum.Font.Code
+UI.loadFilterPresetBtn.TextSize = 10
+UI.loadFilterPresetBtn.ZIndex = 4
+UI.loadFilterPresetBtn.Parent = UI.advancedFiltersPanel
+mkCorner(UI.loadFilterPresetBtn, 3)
+
+
+UI.filterList = Instance.new("ScrollingFrame")
+UI.filterList.Size = UDim2.new(1, -20, 0, 140)
+UI.filterList.Position = UDim2.new(0, 10, 0, 40)
+UI.filterList.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
+UI.filterList.BackgroundTransparency = 0.2
+UI.filterList.BorderSizePixel = 0
+UI.filterList.ScrollBarThickness = 4
+UI.filterList.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+UI.filterList.CanvasSize = UDim2.new(0, 0, 0, 0)
+UI.filterList.ClipsDescendants = true
+UI.filterList.ZIndex = 4
+UI.filterList.Parent = UI.advancedFiltersPanel
+mkCorner(UI.filterList, 4)
+mkStroke(UI.filterList, Color3.fromRGB(42, 42, 42), 1)
+
+local filterListLayout = Instance.new("UIListLayout")
+filterListLayout.Padding = UDim.new(0, 4)
+filterListLayout.Parent = UI.filterList
+
+table.insert(Data.connections, filterListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	UI.filterList.CanvasSize = UDim2.new(0, 0, 0, filterListLayout.AbsoluteContentSize.Y)
+end))
+
+
+UI.addFilterBtn = Instance.new("TextButton")
+UI.addFilterBtn.Size = UDim2.new(0, 80, 0, 20)
+UI.addFilterBtn.Position = UDim2.new(0, 10, 0, 185)
+UI.addFilterBtn.Text = "+ Add Filter"
+UI.addFilterBtn.BackgroundColor3 = Color3.fromRGB(22, 38, 24)
+UI.addFilterBtn.TextColor3 = Color3.fromRGB(140, 210, 145)
+UI.addFilterBtn.Font = Enum.Font.Code
+UI.addFilterBtn.TextSize = 10
+UI.addFilterBtn.ZIndex = 4
+UI.addFilterBtn.Parent = UI.advancedFiltersPanel
+mkCorner(UI.addFilterBtn, 3)
+
+
+UI.filterStatsLabel = Instance.new("TextLabel")
+UI.filterStatsLabel.Text = "Stats: 0/0 visible"
+UI.filterStatsLabel.Size = UDim2.new(0, 120, 0, 20)
+UI.filterStatsLabel.Position = UDim2.new(0, 100, 0, 185)
+UI.filterStatsLabel.BackgroundTransparency = 1
+UI.filterStatsLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+UI.filterStatsLabel.Font = Enum.Font.Code
+UI.filterStatsLabel.TextSize = 10
+UI.filterStatsLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.filterStatsLabel.ZIndex = 4
+UI.filterStatsLabel.Parent = UI.advancedFiltersPanel
+
+
+UI.performancePanel = Instance.new("Frame")
+UI.performancePanel.Size = UDim2.new(1, -20, 0, 164)
+UI.performancePanel.Position = UDim2.new(0, 10, 0, 678)
+UI.performancePanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+UI.performancePanel.BackgroundTransparency = 0.15
+UI.performancePanel.BorderSizePixel = 0
+UI.performancePanel.ZIndex = 3
+UI.performancePanel.Visible = true
+UI.performancePanel.Parent = UI.controls
+mkCorner(UI.performancePanel, 6)
+mkStroke(UI.performancePanel, Color3.fromRGB(60, 60, 60), 1)
+
+UI.performanceTitle = Instance.new("TextLabel")
+UI.performanceTitle.Text = "Performance"
+UI.performanceTitle.Size = UDim2.new(0, 120, 0, 18)
+UI.performanceTitle.Position = UDim2.new(0, 10, 0, 8)
+UI.performanceTitle.BackgroundTransparency = 1
+UI.performanceTitle.TextColor3 = Color3.fromRGB(220, 220, 220)
+UI.performanceTitle.Font = Enum.Font.Code
+UI.performanceTitle.TextSize = 12
+UI.performanceTitle.TextXAlignment = Enum.TextXAlignment.Left
+UI.performanceTitle.ZIndex = 4
+UI.performanceTitle.Parent = UI.performancePanel
+
+UI.captureTrackBtn = Instance.new("TextButton")
+UI.captureTrackBtn.Text = "Capture Track"
+UI.captureTrackBtn.Size = UDim2.new(0, 94, 0, 18)
+UI.captureTrackBtn.Position = UDim2.new(1, -104, 0, 8)
+UI.captureTrackBtn.BackgroundColor3 = Color3.fromRGB(22,38,24)
+UI.captureTrackBtn.TextColor3 = Color3.fromRGB(140,210,145)
+UI.captureTrackBtn.Font = Enum.Font.Code
+UI.captureTrackBtn.TextSize = 10
+UI.captureTrackBtn.BorderSizePixel = 0
+UI.captureTrackBtn.ZIndex = 4
+UI.captureTrackBtn.Parent = UI.performancePanel
+mkCorner(UI.captureTrackBtn, 3)
+mkStroke(UI.captureTrackBtn, Color3.fromRGB(45,80,48), 1)
+
+UI.performanceFpsLabel = Instance.new("TextLabel")
+UI.performanceFpsLabel.Text = "FPS: --"
+UI.performanceFpsLabel.Size = UDim2.new(0, 120, 0, 16)
+UI.performanceFpsLabel.Position = UDim2.new(0, 10, 0, 30)
+UI.performanceFpsLabel.BackgroundTransparency = 1
+UI.performanceFpsLabel.TextColor3 = Color3.fromRGB(160, 220, 160)
+UI.performanceFpsLabel.Font = Enum.Font.Code
+UI.performanceFpsLabel.TextSize = 11
+UI.performanceFpsLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.performanceFpsLabel.ZIndex = 4
+UI.performanceFpsLabel.Parent = UI.performancePanel
+
+UI.performanceTrackLabel = Instance.new("TextLabel")
+UI.performanceTrackLabel.Text = "Script tracks: 0"
+UI.performanceTrackLabel.Size = UDim2.new(0, 140, 0, 16)
+UI.performanceTrackLabel.Position = UDim2.new(0, 10, 0, 50)
+UI.performanceTrackLabel.BackgroundTransparency = 1
+UI.performanceTrackLabel.TextColor3 = Color3.fromRGB(160, 220, 220)
+UI.performanceTrackLabel.Font = Enum.Font.Code
+UI.performanceTrackLabel.TextSize = 11
+UI.performanceTrackLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.performanceTrackLabel.ZIndex = 4
+UI.performanceTrackLabel.Parent = UI.performancePanel
+
+UI.performanceLogRateLabel = Instance.new("TextLabel")
+UI.performanceLogRateLabel.Text = "Log rate: --/s"
+UI.performanceLogRateLabel.Size = UDim2.new(0, 140, 0, 16)
+UI.performanceLogRateLabel.Position = UDim2.new(0, 10, 0, 70)
+UI.performanceLogRateLabel.BackgroundTransparency = 1
+UI.performanceLogRateLabel.TextColor3 = Color3.fromRGB(220, 180, 120)
+UI.performanceLogRateLabel.Font = Enum.Font.Code
+UI.performanceLogRateLabel.TextSize = 11
+UI.performanceLogRateLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.performanceLogRateLabel.ZIndex = 4
+UI.performanceLogRateLabel.Parent = UI.performancePanel
+
+UI.performanceMsLabel = Instance.new("TextLabel")
+UI.performanceMsLabel.Text = "Frame ms: --"
+UI.performanceMsLabel.Size = UDim2.new(0, 150, 0, 16)
+UI.performanceMsLabel.Position = UDim2.new(0, 160, 0, 30)
+UI.performanceMsLabel.BackgroundTransparency = 1
+UI.performanceMsLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
+UI.performanceMsLabel.Font = Enum.Font.Code
+UI.performanceMsLabel.TextSize = 11
+UI.performanceMsLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.performanceMsLabel.ZIndex = 4
+UI.performanceMsLabel.Parent = UI.performancePanel
+
+UI.performancePeakTrackLabel = Instance.new("TextLabel")
+UI.performancePeakTrackLabel.Text = "Peak tracks: 0"
+UI.performancePeakTrackLabel.Size = UDim2.new(0, 150, 0, 16)
+UI.performancePeakTrackLabel.Position = UDim2.new(0, 160, 0, 50)
+UI.performancePeakTrackLabel.BackgroundTransparency = 1
+UI.performancePeakTrackLabel.TextColor3 = Color3.fromRGB(180, 220, 220)
+UI.performancePeakTrackLabel.Font = Enum.Font.Code
+UI.performancePeakTrackLabel.TextSize = 11
+UI.performancePeakTrackLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.performancePeakTrackLabel.ZIndex = 4
+UI.performancePeakTrackLabel.Parent = UI.performancePanel
+
+UI.performanceDropLabel = Instance.new("TextLabel")
+UI.performanceDropLabel.Text = "Drop >33ms: 0%"
+UI.performanceDropLabel.Size = UDim2.new(0, 170, 0, 16)
+UI.performanceDropLabel.Position = UDim2.new(0, 160, 0, 70)
+UI.performanceDropLabel.BackgroundTransparency = 1
+UI.performanceDropLabel.TextColor3 = Color3.fromRGB(220, 170, 150)
+UI.performanceDropLabel.Font = Enum.Font.Code
+UI.performanceDropLabel.TextSize = 11
+UI.performanceDropLabel.TextXAlignment = Enum.TextXAlignment.Left
+UI.performanceDropLabel.ZIndex = 4
+UI.performanceDropLabel.Parent = UI.performancePanel
+
+UI.performanceGraph = Instance.new("Frame")
+UI.performanceGraph.Size = UDim2.new(1, -20, 0, 46)
+UI.performanceGraph.Position = UDim2.new(0, 10, 0, 112)
+UI.performanceGraph.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+UI.performanceGraph.BorderSizePixel = 0
+UI.performanceGraph.ZIndex = 4
+UI.performanceGraph.Parent = UI.performancePanel
+mkCorner(UI.performanceGraph, 4)
+
+UI.performanceBars = {}
+for i = 1, 25 do
+	local bar = Instance.new("Frame")
+	bar.Size = UDim2.new(0, 4, 1, 0)
+	bar.Position = UDim2.new(0, (i-1) * 5, 0, 0)
+	bar.BackgroundColor3 = Color3.fromRGB(80, 150, 255)
+	bar.BorderSizePixel = 0
+	bar.ZIndex = 5
+	bar.Parent = UI.performanceGraph
+	mkCorner(bar, 2)
+	UI.performanceBars[i] = bar
+end
+
+table.insert(Data.connections, UI.filterPresetDropdown.MouseButton1Click:Connect(function()
+	local menu = Instance.new("Frame")
+	menu.Size = UDim2.new(0, 120, 0, 100)
+	menu.Position = UDim2.new(0, 0, 1, 5)
+	menu.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	menu.BorderSizePixel = 0
+	menu.ZIndex = 10
+	menu.Parent = UI.filterPresetDropdown
+	mkCorner(menu, 3)
+	mkStroke(menu, Color3.fromRGB(60, 60, 60), 1)
+
+	local yPos = 0
+	for name, _ in pairs(State.advancedFilters.presets) do
+		local optBtn = Instance.new("TextButton")
+		optBtn.Size = UDim2.new(1, 0, 0, 20)
+		optBtn.Position = UDim2.new(0, 0, 0, yPos)
+		optBtn.Text = name
+		optBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		optBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+		optBtn.Font = Enum.Font.Code
+		optBtn.TextSize = 10
+		optBtn.ZIndex = 11
+		optBtn.Parent = menu
+		mkCorner(optBtn, 2)
+
+		table.insert(Data.connections, optBtn.MouseButton1Click:Connect(function()
+			loadFilterPreset(name)
+			refreshAdvancedFiltersUI()
+			doFilter()
+			menu:Destroy()
+		end))
+
+		yPos = yPos + 20
+	end
+
+	task.delay(5, function() if menu and menu.Parent then menu:Destroy() end end)
+end))
+
+table.insert(Data.connections, UI.filterLogicDropdown.MouseButton1Click:Connect(function()
+	local menu = Instance.new("Frame")
+	menu.Size = UDim2.new(0, 50, 0, 40)
+	menu.Position = UDim2.new(0, 0, 1, 5)
+	menu.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	menu.BorderSizePixel = 0
+	menu.ZIndex = 10
+	menu.Parent = UI.filterLogicDropdown
+	mkCorner(menu, 3)
+	mkStroke(menu, Color3.fromRGB(60, 60, 60), 1)
+
+	local logics = {"AND", "OR"}
+	for i, logic in ipairs(logics) do
+		local optBtn = Instance.new("TextButton")
+		optBtn.Size = UDim2.new(1, 0, 0, 18)
+		optBtn.Position = UDim2.new(0, 0, 0, (i-1)*18)
+		optBtn.Text = logic
+		optBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		optBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+		optBtn.Font = Enum.Font.Code
+		optBtn.TextSize = 10
+		optBtn.ZIndex = 11
+		optBtn.Parent = menu
+		mkCorner(optBtn, 2)
+
+		table.insert(Data.connections, optBtn.MouseButton1Click:Connect(function()
+			State.advancedFilters.logic = logic
+			UI.filterLogicDropdown.Text = logic
+			doFilter()
+			if dumpCfg then dumpCfg() end
+			menu:Destroy()
+		end))
+	end
+
+	task.delay(5, function() if menu and menu.Parent then menu:Destroy() end end)
+end))
+
+table.insert(Data.connections, UI.saveFilterPresetBtn.MouseButton1Click:Connect(function()
+
+	local dialog = Instance.new("Frame")
+	dialog.Size = UDim2.new(0, 200, 0, 80)
+	dialog.Position = UDim2.new(0.5, -100, 0.5, -40)
+	dialog.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	dialog.BorderSizePixel = 0
+	dialog.ZIndex = 20
+	dialog.Parent = UI.gui
+	mkCorner(dialog, 6)
+	mkStroke(dialog, Color3.fromRGB(60, 60, 60), 1)
+
+	local title = Instance.new("TextLabel")
+	title.Text = "Save Preset"
+	title.Size = UDim2.new(1, -20, 0, 20)
+	title.Position = UDim2.new(0, 10, 0, 5)
+	title.BackgroundTransparency = 1
+	title.TextColor3 = Color3.fromRGB(200, 200, 200)
+	title.Font = Enum.Font.Code
+	title.TextSize = 12
+	title.ZIndex = 21
+	title.Parent = dialog
+
+	local input = Instance.new("TextBox")
+	input.Size = UDim2.new(1, -20, 0, 20)
+	input.Position = UDim2.new(0, 10, 0, 30)
+	input.Text = ""
+	input.PlaceholderText = "Preset name..."
+	input.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+	input.TextColor3 = Color3.fromRGB(240, 240, 240)
+	input.Font = Enum.Font.Code
+	input.TextSize = 11
+	input.ZIndex = 21
+	input.Parent = dialog
+	mkCorner(input, 3)
+
+	local saveBtn = Instance.new("TextButton")
+	saveBtn.Size = UDim2.new(0, 40, 0, 20)
+	saveBtn.Position = UDim2.new(0, 10, 0, 55)
+	saveBtn.Text = "Save"
+	saveBtn.BackgroundColor3 = Color3.fromRGB(22, 38, 24)
+	saveBtn.TextColor3 = Color3.fromRGB(140, 210, 145)
+	saveBtn.Font = Enum.Font.Code
+	saveBtn.TextSize = 10
+	saveBtn.ZIndex = 21
+	saveBtn.Parent = dialog
+	mkCorner(saveBtn, 3)
+
+	local cancelBtn = Instance.new("TextButton")
+	cancelBtn.Size = UDim2.new(0, 40, 0, 20)
+	cancelBtn.Position = UDim2.new(0, 55, 0, 55)
+	cancelBtn.Text = "Cancel"
+	cancelBtn.BackgroundColor3 = Color3.fromRGB(38, 22, 22)
+	cancelBtn.TextColor3 = Color3.fromRGB(210, 130, 130)
+	cancelBtn.Font = Enum.Font.Code
+	cancelBtn.TextSize = 10
+	cancelBtn.ZIndex = 21
+	cancelBtn.Parent = dialog
+	mkCorner(cancelBtn, 3)
+
+	table.insert(Data.connections, saveBtn.MouseButton1Click:Connect(function()
+		local name = input.Text:match("^%s*(.-)%s*$")
+		if name ~= "" then
+			saveFilterPreset(name)
+			UI.filterPresetDropdown.Text = name
+		end
+		dialog:Destroy()
+	end))
+
+	table.insert(Data.connections, cancelBtn.MouseButton1Click:Connect(function()
+		dialog:Destroy()
+	end))
+end))
+
+table.insert(Data.connections, UI.loadFilterPresetBtn.MouseButton1Click:Connect(function()
+	loadFilterPreset(State.advancedFilters.currentPreset)
+	refreshAdvancedFiltersUI()
+	doFilter()
+end))
+
+table.insert(Data.connections, UI.addFilterBtn.MouseButton1Click:Connect(function()
+	table.insert(State.advancedFilters.activeFilters, {type = "search", param = "", enabled = true})
+	refreshFilterList()
+	doFilter()
+	if dumpCfg then dumpCfg() end
+end))
+
+local function buildFilterRow(filterIndex, filterData)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 30)
+	row.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	row.BorderSizePixel = 0
+	row.ZIndex = 5
+	mkCorner(row, 4)
+
+
+	local enableCheck = Instance.new("TextButton")
+	enableCheck.Size = UDim2.new(0, 20, 0, 20)
+	enableCheck.Position = UDim2.new(0, 5, 0, 5)
+	enableCheck.Text = filterData.enabled ~= false and "✓" or "✗"
+	enableCheck.BackgroundColor3 = filterData.enabled ~= false and Color3.fromRGB(22, 38, 24) or Color3.fromRGB(38, 22, 22)
+	enableCheck.TextColor3 = Color3.fromRGB(255, 255, 255)
+	enableCheck.Font = Enum.Font.Code
+	enableCheck.TextSize = 12
+	enableCheck.ZIndex = 6
+	enableCheck.Parent = row
+	mkCorner(enableCheck, 2)
+
+
+	local typeDropdown = Instance.new("TextButton")
+	typeDropdown.Size = UDim2.new(0, 90, 1, 0)
+	typeDropdown.Position = UDim2.new(0, 30, 0, 0)
+	typeDropdown.Text = filterData.type or "search"
+	typeDropdown.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+	typeDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
+	typeDropdown.Font = Enum.Font.Code
+	typeDropdown.TextSize = 10
+	typeDropdown.ZIndex = 6
+	typeDropdown.Parent = row
+	mkCorner(typeDropdown, 3)
+
+
+	local paramInput = Instance.new("TextBox")
+	paramInput.Size = UDim2.new(1, -140, 1, 0)
+	paramInput.Position = UDim2.new(0, 125, 0, 0)
+	paramInput.Text = filterData.param or ""
+	paramInput.PlaceholderText = "parameter..."
+	paramInput.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+	paramInput.TextColor3 = Color3.fromRGB(240, 240, 240)
+	paramInput.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
+	paramInput.Font = Enum.Font.Code
+	paramInput.TextSize = 11
+	paramInput.ZIndex = 6
+	paramInput.Parent = row
+	mkCorner(paramInput, 3)
+
+
+	local removeBtn = Instance.new("TextButton")
+	removeBtn.Size = UDim2.new(0, 20, 0, 20)
+	removeBtn.Position = UDim2.new(1, -25, 0, 5)
+	removeBtn.Text = "×"
+	removeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	removeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	removeBtn.Font = Enum.Font.Code
+	removeBtn.TextSize = 12
+	removeBtn.ZIndex = 6
+	removeBtn.Parent = row
+	mkCorner(removeBtn, 3)
+
+
+	table.insert(Data.connections, enableCheck.MouseButton1Click:Connect(function()
+		filterData.enabled = not (filterData.enabled ~= false)
+		enableCheck.Text = filterData.enabled and "✓" or "✗"
+		enableCheck.BackgroundColor3 = filterData.enabled and Color3.fromRGB(22, 38, 24) or Color3.fromRGB(38, 22, 22)
+		doFilter()
+		if dumpCfg then dumpCfg() end
+	end))
+
+	table.insert(Data.connections, typeDropdown.MouseButton1Click:Connect(function()
+		local menu = Instance.new("Frame")
+		menu.Size = UDim2.new(0, 90, 0, 200)
+		menu.Position = UDim2.new(0, 0, 1, 5)
+		menu.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+		menu.BorderSizePixel = 0
+		menu.ZIndex = 10
+		menu.Parent = typeDropdown
+		mkCorner(menu, 3)
+		mkStroke(menu, Color3.fromRGB(60, 60, 60), 1)
+
+		local filterTypes = {
+			"search", "player", "priority", "id_exact", "name_exact",
+			"player_exact", "priority_exact", "id_pattern", "name_pattern",
+			"count_min", "count_max", "favorited"
+		}
+
+		for i, filterType in ipairs(filterTypes) do
+			local optBtn = Instance.new("TextButton")
+			optBtn.Size = UDim2.new(1, 0, 0, 18)
+			optBtn.Position = UDim2.new(0, 0, 0, (i-1)*18)
+			optBtn.Text = filterType
+			optBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			optBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+			optBtn.Font = Enum.Font.Code
+			optBtn.TextSize = 9
+			optBtn.ZIndex = 11
+			optBtn.Parent = menu
+			mkCorner(optBtn, 2)
+
+			table.insert(Data.connections, optBtn.MouseButton1Click:Connect(function()
+				filterData.type = filterType
+				typeDropdown.Text = filterType
+				menu:Destroy()
+				doFilter()
+				if dumpCfg then dumpCfg() end
+			end))
+		end
+
+		task.delay(5, function() if menu and menu.Parent then menu:Destroy() end end)
+	end))
+
+	table.insert(Data.connections, paramInput:GetPropertyChangedSignal("Text"):Connect(function()
+		filterData.param = paramInput.Text
+		doFilter()
+		if dumpCfg then dumpCfg() end
+	end))
+
+	table.insert(Data.connections, removeBtn.MouseButton1Click:Connect(function()
+		table.remove(State.advancedFilters.activeFilters, filterIndex)
+		row:Destroy()
+		doFilter()
+		if dumpCfg then dumpCfg() end
+	end))
+
+	return row
+end
+
+local function refreshFilterList()
+
+	for _, child in ipairs(UI.filterList:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+
+
+	for i, filter in ipairs(State.advancedFilters.activeFilters) do
+		local row = buildFilterRow(i, filter)
+		row.Parent = UI.filterList
+	end
+
+
+	local stats = getFilterStatistics()
+	UI.filterStatsLabel.Text = string.format("Stats: %d/%d visible", stats.visible, stats.total)
+end
+
+local function refreshAdvancedFiltersUI()
+	refreshAdvancedFiltersBtn()
+	UI.filterPresetDropdown.Text = State.advancedFilters.currentPreset
+	UI.filterLogicDropdown.Text = State.advancedFilters.logic
+	UI.advancedFiltersPanel.Visible = State.advancedFilters.enabled
+	if State.advancedFilters.enabled then
+		refreshFilterList()
+	end
+end
+
+refreshAdvancedFiltersUI()
+
+local function refreshPerformanceUI()
+	local perf = State.performance
+	UI.performanceFpsLabel.Text = string.format("FPS: %d", math.floor(perf.fps + 0.5))
+	UI.performanceTrackLabel.Text = string.format("Script tracks: %d", perf.activeScriptTracks)
+	UI.performancePeakTrackLabel.Text = string.format("Peak tracks: %d", perf.peakScriptTracks or 0)
+	UI.performanceLogRateLabel.Text = string.format("Log rate: %.1f/s", perf.logRate)
+	UI.performanceMsLabel.Text = string.format("Frame ms: %.2f", (perf.avgFrameTime or 0) * 1000)
+	local dropPct = ((perf.droppedFrames or 0) / math.max(perf.frameCount or 1, 1)) * 100
+	UI.performanceDropLabel.Text = string.format("Drop >33ms: %.1f%%", dropPct)
+
+	for i, bar in ipairs(UI.performanceBars) do
+		local ratio = math.clamp(perf.fps / 60, 0, 1)
+		local height = math.clamp((i / #UI.performanceBars) * ratio, 0.05, 1)
+		bar.Size = UDim2.new(0, 4, height, 0)
+		bar.Position = UDim2.new(0, (i - 1) * 5, 1 - height, 0)
+		bar.BackgroundColor3 = Color3.fromHSV(math.clamp(0.4 * ratio, 0, 0.4), 0.85, 0.9)
+	end
+end
+
+local function updatePerformance(dt)
+	local perf = State.performance
+	perf.frameCount = (perf.frameCount or 0) + 1
+	if dt > (1/30) then perf.droppedFrames = (perf.droppedFrames or 0) + 1 end
+	table.insert(perf.frameTimes, dt)
+	if #perf.frameTimes > 25 then table.remove(perf.frameTimes, 1) end
+
+	local sum = 0
+	for _, v in ipairs(perf.frameTimes) do sum = sum + v end
+	perf.avgFrameTime = sum / #perf.frameTimes
+	perf.fps = perf.avgFrameTime > 0 and (1 / perf.avgFrameTime) or 0
+
+	local active = 0
+	for _ in pairs(Data.scriptTracks) do active = active + 1 end
+	perf.activeScriptTracks = active
+	perf.peakScriptTracks = math.max(perf.peakScriptTracks or 0, active)
+	perf.totalScriptTracks = perf.totalScriptTracks + active
+
+	local elapsed = tick() - perf.logTickStart
+	perf.logRate = elapsed > 0 and (perf.totalLogs / elapsed) or 0
+
+	refreshPerformanceUI()
+end
+
+local function captureCurrentTrack()
+	local animator = grabAnimator()
+	if not animator then
+		flashNotif("No local animator found", 2, nil, "warn")
+		return false
+	end
+	local chosen
+	for _, t in ipairs(animator:GetPlayingAnimationTracks()) do
+		if t and t.IsPlaying then chosen = t; break end
+	end
+	if not chosen then
+		flashNotif("No active local track to capture", 2, nil, "warn")
+		return false
+	end
+	local id = grabId(chosen.Animation and chosen.Animation.AnimationId)
+	if not id or id == "" then
+		flashNotif("Could not resolve animation id", 2, nil, "error")
+		return false
+	end
+	UI.idBox.Text = id
+	UI.speedBox.Text = string.format("%.2f", chosen.Speed or 1)
+	UI.timeBox.Text = string.format("%.2f", chosen.TimePosition or 0)
+	UI.priorityFilterBox.Text = chosen.Priority and chosen.Priority.Name or UI.priorityFilterBox.Text
+	flashNotif("Captured track " .. id, 2, nil, "success")
+	return true
+end
+
+table.insert(Data.connections, UI.captureTrackBtn.MouseButton1Click:Connect(captureCurrentTrack))
+
 UI.toggleKeyBtn = Instance.new("TextButton")
-UI.toggleKeyBtn.Text = "Hide Key: " .. State.toggleKey.Name; UI.toggleKeyBtn.Position = UDim2.new(0,10,0,686); UI.toggleKeyBtn.Size = UDim2.new(1,-20,0,26)
+UI.toggleKeyBtn.Text = "Hide Key: " .. State.toggleKey.Name; UI.toggleKeyBtn.Position = UDim2.new(0,10,0,846); UI.toggleKeyBtn.Size = UDim2.new(1,-20,0,26)
 UI.toggleKeyBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); UI.toggleKeyBtn.TextColor3 = Color3.fromRGB(160,160,160)
 UI.toggleKeyBtn.BorderSizePixel = 0; UI.toggleKeyBtn.Font = Enum.Font.Code; UI.toggleKeyBtn.TextSize = 12; UI.toggleKeyBtn.ZIndex = 3; UI.toggleKeyBtn.Visible = true; UI.toggleKeyBtn.Parent = UI.controls
 mkCorner(UI.toggleKeyBtn, 4); mkStroke(UI.toggleKeyBtn, Color3.fromRGB(65,65,65), 1)
@@ -827,12 +1638,19 @@ table.insert(Data.connections, UI.discordBtn.MouseButton1Click:Connect(function(
 	task.delay(2, function() UI.discordBtn.Text = "discord"; UI.discordBtn.TextColor3 = Color3.fromRGB(180,190,255) end)
 end))
 
+table.insert(Data.connections, Services.RunService.RenderStepped:Connect(function(dt)
+	if State.performance.enabled then
+		updatePerformance(dt)
+	end
+end))
+
 table.insert(Data.connections, UI.minimize.MouseButton1Click:Connect(function()
 	State.minimized = not State.minimized
 	if State.minimized then
 		UI.mainFrame.Size = UDim2.new(0,460,0,28)
 		for _, v in ipairs({UI.list, UI.favsList, UI.bannedList, UI.controls, UI.searchBox, UI.playerFilterBox, UI.priorityFilterBox,
-			UI.logTabBtn, UI.favsTabBtn, UI.bannedTabBtn, UI.logCountLabel, UI.resizeHandle, UI.discordBtn}) do
+			UI.logTabBtn, UI.favsTabBtn, UI.bannedTabBtn, UI.logCountLabel, UI.resizeHandle, UI.discordBtn, UI.advancedFiltersPanel, UI.performancePanel,
+			UI.commandBar, UI.commandPaletteBtn, UI.commandRunBtn, UI.commandPalette}) do
 			v.Visible = false
 		end
 		UI.minimize.Text = "+"
@@ -840,28 +1658,53 @@ table.insert(Data.connections, UI.minimize.MouseButton1Click:Connect(function()
 		UI.mainFrame.Size = UDim2.new(0,820,0,630)
 		UI.list.Visible = (State.currentTab == "log"); UI.favsList.Visible = (State.currentTab == "favs"); UI.bannedList.Visible = (State.currentTab == "banned")
 		for _, v in ipairs({UI.controls, UI.searchBox, UI.playerFilterBox, UI.priorityFilterBox,
-			UI.logTabBtn, UI.favsTabBtn, UI.bannedTabBtn, UI.logCountLabel, UI.resizeHandle, UI.discordBtn}) do
+			UI.logTabBtn, UI.favsTabBtn, UI.bannedTabBtn, UI.logCountLabel, UI.resizeHandle, UI.discordBtn, UI.commandBar, UI.commandPaletteBtn, UI.commandRunBtn}) do
 			v.Visible = true
 		end
+		UI.performancePanel.Visible = true
+		UI.advancedFiltersPanel.Visible = State.advancedFilters.enabled
 		UI.minimize.Text = "-"
 	end
 end))
 
 local function doFilter()
-	local query = UI.searchBox.Text:lower(); local pf = UI.playerFilterBox.Text:lower(); local priF = UI.priorityFilterBox.Text:lower()
 	for id, entry in pairs(Data.animFrames) do
 		if id:find("__frame", 1, true) then continue end
-		local text = entry.Text:lower()
-		local ok = (query == "" or id:lower():find(query,1,true) or text:find(query,1,true))
-			and (pf == "" or text:find(pf,1,true))
-			and (priF == "" or text:find(priF,1,true))
+
+		local animData = {
+			id = id:match("^([%d]+)") or id,
+			name = entry.Text,
+			player = "", 
+			priority = "", 
+			count = Data.animCounts[id] or 1,
+			favorited = Data.favorites[id:match("^([%d]+)") or id] or false
+		}
+
+		local shouldShow = shouldShowAnimation(animData)
 		local container = entry.Parent
-		if container and container:IsA("Frame") then container.Visible = ok end
+		if container and container:IsA("Frame") then
+			container.Visible = shouldShow
+		end
 	end
 end
-table.insert(Data.connections, UI.searchBox:GetPropertyChangedSignal("Text"):Connect(doFilter))
-table.insert(Data.connections, UI.playerFilterBox:GetPropertyChangedSignal("Text"):Connect(doFilter))
-table.insert(Data.connections, UI.priorityFilterBox:GetPropertyChangedSignal("Text"):Connect(doFilter))
+table.insert(Data.connections, UI.searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	if not State.advancedFilters.enabled then
+		State.advancedFilters.activeFilters[1].param = UI.searchBox.Text
+		doFilter()
+	end
+end))
+table.insert(Data.connections, UI.playerFilterBox:GetPropertyChangedSignal("Text"):Connect(function()
+	if not State.advancedFilters.enabled then
+		State.advancedFilters.activeFilters[2].param = UI.playerFilterBox.Text
+		doFilter()
+	end
+end))
+table.insert(Data.connections, UI.priorityFilterBox:GetPropertyChangedSignal("Text"):Connect(function()
+	if not State.advancedFilters.enabled then
+		State.advancedFilters.activeFilters[3].param = UI.priorityFilterBox.Text
+		doFilter()
+	end
+end))
 
 
 UI.sideFrame = Instance.new("Frame")
@@ -1004,7 +1847,7 @@ do
 	tl.BackgroundTransparency = 1; tl.TextColor3 = Color3.fromRGB(160,160,160)
 	tl.TextXAlignment = Enum.TextXAlignment.Left; tl.TextYAlignment = Enum.TextYAlignment.Top
 	tl.TextWrapped = true; tl.Font = Enum.Font.Code; tl.TextSize = 11; tl.ZIndex = 14
-	tl.Text = "COMMANDS (main id box):\npause/freeze  speed [n]  ban [id]\nunban [id]  stop [id]  step [n]\nloop  clear\n\nMACRO (use ; to chain):\nplay [id] [speed] [loop?]\nwait [secs]  stop [id]  speed [n]\n\nEXAMPLE:\nplay 111; wait 0.5; play 222 2 true;\nwait 1; stop 111\n\nHold: ON = temp freeze while held."
+	tl.Text = "COMMANDS (main id box):\npause/freeze  speed [n]  ban [id]  unban [id]\nstop [id]  step [n]  loop  clear  global\nautocopy  priority [name]  weight [n]  fade [t]\nreverse  scrub [pos]  length [n]  export  import\n\nMACRO (use ; to chain):\nplay [id] [speed] [loop?]  wait [secs]  stop [id]\nspeed [n]  ramp [start] [end] [time]  priority [name]\nweight [n]  fade [t]  reverse  scrub [pos]  step [n]\nlength [n]  var [name] [val]  add [name] [amt]  mul [name] [fac]\nuse [name]  if [var] [op] [val]  goto [label]  label [name]\nrepeat [count] ... endrepeat  random [min] [max]\nsin [freq] [amp] [offset] [time]  cos [freq] [amp] [offset] [time]\nlerp [start] [end] [time]\n\nEXAMPLES:\nramp 1 3 2; wait 2; ramp 3 0.5 1\nrepeat 3 play 123; wait 0.5 endrepeat\nvar spd 1; add spd 0.5; use spd\nif spd > 2 goto fast; speed 1; label fast"
 	tl.Parent = UI.cmdsPanel
 end
 table.insert(Data.connections, UI.cmdsBtn.MouseButton1Click:Connect(function()
@@ -1283,9 +2126,13 @@ local function dragVP(input)
 	local delta = input.Position - State.dragStartVP
 	viewportWin.Position = UDim2.new(State.startPosVP.X.Scale, State.startPosVP.X.Offset + delta.X, State.startPosVP.Y.Scale, State.startPosVP.Y.Offset + delta.Y)
 end
+
 table.insert(Data.connections, viewportWin.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not UI.activeDragger then
 		UI.activeDragger = "vp"; State.draggingVP = true; State.dragStartVP = input.Position; State.startPosVP = viewportWin.Position
+		do local px, py = input.Position.X, input.Position.Y; local fp = UI.vpFrame.AbsolutePosition; local fs = UI.vpFrame.AbsoluteSize
+			if px >= fp.X and px <= fp.X + fs.X and py >= fp.Y and py <= fp.Y + fs.Y then State.draggingVP = false; if UI.activeDragger == "vp" then UI.activeDragger = nil end; return end
+		end
 		table.insert(Data.connections, input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				State.draggingVP = false; if UI.activeDragger == "vp" then UI.activeDragger = nil end
@@ -1304,9 +2151,9 @@ end))
 
 local vpTop = Instance.new("Frame"); vpTop.Size = UDim2.new(1,0,0,25); vpTop.BackgroundColor3 = Color3.fromRGB(20,20,20); vpTop.BackgroundTransparency = 0; vpTop.BorderSizePixel = 0; vpTop.ZIndex = 6; vpTop.Parent = viewportWin
 do local g = Instance.new("UIGradient"); g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(42,42,42)),ColorSequenceKeypoint.new(1,Color3.fromRGB(20,20,20))}); g.Rotation = 90; g.Parent = vpTop end
-UI.vpTitle = Instance.new("TextLabel"); UI.vpTitle.Text = "preview"; UI.vpTitle.Size = UDim2.new(1,-120,1,0); UI.vpTitle.BackgroundTransparency = 1; UI.vpTitle.TextColor3 = Color3.fromRGB(160,160,160); UI.vpTitle.Font = Enum.Font.Code; UI.vpTitle.TextSize = 13; UI.vpTitle.ZIndex = 7; UI.vpTitle.Parent = vpTop
-UI.vpClose = Instance.new("TextButton"); UI.vpClose.Size = UDim2.new(0,25,0,20); UI.vpClose.Position = UDim2.new(1,-27,0,3); UI.vpClose.Text = "X"; UI.vpClose.BackgroundColor3 = Color3.fromRGB(200,50,50); UI.vpClose.TextColor3 = Color3.fromRGB(255,255,255); UI.vpClose.BorderSizePixel = 0; UI.vpClose.Font = Enum.Font.Code; UI.vpClose.TextSize = 11; UI.vpClose.ZIndex = 7; UI.vpClose.Parent = vpTop; mkCorner(UI.vpClose,4)
-UI.vpMinimize = Instance.new("TextButton"); UI.vpMinimize.Size = UDim2.new(0,25,0,20); UI.vpMinimize.Position = UDim2.new(1,-54,0,3); UI.vpMinimize.Text = "-"; UI.vpMinimize.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpMinimize.TextColor3 = Color3.fromRGB(140,210,145); UI.vpMinimize.BorderSizePixel = 0; UI.vpMinimize.Font = Enum.Font.Code; UI.vpMinimize.TextSize = 11; UI.vpMinimize.ZIndex = 7; UI.vpMinimize.Parent = vpTop; mkCorner(UI.vpMinimize,4)
+UI.vpTitle = Instance.new("TextLabel"); UI.vpTitle.Text = "preview"; UI.vpTitle.Position = UDim2.new(0,55,0,0); UI.vpTitle.Size = UDim2.new(1,-175,1,0); UI.vpTitle.BackgroundTransparency = 1; UI.vpTitle.TextColor3 = Color3.fromRGB(160,160,160); UI.vpTitle.Font = Enum.Font.Code; UI.vpTitle.TextSize = 13; UI.vpTitle.ZIndex = 7; UI.vpTitle.Parent = vpTop
+UI.vpClose = Instance.new("TextButton"); UI.vpClose.Size = UDim2.new(0,25,0,20); UI.vpClose.Position = UDim2.new(1,-27,0,3); UI.vpClose.Text = "X"; UI.vpClose.BackgroundColor3 = Color3.fromRGB(120,30,30); UI.vpClose.TextColor3 = Color3.fromRGB(255,255,255); UI.vpClose.BorderSizePixel = 0; UI.vpClose.Font = Enum.Font.Code; UI.vpClose.TextSize = 11; UI.vpClose.ZIndex = 7; UI.vpClose.Parent = vpTop; mkCorner(UI.vpClose,4); mkStroke(UI.vpClose, Color3.fromRGB(200,50,50), 1)
+UI.vpMinimize = Instance.new("TextButton"); UI.vpMinimize.Size = UDim2.new(0,25,0,20); UI.vpMinimize.Position = UDim2.new(1,-54,0,3); UI.vpMinimize.Text = "-"; UI.vpMinimize.BackgroundColor3 = Color3.fromRGB(22,38,24); UI.vpMinimize.TextColor3 = Color3.fromRGB(140,210,145); UI.vpMinimize.BorderSizePixel = 0; UI.vpMinimize.Font = Enum.Font.Code; UI.vpMinimize.TextSize = 11; UI.vpMinimize.ZIndex = 7; UI.vpMinimize.Parent = vpTop; mkCorner(UI.vpMinimize,4); mkStroke(UI.vpMinimize, Color3.fromRGB(45,80,48), 1)
 table.insert(Data.connections, UI.vpClose.MouseButton1Click:Connect(function() UI.viewportWin.Visible = false end))
 table.insert(Data.connections, UI.vpMinimize.MouseButton1Click:Connect(function()
 	State.vpMinimized = not State.vpMinimized
@@ -1330,6 +2177,8 @@ mkCorner(UI.vpFrame,4); mkStroke(UI.vpFrame, Color3.fromRGB(42,42,42), 1)
 UI.vpCamera = Instance.new("Camera"); UI.vpCamera.Parent = UI.vpFrame; UI.vpFrame.CurrentCamera = UI.vpCamera
 UI.worldModel = Instance.new("WorldModel"); UI.worldModel.Parent = UI.vpFrame
 UI.vpFrame.Ambient = Color3.fromRGB(95,95,95); UI.vpFrame.LightDirection = Vector3.new(-1,-2,-1)
+local vpCamHint = Instance.new("TextLabel"); vpCamHint.Size = UDim2.new(1,-10,0,12); vpCamHint.Position = UDim2.new(0,5,0,280); vpCamHint.Text = "Left/Right-drag: rotate  |  Scroll: zoom"
+vpCamHint.BackgroundTransparency = 1; vpCamHint.TextColor3 = Color3.fromRGB(100,100,100); vpCamHint.Font = Enum.Font.Code; vpCamHint.TextSize = 10; vpCamHint.ZIndex = 6; vpCamHint.Parent = UI.viewportWin
 local worldModel = UI.worldModel
 local vpCamera = UI.vpCamera
 
@@ -1598,11 +2447,30 @@ table.insert(Data.connections, UI.closeButton.MouseButton1Click:Connect(function
 	UI.gui:Destroy()
 end))
 
+local function ensureSpawnDummyAnimator()
+	if not Data.spawnDummy then return nil end
+	local hum = Data.spawnDummy:FindFirstChildOfClass("Humanoid")
+	if not hum then return nil end
+	if Data.spawnDummyAnimator and Data.spawnDummyAnimator.Parent == hum then return Data.spawnDummyAnimator end
+	local anim = hum:FindFirstChildOfClass("Animator")
+	if not anim then
+		anim = Instance.new("Animator")
+		anim.Parent = hum
+	end
+	Data.spawnDummyAnimator = anim
+	return anim
+end
+
 local function playOnSpawnDummy(animId, speed, loop)
-	if not Data.spawnDummy or not Data.spawnDummyAnimator then return end
+	if not Data.spawnDummy then return end
+	local animator = ensureSpawnDummyAnimator()
+	if not animator then return end
+	local aid = grabId(tostring(animId)) or tostring(animId)
+	if aid == "" then return end
 	if Data.spawnDummyTrack then pcall(function() Data.spawnDummyTrack:Stop(0) end); Data.spawnDummyTrack = nil end
-	local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. animId
-	local track; pcall(function() track = Data.spawnDummyAnimator:LoadAnimation(anim) end)
+	local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. aid
+	local track
+	pcall(function() track = animator:LoadAnimation(anim) end)
 	if track then
 		track.Priority = Enum.AnimationPriority.Action4; track.Looped = loop ~= false
 		track:Play(0,1,speed or 1); Data.spawnDummyTrack = track
@@ -1695,13 +2563,8 @@ table.insert(Data.connections, UI.vpSpawnDummyBtn.MouseButton1Click:Connect(func
 		elseif cache and cache.type == "char" and cache.data then
 			applyFromCharSource(rig, cache.data)
 		end
-		local head = rig:FindFirstChild("Head")
-		if head then
-			local existingNose = rig:FindFirstChild("Nose")
-			if existingNose then existingNose:Destroy() end
-			local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.BrickColor = BrickColor.new("Bright red"); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = rig
-			local noseWeld = Instance.new("Weld"); noseWeld.Part0 = head; noseWeld.Part1 = nose; noseWeld.C0 = CFrame.new(0,0,-0.65); noseWeld.Parent = head
-		end
+		removeClownNosePart(rig)
+		ensureSpawnDummyAnimator()
 	end
 end))
 
@@ -1710,6 +2573,33 @@ table.insert(Data.connections, UI.vpDespawnDummyBtn.MouseButton1Click:Connect(fu
 end))
 
 local function makeRig()
+	if State.vpRigType == "R15" then
+		local r15
+		local okR15 = pcall(function()
+			r15 = Services.Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
+		end)
+		if okR15 and r15 then
+			r15.Name = "PreviewRig"
+			local r15root = r15:FindFirstChild("HumanoidRootPart")
+			local r15hum = r15:FindFirstChildOfClass("Humanoid")
+			if r15root and r15hum then
+				r15hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; r15hum.WalkSpeed = 0; r15hum.JumpPower = 0
+				r15root.Anchored = true; r15root.Transparency = 1; r15.PrimaryPart = r15root
+				r15root.CFrame = CFrame.new(0,5,0)
+				local r15head = r15:FindFirstChild("Head")
+				if r15head then
+					local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = r15
+					local nw = Instance.new("Weld"); nw.Part0 = r15head; nw.Part1 = nose; nw.C0 = CFrame.new(0,0,-0.65); nw.Parent = r15head
+				end
+				local r15anim = r15hum:FindFirstChildOfClass("Animator"); if not r15anim then r15anim = Instance.new("Animator"); r15anim.Parent = r15hum end
+				r15.Parent = worldModel
+				return r15, r15anim, r15root
+			elseif r15 then
+				pcall(function() r15:Destroy() end)
+			end
+		end
+		-- R15 build failed; fall back to R6 rig below
+	end
 	local model = Instance.new("Model"); model.Name = "PreviewRig"
 	local function part(name, size)
 		local p = Instance.new("Part"); p.Name = name; p.Size = size; p.BrickColor = BrickColor.new("Medium stone grey")
@@ -1718,7 +2608,7 @@ local function makeRig()
 	local root = part("HumanoidRootPart", Vector3.new(2,2,1)); local torso = part("Torso", Vector3.new(2,2,1)); local head = part("Head", Vector3.new(2,1,1))
 	local rArm = part("Right Arm", Vector3.new(1,2,1)); local lArm = part("Left Arm", Vector3.new(1,2,1))
 	local rLeg = part("Right Leg", Vector3.new(1,2,1)); local lLeg = part("Left Leg", Vector3.new(1,2,1))
-	root.Anchored = true; root.Transparency = 1; root.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0,State.vpYaw,0); model.PrimaryPart = root
+	root.Anchored = true; root.Transparency = 1; root.CFrame = CFrame.new(0,5,0); model.PrimaryPart = root
 	local hum = Instance.new("Humanoid"); hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; hum.WalkSpeed = 0; hum.JumpPower = 0; hum.Parent = model
 	local function motor(name, p0, p1, c0, c1) local m = Instance.new("Motor6D"); m.Name = name; m.Part0 = p0; m.Part1 = p1; m.C0 = c0; m.C1 = c1; m.Parent = p0 end
 	motor("RootJoint", root, torso, CFrame.new(0,0,0,-1,0,0,0,0,1,0,1,0), CFrame.new(0,0,0,-1,0,0,0,0,1,0,1,0))
@@ -1740,6 +2630,16 @@ local function makeRig()
 	return model, animator, root
 end
 
+local function removeClownNosePart(rig)
+	if not rig then return end
+	for _, inst in ipairs(rig:GetDescendants()) do
+		if inst:IsA("BasePart") and inst.Name == "Nose" then
+			local s = inst.Size
+			if s.X <= 0.45 and s.Y <= 0.45 and s.Z <= 0.5 then inst:Destroy() end
+		end
+	end
+end
+
 local function stripRigAppearance(rig)
 	for _, obj in ipairs(rig:GetChildren()) do
 		if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("BodyColors") then obj:Destroy() end
@@ -1754,7 +2654,7 @@ local function stripRigAppearance(rig)
 	end
 	local head = rig:FindFirstChild("Head")
 	if head then local mesh = Instance.new("SpecialMesh"); mesh.MeshType = Enum.MeshType.Head; mesh.Scale = Vector3.new(1,1,1); mesh.Parent = head end
-	local nose = rig:FindFirstChild("Nose"); if nose then nose:Destroy() end
+	removeClownNosePart(rig)
 end
 
 local function applyFromChar(rig, srcChar)
@@ -1842,13 +2742,15 @@ local function applyPlayerSkin(query)
 		end
 		if ingameChar then
 			local clonedChar = ingameChar:Clone()
-			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromChar(rig, clonedChar) end
+			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromChar(rig, clonedChar); removeClownNosePart(rig) end
+			if Data.spawnDummy then ensureSpawnDummyAnimator() end
 			State.vpSkinCache = {type="char", data=clonedChar}
 			UI.vpSkinStatusLabel.Text = "from server: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return
 		end
 		local desc; local ok, result = pcall(function() desc = Services.Players:GetHumanoidDescriptionFromUserId(resolvedId) end)
 		if ok and desc then
-			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromDescription(rig, desc) end
+			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromDescription(rig, desc); removeClownNosePart(rig) end
+			if Data.spawnDummy then ensureSpawnDummyAnimator() end
 			State.vpSkinCache = {type="desc", data=desc}
 			UI.vpSkinStatusLabel.Text = "from api: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160)
 			return
@@ -1856,7 +2758,8 @@ local function applyPlayerSkin(query)
 		local appearanceModel; ok, result = pcall(function() appearanceModel = Services.Players:GetCharacterAppearanceAsync(resolvedId) end)
 		if ok and appearanceModel then
 			local clonedAppearance = appearanceModel:Clone()
-			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromChar(rig, clonedAppearance) end
+			for _, rig in ipairs(rigsToApply) do stripRigAppearance(rig); applyFromChar(rig, clonedAppearance); removeClownNosePart(rig) end
+			if Data.spawnDummy then ensureSpawnDummyAnimator() end
 			State.vpSkinCache = {type="char", data=clonedAppearance}
 			UI.vpSkinStatusLabel.Text = "from appearance: " .. tostring(resolvedId); UI.vpSkinStatusLabel.TextColor3 = Color3.fromRGB(160,160,160); return
 		end
@@ -1882,12 +2785,20 @@ local function reapplyCachedSkin(rig)
 	stripRigAppearance(rig)
 	if cache.type == "desc" then applyFromDescription(rig, cache.data)
 	elseif cache.type == "char" then applyFromChar(rig, cache.data) end
+	removeClownNosePart(rig)
 end
 
 local function getDummyAnimator()
 	if not Data.ghostChar then return nil end
-	local hum = Data.ghostChar:FindFirstChildOfClass("Humanoid"); if not hum then return nil end
-	return hum:FindFirstChildOfClass("Animator")
+	local hum = Data.ghostChar:FindFirstChildOfClass("Humanoid")
+	if not hum then return nil end
+	local anim = hum:FindFirstChildOfClass("Animator")
+	if not anim then
+		anim = Instance.new("Animator")
+		anim.Parent = hum
+	end
+	Data.vpAnimator = anim
+	return anim
 end
 
 local function previewAnim(id)
@@ -1916,7 +2827,14 @@ local function fmtTime(n) return string.format("%.2f", n) end
 table.insert(Data.connections, Services.RunService.RenderStepped:Connect(function()
 	local mouse = Services.UserInputService:GetMouseLocation()
 	if UI.viewportWin.Visible and Data.ghostChar then
-		vpCamera.CFrame = CFrame.new(Vector3.new(0,5,State.vpZoomDist), Vector3.new(0,4,0))
+		local camPitch = State.vpPitch or 0
+
+
+		local offsetX = State.vpCamOffsetX or 0
+		local offsetY = State.vpCamOffsetY or 0
+		local targetPos = Vector3.new(offsetX, 4 + offsetY, 0)
+		local camPos = targetPos + (CFrame.Angles(camPitch, State.vpYaw, 0) * Vector3.new(0, 0, State.vpZoomDist))
+		vpCamera.CFrame = CFrame.new(camPos, targetPos)
 	end
 	if State.vpScrubbing then
 		local bx = UI.vpScrubBg.AbsolutePosition.X; local bw = UI.vpScrubBg.AbsoluteSize.X
@@ -1974,6 +2892,36 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(functio
 	end
 end))
 
+local vpCamState = {orbiting = false, lastMouseX = 0, lastMouseY = 0}
+
+-- start orbit from clicks directly on the viewport frame (reliable GUI input, either mouse button)
+table.insert(Data.connections, UI.vpFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+		local m = Services.UserInputService:GetMouseLocation()
+		vpCamState.orbiting = true; vpCamState.lastMouseX = m.X; vpCamState.lastMouseY = m.Y
+	end
+end))
+-- zoom via scroll wheel over the viewport (MouseWheel arrives through InputChanged, not InputBegan)
+table.insert(Data.connections, UI.vpFrame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseWheel then
+		local scrollDir = input.Position.Z > 0 and 1 or -1
+		State.vpZoomDist = math.clamp(State.vpZoomDist - (scrollDir * 2), 1, 200)
+	end
+end))
+table.insert(Data.connections, Services.UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then vpCamState.orbiting = false end
+end))
+table.insert(Data.connections, Services.UserInputService.InputChanged:Connect(function(input)
+	if vpCamState.orbiting and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local mouse = Services.UserInputService:GetMouseLocation()
+		local deltaX = mouse.X - vpCamState.lastMouseX
+		local deltaY = mouse.Y - vpCamState.lastMouseY
+		State.vpYaw = State.vpYaw - math.rad(deltaX * 0.65)
+		State.vpPitch = math.clamp((State.vpPitch or 0) + math.rad(deltaY * 0.65), -math.pi/2.5, math.pi/2.5)
+		vpCamState.lastMouseX = mouse.X; vpCamState.lastMouseY = mouse.Y
+	end
+end))
+
 local function popPreview(id)
 	State.vpCurrentId = id; UI.vpIdLabel.Text = "ID: " .. id; UI.vpTitle.Text = "preview — " .. id
 	UI.vpIdInput.Text = id; UI.viewportWin.Visible = true; previewAnim(id)
@@ -1997,21 +2945,26 @@ end))
 table.insert(Data.connections, UI.vpPlaySelfBtn.MouseButton1Click:Connect(function()
 	if State.vpCurrentId then fireAnim(State.vpCurrentId, tonumber(UI.vpSpeedBox.Text) or 1, State.vpLooped) end
 end))
+UI.vpRigToggle = Instance.new("TextButton"); UI.vpRigToggle.Size = UDim2.new(0,46,0,20); UI.vpRigToggle.Position = UDim2.new(0,10,25.4,3)
+UI.vpRigToggle.Text = State.vpRigType; UI.vpRigToggle.BackgroundColor3 = Color3.fromRGB(28,40,55); UI.vpRigToggle.TextColor3 = Color3.fromRGB(150,190,235)
+UI.vpRigToggle.BorderSizePixel = 0; UI.vpRigToggle.Font = Enum.Font.Code; UI.vpRigToggle.TextSize = 11; UI.vpRigToggle.ZIndex = 7; UI.vpRigToggle.Parent = vpTop
+mkCorner(UI.vpRigToggle,4); mkStroke(UI.vpRigToggle, Color3.fromRGB(55,90,125), 1)
+table.insert(Data.connections, UI.vpRigToggle.MouseButton1Click:Connect(function()
+	State.vpRigType = (State.vpRigType == "R15") and "R6" or "R15"
+	UI.vpRigToggle.Text = State.vpRigType
+	if State.vpCurrentId and State.vpCurrentId ~= "" then previewAnim(State.vpCurrentId) end
+end))
 table.insert(Data.connections, UI.vpRotateCCW.MouseButton1Click:Connect(function()
 	local deg = tonumber(UI.vpPrecisionBox.Text) or 90; State.vpYaw = State.vpYaw + math.rad(deg)
-	if Data.vpRootPart then Data.vpRootPart.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0,State.vpYaw,0) end
 end))
 table.insert(Data.connections, UI.vpRotateCW.MouseButton1Click:Connect(function()
 	local deg = tonumber(UI.vpPrecisionBox.Text) or 90; State.vpYaw = State.vpYaw - math.rad(deg)
-	if Data.vpRootPart then Data.vpRootPart.CFrame = CFrame.new(0,5,0) * CFrame.Angles(0,State.vpYaw,0) end
 end))
 table.insert(Data.connections, UI.vpZoomIn.MouseButton1Click:Connect(function()
-	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = State.vpZoomDist - step
-	vpCamera.CFrame = CFrame.new(Vector3.new(0,5,State.vpZoomDist), Vector3.new(0,4,0))
+	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = math.clamp(State.vpZoomDist - step, 1, 200)
 end))
 table.insert(Data.connections, UI.vpZoomOut.MouseButton1Click:Connect(function()
-	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = State.vpZoomDist + step
-	vpCamera.CFrame = CFrame.new(Vector3.new(0,5,State.vpZoomDist), Vector3.new(0,4,0))
+	local step = tonumber(UI.vpPrecisionBox.Text) or 2; State.vpZoomDist = math.clamp(State.vpZoomDist + step, 1, 200)
 end))
 table.insert(Data.connections, UI.vpSpeedBox:GetPropertyChangedSignal("Text"):Connect(function()
 	local num = tonumber(UI.vpSpeedBox.Text:match("[%d%.]+"))
@@ -2044,10 +2997,19 @@ table.insert(Data.connections, UI.vpSkinInput.FocusLost:Connect(function(enter)
 end))
 table.insert(Data.connections, UI.vpSkinResetBtn.MouseButton1Click:Connect(function() resetDummySkin() end))
 table.insert(Data.connections, UI.vpTestDummyBtn.MouseButton1Click:Connect(function()
-	if not Data.ghostChar then flashNotif("load a preview first"); return end
 	if not State.vpCurrentId or State.vpCurrentId == "" then flashNotif("no animation loaded"); return end
-	stopAllDummyTracks()
-	playOnDummy(State.vpCurrentId, tonumber(UI.vpSpeedBox.Text) or 1, State.vpLooped, 0, "Action4")
+	local spd = tonumber(UI.vpSpeedBox.Text) or 1
+	if Data.spawnDummy then
+		ensureSpawnDummyAnimator()
+		stopSpawnDummyTrack()
+		playOnSpawnDummy(State.vpCurrentId, spd, State.vpLooped)
+	elseif Data.ghostChar then
+		stopAllDummyTracks()
+		playOnDummy(State.vpCurrentId, spd, State.vpLooped, 0, "Action4")
+	else
+		flashNotif("spawn dummy or load preview first")
+		return
+	end
 	UI.vpTestDummyBtn.Text = "▶ playing!"; UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(42,42,42)
 	task.delay(1.5, function() UI.vpTestDummyBtn.Text = "▶ test on dummy"; UI.vpTestDummyBtn.BackgroundColor3 = Color3.fromRGB(42,42,42) end)
 end))
@@ -2058,8 +3020,10 @@ table.insert(Data.connections, UI.vpRunDummyMacroBtn.MouseButton1Click:Connect(f
 end))
 
 local function playOnDummy(id, speed, loop, startOffset, priorityName)
+	local aid = grabId(tostring(id)) or tostring(id)
+	if aid == "" then return nil end
 	local animator = getDummyAnimator(); if not animator then return nil end
-	local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. id
+	local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. aid
 	local track; pcall(function() track = animator:LoadAnimation(anim) end); if not track then return nil end
 	local pri = Enum.AnimationPriority[priorityName] or Enum.AnimationPriority.Action4
 	track.Priority = pri; track.Looped = loop or false
@@ -2122,15 +3086,353 @@ end
 
 local PRIORITY_OPTIONS = {"Action4","Action3","Action2","Action","Movement","Idle","Core"}
 
+
+local function evaluateFilter(filter, animData)
+	local filterType = filter.type
+	local param = filter.param or ""
+	local enabled = filter.enabled ~= false
+
+	if not enabled then return true end
+
+	local id = animData.id or ""
+	local name = animData.name or ""
+	local player = animData.player or ""
+	local priority = animData.priority or ""
+
+	if filterType == "search" then
+		if param == "" then return true end
+		return id:lower():find(param:lower(), 1, true) or name:lower():find(param:lower(), 1, true)
+	elseif filterType == "player" then
+		if param == "" then return true end
+		return player:lower():find(param:lower(), 1, true)
+	elseif filterType == "priority" then
+		if param == "" then return true end
+		return priority:lower():find(param:lower(), 1, true)
+	elseif filterType == "id_exact" then
+		return id == param
+	elseif filterType == "name_exact" then
+		return name == param
+	elseif filterType == "player_exact" then
+		return player == param
+	elseif filterType == "priority_exact" then
+		return priority == param
+	elseif filterType == "id_pattern" then
+		return id:find(param, 1, true)
+	elseif filterType == "name_pattern" then
+		return name:find(param, 1, true)
+	elseif filterType == "count_min" then
+		local minCount = tonumber(param) or 0
+		return (animData.count or 1) >= minCount
+	elseif filterType == "count_max" then
+		local maxCount = tonumber(param) or math.huge
+		return (animData.count or 1) <= maxCount
+	elseif filterType == "favorited" then
+		local shouldBeFavorited = param == "true"
+		return (animData.favorited or false) == shouldBeFavorited
+	end
+
+	return true
+end
+
+local function shouldShowAnimation(animData)
+	if not State.advancedFilters.enabled then
+
+		local query = (UI.searchBox and UI.searchBox.Text or ""):lower()
+		local pf = (UI.playerFilterBox and UI.playerFilterBox.Text or ""):lower()
+		local priF = (UI.priorityFilterBox and UI.priorityFilterBox.Text or ""):lower()
+
+		local text = animData.name:lower()
+		return (query == "" or animData.id:lower():find(query,1,true) or text:find(query,1,true))
+			and (pf == "" or text:find(pf,1,true))
+			and (priF == "" or text:find(priF,1,true))
+	end
+
+
+	local filters = State.advancedFilters.activeFilters
+	local logic = State.advancedFilters.logic
+
+	if logic == "AND" then
+		for _, filter in ipairs(filters) do
+			if not evaluateFilter(filter, animData) then
+				return false
+			end
+		end
+		return true
+	elseif logic == "OR" then
+		for _, filter in ipairs(filters) do
+			if evaluateFilter(filter, animData) then
+				return true
+			end
+		end
+		return false
+	end
+
+	return true
+end
+
+local function saveFilterPreset(name)
+	State.advancedFilters.presets[name] = {
+		name = name,
+		filters = table.clone(State.advancedFilters.activeFilters),
+		logic = State.advancedFilters.logic
+	}
+	if dumpCfg then dumpCfg() end
+end
+
+local function loadFilterPreset(name)
+	local preset = State.advancedFilters.presets[name]
+	if preset then
+		State.advancedFilters.activeFilters = table.clone(preset.filters)
+		State.advancedFilters.logic = preset.logic
+		State.advancedFilters.currentPreset = name
+		if dumpCfg then dumpCfg() end
+		return true
+	end
+	return false
+end
+
+local function deleteFilterPreset(name)
+	if name ~= "Default" and State.advancedFilters.presets[name] then
+		State.advancedFilters.presets[name] = nil
+		if State.advancedFilters.currentPreset == name then
+			loadFilterPreset("Default")
+		end
+		if dumpCfg then dumpCfg() end
+		return true
+	end
+	return false
+end
+
+local function getFilterStatistics()
+	local total = 0
+	local visible = 0
+	local filters = {}
+
+	for id, entry in pairs(Data.animFrames) do
+		if id:find("__frame", 1, true) then continue end
+		total = total + 1
+
+		local animData = {
+			id = id:match("^([%d]+)") or id,
+			name = entry.Text,
+			player = "", 
+			priority = "", 
+			count = Data.animCounts[id] or 1,
+			favorited = Data.favorites[id:match("^([%d]+)") or id] or false
+		}
+
+		if shouldShowAnimation(animData) then
+			visible = visible + 1
+		end
+	end
+
+	return {total = total, visible = visible, hidden = total - visible}
+end
+
+local function buildTriggerRow(ruleData, triggerIndex, triggerData)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 30)
+	row.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	row.BorderSizePixel = 0
+	row.ZIndex = 4
+	mkCorner(row, 4)
+
+	local typeDropdown = Instance.new("TextButton")
+	typeDropdown.Size = UDim2.new(0, 80, 1, 0)
+	typeDropdown.Position = UDim2.new(0, 5, 0, 0)
+	typeDropdown.Text = triggerData.type or "animId"
+	typeDropdown.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+	typeDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
+	typeDropdown.Font = Enum.Font.Code
+	typeDropdown.TextSize = 10
+	typeDropdown.ZIndex = 5
+	typeDropdown.Parent = row
+	mkCorner(typeDropdown, 3)
+
+	local paramInput = Instance.new("TextBox")
+	paramInput.Size = UDim2.new(1, -95, 1, 0)
+	paramInput.Position = UDim2.new(0, 90, 0, 0)
+	paramInput.Text = triggerData.param or ""
+	paramInput.PlaceholderText = "parameter..."
+	paramInput.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+	paramInput.TextColor3 = Color3.fromRGB(240, 240, 240)
+	paramInput.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
+	paramInput.Font = Enum.Font.Code
+	paramInput.TextSize = 11
+	paramInput.ZIndex = 5
+	paramInput.Parent = row
+	mkCorner(paramInput, 3)
+
+	local removeBtn = Instance.new("TextButton")
+	removeBtn.Size = UDim2.new(0, 20, 0, 20)
+	removeBtn.Position = UDim2.new(1, -25, 0, 5)
+	removeBtn.Text = "×"
+	removeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	removeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	removeBtn.Font = Enum.Font.Code
+	removeBtn.TextSize = 12
+	removeBtn.ZIndex = 5
+	removeBtn.Parent = row
+	mkCorner(removeBtn, 3)
+
+	table.insert(Data.connections, typeDropdown.MouseButton1Click:Connect(function()
+		local menu = Instance.new("Frame")
+		menu.Size = UDim2.new(0, 80, 0, 120)
+		menu.Position = UDim2.new(0, 0, 1, 5)
+		menu.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+		menu.BorderSizePixel = 0
+		menu.ZIndex = 10
+		menu.Parent = typeDropdown
+		mkCorner(menu, 3)
+		mkStroke(menu, Color3.fromRGB(60, 60, 60), 1)
+
+		local options = {"animId", "animName", "player", "priority", "anyAnim"}
+		for i, opt in ipairs(options) do
+			local optBtn = Instance.new("TextButton")
+			optBtn.Size = UDim2.new(1, 0, 0, 20)
+			optBtn.Position = UDim2.new(0, 0, 0, (i-1)*20)
+			optBtn.Text = opt
+			optBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			optBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+			optBtn.Font = Enum.Font.Code
+			optBtn.TextSize = 10
+			optBtn.ZIndex = 11
+			optBtn.Parent = menu
+			mkCorner(optBtn, 2)
+
+			table.insert(Data.connections, optBtn.MouseButton1Click:Connect(function()
+				triggerData.type = opt
+				typeDropdown.Text = opt
+				menu:Destroy()
+				if dumpCfg then dumpCfg() end
+			end))
+		end
+
+		task.delay(5, function() if menu and menu.Parent then menu:Destroy() end end)
+	end))
+
+	table.insert(Data.connections, paramInput:GetPropertyChangedSignal("Text"):Connect(function()
+		triggerData.param = paramInput.Text
+		if dumpCfg then dumpCfg() end
+	end))
+
+	table.insert(Data.connections, removeBtn.MouseButton1Click:Connect(function()
+		table.remove(ruleData.triggers, triggerIndex)
+		row:Destroy()
+		if dumpCfg then dumpCfg() end
+	end))
+
+	return row
+end
+
+local function buildActionRow(ruleData, actionIndex, actionData)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 30)
+	row.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	row.BorderSizePixel = 0
+	row.ZIndex = 4
+	mkCorner(row, 4)
+
+	local typeDropdown = Instance.new("TextButton")
+	typeDropdown.Size = UDim2.new(0, 80, 1, 0)
+	typeDropdown.Position = UDim2.new(0, 5, 0, 0)
+	typeDropdown.Text = actionData.type or "play"
+	typeDropdown.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+	typeDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
+	typeDropdown.Font = Enum.Font.Code
+	typeDropdown.TextSize = 10
+	typeDropdown.ZIndex = 5
+	typeDropdown.Parent = row
+	mkCorner(typeDropdown, 3)
+
+	local paramInput = Instance.new("TextBox")
+	paramInput.Size = UDim2.new(1, -95, 1, 0)
+	paramInput.Position = UDim2.new(0, 90, 0, 0)
+	paramInput.Text = actionData.param or ""
+	paramInput.PlaceholderText = "parameters..."
+	paramInput.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+	paramInput.TextColor3 = Color3.fromRGB(240, 240, 240)
+	paramInput.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
+	paramInput.Font = Enum.Font.Code
+	paramInput.TextSize = 11
+	paramInput.ZIndex = 5
+	paramInput.Parent = row
+	mkCorner(paramInput, 3)
+
+	local removeBtn = Instance.new("TextButton")
+	removeBtn.Size = UDim2.new(0, 20, 0, 20)
+	removeBtn.Position = UDim2.new(1, -25, 0, 5)
+	removeBtn.Text = "×"
+	removeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	removeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	removeBtn.Font = Enum.Font.Code
+	removeBtn.TextSize = 12
+	removeBtn.ZIndex = 5
+	removeBtn.Parent = row
+	mkCorner(removeBtn, 3)
+
+	table.insert(Data.connections, typeDropdown.MouseButton1Click:Connect(function()
+		local menu = Instance.new("Frame")
+		menu.Size = UDim2.new(0, 80, 0, 160)
+		menu.Position = UDim2.new(0, 0, 1, 5)
+		menu.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+		menu.BorderSizePixel = 0
+		menu.ZIndex = 10
+		menu.Parent = typeDropdown
+		mkCorner(menu, 3)
+		mkStroke(menu, Color3.fromRGB(60, 60, 60), 1)
+
+		local options = {"play", "stop", "speed", "priority", "weight", "fade", "wait", "macro", "var", "flash"}
+		for i, opt in ipairs(options) do
+			local optBtn = Instance.new("TextButton")
+			optBtn.Size = UDim2.new(1, 0, 0, 20)
+			optBtn.Position = UDim2.new(0, 0, 0, (i-1)*20)
+			optBtn.Text = opt
+			optBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			optBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+			optBtn.Font = Enum.Font.Code
+			optBtn.TextSize = 10
+			optBtn.ZIndex = 11
+			optBtn.Parent = menu
+			mkCorner(optBtn, 2)
+
+			table.insert(Data.connections, optBtn.MouseButton1Click:Connect(function()
+				actionData.type = opt
+				typeDropdown.Text = opt
+				menu:Destroy()
+				if dumpCfg then dumpCfg() end
+			end))
+		end
+
+		task.delay(5, function() if menu and menu.Parent then menu:Destroy() end end)
+	end))
+
+	table.insert(Data.connections, paramInput:GetPropertyChangedSignal("Text"):Connect(function()
+		actionData.param = paramInput.Text
+		if dumpCfg then dumpCfg() end
+	end))
+
+	table.insert(Data.connections, removeBtn.MouseButton1Click:Connect(function()
+		table.remove(ruleData.actions, actionIndex)
+		row:Destroy()
+		if dumpCfg then dumpCfg() end
+	end))
+
+	return row
+end
+
 local function addAdvReplUI(ruleData)
 	if not ruleData then
 		ruleData = {
 			enabled = true,
-			triggerAnimId = "",
-			triggerDelay = 0,
-			triggerPriority = "any",
-			chainToId = "",
-			layers = {{id="", speed=1, loop=false, startOffset=0, priority="Action4", weight=1}},
+			name = "New Rule",
+			triggers = {{type="animId", value="", priority="any", player="any"}},
+			conditions = {},
+			actions = {{type="play", param=""}},
+			variables = {},
+			chainTo = "",
+			cooldown = 0,
+			lastFired = 0
 		}
 		table.insert(Data.advReplacements, ruleData)
 	end
@@ -2139,25 +3441,24 @@ local function addAdvReplUI(ruleData)
 	for i, r in ipairs(Data.advReplacements) do if r == ruleData then ruleIndex = i; break end end
 	if not ruleIndex then table.insert(Data.advReplacements, ruleData); ruleIndex = #Data.advReplacements end
 
-	
 	local rFrame = Instance.new("Frame")
 	rFrame.Size = UDim2.new(1,-4,0,10)
-	rFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+	rFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
 	rFrame.BorderSizePixel = 0; rFrame.ZIndex = 3; rFrame.Parent = sideTabLists[3]
-	mkCorner(rFrame,7)
-	do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(200,50,50); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=rFrame end
+	mkCorner(rFrame,8)
+	do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(100,150,200); s.Thickness=1.5; s.Transparency=0.3; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=rFrame end
 
 	local innerList = Instance.new("UIListLayout")
-	innerList.Padding = UDim.new(0,5)
+	innerList.Padding = UDim.new(0,8)
 	innerList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	innerList.SortOrder = Enum.SortOrder.LayoutOrder
 	innerList.Parent = rFrame
 	local innerPad = Instance.new("UIPadding")
-	innerPad.PaddingTop=UDim.new(0,7); innerPad.PaddingBottom=UDim.new(0,7)
-	innerPad.PaddingLeft=UDim.new(0,7); innerPad.PaddingRight=UDim.new(0,7)
+	innerPad.PaddingTop=UDim.new(0,10); innerPad.PaddingBottom=UDim.new(0,10)
+	innerPad.PaddingLeft=UDim.new(0,10); innerPad.PaddingRight=UDim.new(0,10)
 	innerPad.Parent = rFrame
 	table.insert(Data.connections, innerList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		rFrame.Size = UDim2.new(1,-4,0,innerList.AbsoluteContentSize.Y+18)
+		rFrame.Size = UDim2.new(1,-4,0,innerList.AbsoluteContentSize.Y+25)
 	end))
 
 	local rowOrder = 0
@@ -2168,275 +3469,186 @@ local function addAdvReplUI(ruleData)
 	end
 	local function mkInput(parent, text, ph)
 		local b=Instance.new("TextBox"); b.Size=UDim2.new(1,0,1,0); b.Text=text or ""; b.PlaceholderText=ph or ""
-		b.BackgroundColor3=Color3.fromRGB(20,20,20); b.TextColor3=Color3.fromRGB(240,240,240)
-		b.PlaceholderColor3=Color3.fromRGB(65,65,65); b.Font=Enum.Font.Code; b.TextSize=12
+		b.BackgroundColor3=Color3.fromRGB(18,18,18); b.TextColor3=Color3.fromRGB(240,240,240)
+		b.PlaceholderColor3=Color3.fromRGB(80,80,80); b.Font=Enum.Font.Code; b.TextSize=11
 		b.BorderSizePixel=0; b.ZIndex=5; b.Parent=parent; mkCorner(b,4)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(95,95,95); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(60,60,60); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
+		return b
+	end
+	local function mkBtn(parent, text, bg, tc)
+		local b=Instance.new("TextButton"); b.Size=UDim2.new(1,0,1,0); b.Text=text or ""
+		b.BackgroundColor3=bg or Color3.fromRGB(35,35,35); b.TextColor3=tc or Color3.fromRGB(200,200,200)
+		b.Font=Enum.Font.Code; b.TextSize=11; b.BorderSizePixel=0; b.ZIndex=5; b.Parent=parent; mkCorner(b,4)
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(80,80,80); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
 		return b
 	end
 
-	
 	do
-		local row=mkRow(24)
-		local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-72,1,0); title.BackgroundTransparency=1
-		title.TextColor3=Color3.fromRGB(160,160,160); title.Font=Enum.Font.Code; title.TextSize=12
-		title.TextXAlignment=Enum.TextXAlignment.Left; title.Text="adv replacement"; title.ZIndex=5; title.Parent=row
-		local enableT=Instance.new("TextButton"); enableT.Size=UDim2.new(0,66,1,-2); enableT.Position=UDim2.new(1,-66,0,1)
-		enableT.Text=ruleData.enabled and "● on" or "○ off"
-		enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(45,45,45) or Color3.fromRGB(28,28,28)
-		enableT.TextColor3=ruleData.enabled and Color3.fromRGB(240,240,240) or Color3.fromRGB(100,100,100)
-		enableT.Font=Enum.Font.Code; enableT.TextSize=11; enableT.BorderSizePixel=0; enableT.ZIndex=5; enableT.Parent=row; mkCorner(enableT,4); mkStroke(enableT, Color3.fromRGB(42,42,42), 1)
+		local row=mkRow(28)
+		local nameBox=mkInput(row, ruleData.name or "New Rule", "rule name...")
+		table.insert(Data.connections, nameBox:GetPropertyChangedSignal("Text"):Connect(function() ruleData.name=nameBox.Text; dumpCfg() end))
+
+		local enableT=Instance.new("TextButton"); enableT.Size=UDim2.new(0,60,1,0); enableT.Position=UDim2.new(1,-60,0,0)
+		enableT.Text=ruleData.enabled and "ON" or "OFF"
+		enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(40,80,40) or Color3.fromRGB(80,40,40)
+		enableT.TextColor3=Color3.fromRGB(255,255,255); enableT.Font=Enum.Font.GothamBold; enableT.TextSize=10; enableT.BorderSizePixel=0; enableT.ZIndex=5; enableT.Parent=row; mkCorner(enableT,4)
 		table.insert(Data.connections, enableT.MouseButton1Click:Connect(function()
 			ruleData.enabled=not ruleData.enabled
-			enableT.Text=ruleData.enabled and "● on" or "○ off"
-			enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(45,45,45) or Color3.fromRGB(28,28,28)
-			enableT.TextColor3=ruleData.enabled and Color3.fromRGB(240,240,240) or Color3.fromRGB(100,100,100)
+			enableT.Text=ruleData.enabled and "ON" or "OFF"
+			enableT.BackgroundColor3=ruleData.enabled and Color3.fromRGB(40,80,40) or Color3.fromRGB(80,40,40)
 			dumpCfg()
 		end))
 	end
 
-	
-	do
-		local lrow=mkRow(14)
-		local l=Instance.new("TextLabel"); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
-		l.TextColor3=Color3.fromRGB(95,95,95); l.Font=Enum.Font.Code; l.TextSize=10
-		l.TextXAlignment=Enum.TextXAlignment.Left; l.Text="trigger anim id:"; l.ZIndex=5; l.Parent=lrow
-		local irow=mkRow(26); local trigIdBox=mkInput(irow, ruleData.triggerAnimId or "", "anim id to intercept...")
-		table.insert(Data.connections, trigIdBox:GetPropertyChangedSignal("Text"):Connect(function() ruleData.triggerAnimId=trigIdBox.Text; dumpCfg() end))
-	end
-
-	
-	do
-		local lrow=mkRow(14)
-		local l1=Instance.new("TextLabel"); l1.Size=UDim2.new(0.44,0,1,0); l1.BackgroundTransparency=1
-		l1.TextColor3=Color3.fromRGB(95,95,95); l1.Font=Enum.Font.Code; l1.TextSize=10
-		l1.TextXAlignment=Enum.TextXAlignment.Left; l1.Text="delay (s):"; l1.ZIndex=5; l1.Parent=lrow
-		local l2=Instance.new("TextLabel"); l2.Size=UDim2.new(0.56,0,1,0); l2.Position=UDim2.new(0.44,0,0,0); l2.BackgroundTransparency=1
-		l2.TextColor3=Color3.fromRGB(95,95,95); l2.Font=Enum.Font.Code; l2.TextSize=10
-		l2.TextXAlignment=Enum.TextXAlignment.Left; l2.Text="only if priority:"; l2.ZIndex=5; l2.Parent=lrow
-
-		local vrow=mkRow(26)
-		local dbox=Instance.new("TextBox"); dbox.Size=UDim2.new(0.42,0,1,-2); dbox.Position=UDim2.new(0,0,0,1)
-		dbox.Text=tostring(ruleData.triggerDelay or 0); dbox.BackgroundColor3=Color3.fromRGB(8,8,8)
-		dbox.TextColor3=Color3.fromRGB(240,240,240); dbox.Font=Enum.Font.Code; dbox.TextSize=12; dbox.BorderSizePixel=0; dbox.ZIndex=5; dbox.Parent=vrow
-		mkCorner(dbox,4); do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(95,95,95); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=dbox end
-		table.insert(Data.connections, dbox:GetPropertyChangedSignal("Text"):Connect(function()
-			local v=tonumber(dbox.Text); if v then ruleData.triggerDelay=v; dumpCfg() end
-		end))
-
-		local priOpts={"any","Action4","Action3","Action2","Action","Movement","Idle","Core"}
-		local priIdx=1
-		for i,v in ipairs(priOpts) do if v==(ruleData.triggerPriority or "any") then priIdx=i; break end end
-		local priBtn=Instance.new("TextButton"); priBtn.Size=UDim2.new(0.58,-6,1,-2); priBtn.Position=UDim2.new(0.42,6,0,1)
-		priBtn.Text=priOpts[priIdx]; priBtn.BackgroundColor3=Color3.fromRGB(22,38,24); priBtn.TextColor3=Color3.fromRGB(140,210,145)
-		priBtn.Font=Enum.Font.Code; priBtn.TextSize=11; priBtn.BorderSizePixel=0; priBtn.ZIndex=5; priBtn.Parent=vrow; mkCorner(priBtn,4)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=priBtn end
-		table.insert(Data.connections, priBtn.MouseButton1Click:Connect(function()
-			priIdx=(priIdx%#priOpts)+1; priBtn.Text=priOpts[priIdx]; ruleData.triggerPriority=priOpts[priIdx]; dumpCfg()
-		end))
-	end
-
-	
-	do
-		local lrow=mkRow(14)
-		local l=Instance.new("TextLabel"); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
-		l.TextColor3=Color3.fromRGB(95,95,95); l.Font=Enum.Font.Code; l.TextSize=10
-		l.TextXAlignment=Enum.TextXAlignment.Left; l.Text="chain → trigger anim id (optional):"; l.ZIndex=5; l.Parent=lrow
-		local irow=mkRow(26)
-		local chainBox=mkInput(irow, ruleData.chainToId or "", "anim id of rule to chain into...")
-		table.insert(Data.connections, chainBox:GetPropertyChangedSignal("Text"):Connect(function()
-			ruleData.chainToId = chainBox.Text; dumpCfg()
-		end))
-	end
-
-	
-	local layerHolder=Instance.new("Frame")
-	layerHolder.Size=UDim2.new(1,0,0,0); layerHolder.BackgroundTransparency=1; layerHolder.BorderSizePixel=0
-	layerHolder.ZIndex=4; layerHolder.LayoutOrder=rowOrder+1; layerHolder.Parent=rFrame
+	local triggerHolder=Instance.new("Frame")
+	triggerHolder.Size=UDim2.new(1,0,0,0); triggerHolder.BackgroundTransparency=1; triggerHolder.BorderSizePixel=0
+	triggerHolder.ZIndex=4; triggerHolder.LayoutOrder=rowOrder+1; triggerHolder.Parent=rFrame
 	rowOrder+=1
-	local layerLayout=Instance.new("UIListLayout"); layerLayout.Padding=UDim.new(0,6); layerLayout.Parent=layerHolder
-	table.insert(Data.connections, layerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		layerHolder.Size=UDim2.new(1,0,0,layerLayout.AbsoluteContentSize.Y)
+	local triggerLayout=Instance.new("UIListLayout"); triggerLayout.Padding=UDim.new(0,4); triggerLayout.Parent=triggerHolder
+	table.insert(Data.connections, triggerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		triggerHolder.Size=UDim2.new(1,0,0,triggerLayout.AbsoluteContentSize.Y)
 	end))
 
-	local function buildLayerRow(layerData, layerIdx)
-		local lCard=Instance.new("Frame"); lCard.Size=UDim2.new(1,0,0,10); lCard.BackgroundColor3=Color3.fromRGB(14,14,14)
-		lCard.BorderSizePixel=0; lCard.ZIndex=5; lCard.Parent=layerHolder; mkCorner(lCard,5)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(65,65,65); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=lCard end
+	local function buildTriggerRow(triggerData, triggerIdx)
+		local tCard=Instance.new("Frame"); tCard.Size=UDim2.new(1,0,0,10); tCard.BackgroundColor3=Color3.fromRGB(30,30,30)
+		tCard.BorderSizePixel=0; tCard.ZIndex=5; tCard.Parent=triggerHolder; mkCorner(tCard,5)
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(100,100,100); s.Thickness=1; s.Transparency=0.6; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=tCard end
 
-		local lcList=Instance.new("UIListLayout"); lcList.Padding=UDim.new(0,4)
-		lcList.HorizontalAlignment=Enum.HorizontalAlignment.Center; lcList.SortOrder=Enum.SortOrder.LayoutOrder; lcList.Parent=lCard
-		local lcPad=Instance.new("UIPadding"); lcPad.PaddingTop=UDim.new(0,5); lcPad.PaddingBottom=UDim.new(0,5)
-		lcPad.PaddingLeft=UDim.new(0,5); lcPad.PaddingRight=UDim.new(0,5); lcPad.Parent=lCard
-		table.insert(Data.connections, lcList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-			lCard.Size=UDim2.new(1,0,0,lcList.AbsoluteContentSize.Y+14)
+		local tcList=Instance.new("UIListLayout"); tcList.Padding=UDim.new(0,3)
+		tcList.HorizontalAlignment=Enum.HorizontalAlignment.Center; tcList.SortOrder=Enum.SortOrder.LayoutOrder; tcList.Parent=tCard
+		local tcPad=Instance.new("UIPadding"); tcPad.PaddingTop=UDim.new(0,5); tcPad.PaddingBottom=UDim.new(0,5)
+		tcPad.PaddingLeft=UDim.new(0,5); tcPad.PaddingRight=UDim.new(0,5); tcPad.Parent=tCard
+		table.insert(Data.connections, tcList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			tCard.Size=UDim2.new(1,0,0,tcList.AbsoluteContentSize.Y+14)
 		end))
 
-		local lo=0
-		local function lr(h) lo+=1; local r=Instance.new("Frame"); r.Size=UDim2.new(1,0,0,h); r.BackgroundTransparency=1; r.BorderSizePixel=0; r.ZIndex=6; r.LayoutOrder=lo; r.Parent=lCard; return r end
+		local to=0
+		local function tr(h) to+=1; local r=Instance.new("Frame"); r.Size=UDim2.new(1,0,0,h); r.BackgroundTransparency=1; r.BorderSizePixel=0; r.ZIndex=6; r.LayoutOrder=to; r.Parent=tCard; return r end
 
-		
 		do
-			local hr=lr(18)
-			local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-22,1,0); lbl.BackgroundTransparency=1
-			lbl.TextColor3=Color3.fromRGB(95,95,95); lbl.Font=Enum.Font.Code; lbl.TextSize=10
-			lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Text="layer "..layerIdx; lbl.ZIndex=7; lbl.Parent=hr
-			local db=Instance.new("TextButton"); db.Size=UDim2.new(0,18,1,0); db.Position=UDim2.new(1,-18,0,0)
-			db.Text="X"; db.BackgroundColor3=Color3.fromRGB(200,50,50); db.TextColor3=Color3.fromRGB(255,255,255)
-			db.Font=Enum.Font.Code; db.TextSize=9; db.BorderSizePixel=0; db.ZIndex=7; db.Parent=hr; mkCorner(db,3)
+			local hr=tr(20)
+			local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-25,1,0); lbl.BackgroundTransparency=1
+			lbl.TextColor3=Color3.fromRGB(150,150,150); lbl.Font=Enum.Font.Code; lbl.TextSize=10
+			lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Text="WHEN: " .. (triggerData.type or "animId"); lbl.ZIndex=7; lbl.Parent=hr
+			local db=Instance.new("TextButton"); db.Size=UDim2.new(0,20,1,0); db.Position=UDim2.new(1,-20,0,0)
+			db.Text="×"; db.BackgroundColor3=Color3.fromRGB(150,50,50); db.TextColor3=Color3.fromRGB(255,255,255)
+			db.Font=Enum.Font.GothamBold; db.TextSize=12; db.BorderSizePixel=0; db.ZIndex=7; db.Parent=hr; mkCorner(db,3)
 			table.insert(Data.connections, db.MouseButton1Click:Connect(function()
-				table.remove(ruleData.layers, layerIdx); lCard:Destroy(); dumpCfg()
+				table.remove(ruleData.triggers, triggerIdx); tCard:Destroy(); dumpCfg()
 			end))
 		end
 
-		
-		do
-			local ir=lr(26)
-			local b=Instance.new("TextBox"); b.Size=UDim2.new(1,0,1,0); b.Text=layerData.id or ""
-			b.PlaceholderText="replacement anim id"; b.BackgroundColor3=Color3.fromRGB(20,20,20)
-			b.TextColor3=Color3.fromRGB(240,240,240); b.Font=Enum.Font.Code; b.TextSize=12; b.BorderSizePixel=0; b.ZIndex=7; b.Parent=ir; mkCorner(b,4)
-			do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=b end
-			table.insert(Data.connections, b:GetPropertyChangedSignal("Text"):Connect(function() layerData.id=b.Text; dumpCfg() end))
-		end
+		local triggerOpts={"animId","animName","player","priority","anyAnim"}
+		local typeIdx=1
+		for i,v in ipairs(triggerOpts) do if v==(triggerData.type or "animId") then typeIdx=i; break end end
+		local typeBtn=mkBtn(tr(24), triggerOpts[typeIdx], Color3.fromRGB(50,50,80), Color3.fromRGB(180,180,220))
+		table.insert(Data.connections, typeBtn.MouseButton1Click:Connect(function()
+			typeIdx=(typeIdx%#triggerOpts)+1; triggerData.type=triggerOpts[typeIdx]; typeBtn.Text=triggerOpts[typeIdx]
+			dumpCfg()
+		end))
 
-		
-		do
-			local labrow=lr(12)
-			local valrow=lr(22)
-			local fields={{"start",layerData.startOffset,function(v) layerData.startOffset=v end},
-			              {"speed",layerData.speed,function(v) layerData.speed=v end},
-			              {"blend",layerData.weight,function(v) layerData.weight=v end}}
-			for i,f in ipairs(fields) do
-				local xs=(i-1)/3
-				local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1/3,-4,1,0); lbl.Position=UDim2.new(xs,2,0,0); lbl.BackgroundTransparency=1
-				lbl.TextColor3=Color3.fromRGB(95,95,95); lbl.Font=Enum.Font.Code; lbl.TextSize=9
-				lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Text=f[1]; lbl.ZIndex=7; lbl.Parent=labrow
-				local bx=Instance.new("TextBox"); bx.Size=UDim2.new(1/3,-4,1,0); bx.Position=UDim2.new(xs,2,0,0)
-				bx.Text=tostring(f[2] or 0); bx.BackgroundColor3=Color3.fromRGB(20,20,20)
-				bx.TextColor3=Color3.fromRGB(240,240,240); bx.Font=Enum.Font.Code; bx.TextSize=11; bx.BorderSizePixel=0; bx.ZIndex=7; bx.Parent=valrow; mkCorner(bx,3)
-				do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=bx end
-				local cb=f[3]
-				table.insert(Data.connections, bx:GetPropertyChangedSignal("Text"):Connect(function()
-					local v=tonumber(bx.Text); if v then cb(v); dumpCfg() end
-				end))
-			end
-		end
+		local valBox=mkInput(tr(24), triggerData.value or "", "value/pattern...")
+		table.insert(Data.connections, valBox:GetPropertyChangedSignal("Text"):Connect(function() triggerData.value=valBox.Text; dumpCfg() end))
 
-		
-		do
-			local r4=lr(24)
-			local lp=Instance.new("TextButton"); lp.Size=UDim2.new(0.44,0,1,0)
-			lp.Text=layerData.loop and "loop: ON" or "loop: OFF"
-			lp.BackgroundColor3=layerData.loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20)
-			lp.TextColor3=layerData.loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210)
-			lp.Font=Enum.Font.Code; lp.TextSize=10; lp.BorderSizePixel=0; lp.ZIndex=7; lp.Parent=r4; mkCorner(lp,4)
-			local lpStroke = Instance.new("UIStroke"); lpStroke.Color = layerData.loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42); lpStroke.Thickness = 1; lpStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; lpStroke.Parent = lp
-			table.insert(Data.connections, lp.MouseButton1Click:Connect(function()
-				layerData.loop=not layerData.loop
-				lp.Text=layerData.loop and "loop: ON" or "loop: OFF"
-				lp.BackgroundColor3=layerData.loop and Color3.fromRGB(22,38,24) or Color3.fromRGB(20,20,20)
-				lp.TextColor3=layerData.loop and Color3.fromRGB(140,210,145) or Color3.fromRGB(210,210,210)
-				lpStroke.Color = layerData.loop and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42)
-				dumpCfg()
-			end))
-			local priOpts2=PRIORITY_OPTIONS; local piIdx=1
-			for i,v in ipairs(priOpts2) do if v==(layerData.priority or "Action4") then piIdx=i; break end end
-			local pb=Instance.new("TextButton"); pb.Size=UDim2.new(0.56,-6,1,0); pb.Position=UDim2.new(0.44,6,0,0)
-			pb.Text=priOpts2[piIdx]; pb.BackgroundColor3=Color3.fromRGB(22,38,24); pb.TextColor3=Color3.fromRGB(140,210,145)
-			pb.Font=Enum.Font.Code; pb.TextSize=10; pb.BorderSizePixel=0; pb.ZIndex=7; pb.Parent=r4; mkCorner(pb,4)
-			do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=pb end
-			table.insert(Data.connections, pb.MouseButton1Click:Connect(function()
-				piIdx=(piIdx%#priOpts2)+1; pb.Text=priOpts2[piIdx]; layerData.priority=priOpts2[piIdx]; dumpCfg()
-			end))
-		end
-
-		
-		do
-			local r5=lr(24)
-			local prev=Instance.new("TextButton"); prev.Size=UDim2.new(0.5,-2,1,0)
-			prev.Text="▶ preview"; prev.BackgroundColor3=Color3.fromRGB(35,35,35); prev.TextColor3=Color3.fromRGB(130,190,240)
-			prev.Font=Enum.Font.Code; prev.TextSize=10; prev.BorderSizePixel=0; prev.ZIndex=7; prev.Parent=r5; mkCorner(prev,4)
-			table.insert(Data.connections, prev.MouseButton1Click:Connect(function()
-				if not layerData.id or layerData.id=="" then return end
-				if not Data.ghostChar then popPreview(layerData.id); return end
-				playOnDummy(layerData.id, layerData.speed, layerData.loop, layerData.startOffset, layerData.priority)
-			end))
-			local cp=Instance.new("TextButton"); cp.Size=UDim2.new(0.5,-2,1,0); cp.Position=UDim2.new(0.5,2,0,0)
-			cp.Text="⎘ copy id"; cp.BackgroundColor3=Color3.fromRGB(35,35,35); cp.TextColor3=Color3.fromRGB(130,190,240)
-			cp.Font=Enum.Font.Code; cp.TextSize=10; cp.BorderSizePixel=0; cp.ZIndex=7; cp.Parent=r5; mkCorner(cp,4)
-			table.insert(Data.connections, cp.MouseButton1Click:Connect(function() yoink(layerData.id or "") end))
-		end
-		return lCard
+		return tCard
 	end
 
-	for i,layer in ipairs(ruleData.layers) do buildLayerRow(layer, i) end
+	for i,trigger in ipairs(ruleData.triggers or {}) do buildTriggerRow(trigger, i) end
 
-	
 	do
-		local r=mkRow(28)
-		local btn=Instance.new("TextButton"); btn.Size=UDim2.new(1,0,1,0)
-		btn.Text="＋ add layer"; btn.BackgroundColor3=Color3.fromRGB(22,38,24); btn.TextColor3=Color3.fromRGB(140,210,145)
-		btn.Font=Enum.Font.Code; btn.TextSize=11; btn.BorderSizePixel=0; btn.ZIndex=5; btn.Parent=r; mkCorner(btn,5)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,80,48); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=btn end
-		table.insert(Data.connections, btn.MouseButton1Click:Connect(function()
-			local ld={id="",speed=1,loop=false,startOffset=0,priority="Action4",weight=1}
-			table.insert(ruleData.layers, ld); buildLayerRow(ld, #ruleData.layers); dumpCfg()
+		local row=mkRow(26)
+		local addTrigBtn=mkBtn(row, "+ Add Trigger", Color3.fromRGB(40,60,40), Color3.fromRGB(150,200,150))
+		table.insert(Data.connections, addTrigBtn.MouseButton1Click:Connect(function()
+			local newTrig={type="animId", value="", priority="any", player="any"}
+			ruleData.triggers = ruleData.triggers or {}
+			table.insert(ruleData.triggers, newTrig); buildTriggerRow(newTrig, #ruleData.triggers); dumpCfg()
 		end))
 	end
 
-	
-	do
-		local r=mkRow(28)
-		local tb=Instance.new("TextButton"); tb.Size=UDim2.new(0.5,-2,1,0)
-		tb.Text="▶ test dummy"; tb.BackgroundColor3=Color3.fromRGB(42,42,42); tb.TextColor3=Color3.fromRGB(160,160,160)
-		tb.Font=Enum.Font.Code; tb.TextSize=10; tb.BorderSizePixel=0; tb.ZIndex=5; tb.Parent=r; mkCorner(tb,5)
-		table.insert(Data.connections, tb.MouseButton1Click:Connect(function()
-			if not Data.ghostChar then
-				local id=ruleData.layers[1] and ruleData.layers[1].id
-				if id and id~="" then popPreview(id) else flashNotif("open preview first"); return end
-			end
-			stopAllDummyTracks()
-			task.spawn(function()
-				if (ruleData.triggerDelay or 0)>0 then task.wait(ruleData.triggerDelay) end
-				for _,layer in ipairs(ruleData.layers) do
-					if layer.id and layer.id~="" then playOnDummy(layer.id,layer.speed,layer.loop,layer.startOffset,layer.priority) end
-				end
-			end)
-			tb.Text="fired!"; tb.BackgroundColor3=Color3.fromRGB(42,42,42)
-			task.delay(1.5, function() tb.Text="▶ test dummy"; tb.BackgroundColor3=Color3.fromRGB(42,42,42) end)
+	local actionHolder=Instance.new("Frame")
+	actionHolder.Size=UDim2.new(1,0,0,0); actionHolder.BackgroundTransparency=1; actionHolder.BorderSizePixel=0
+	actionHolder.ZIndex=4; actionHolder.LayoutOrder=rowOrder+1; actionHolder.Parent=rFrame
+	rowOrder+=1
+	local actionLayout=Instance.new("UIListLayout"); actionLayout.Padding=UDim.new(0,4); actionLayout.Parent=actionHolder
+	table.insert(Data.connections, actionLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		actionHolder.Size=UDim2.new(1,0,0,actionLayout.AbsoluteContentSize.Y)
+	end))
+
+	local function buildActionRow(actionData, actionIdx)
+		local aCard=Instance.new("Frame"); aCard.Size=UDim2.new(1,0,0,10); aCard.BackgroundColor3=Color3.fromRGB(35,35,35)
+		aCard.BorderSizePixel=0; aCard.ZIndex=5; aCard.Parent=actionHolder; mkCorner(aCard,5)
+		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(120,120,120); s.Thickness=1; s.Transparency=0.6; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=aCard end
+
+		local acList=Instance.new("UIListLayout"); acList.Padding=UDim.new(0,3)
+		acList.HorizontalAlignment=Enum.HorizontalAlignment.Center; acList.SortOrder=Enum.SortOrder.LayoutOrder; acList.Parent=aCard
+		local acPad=Instance.new("UIPadding"); acPad.PaddingTop=UDim.new(0,5); acPad.PaddingBottom=UDim.new(0,5)
+		acPad.PaddingLeft=UDim.new(0,5); acPad.PaddingRight=UDim.new(0,5); acPad.Parent=aCard
+		table.insert(Data.connections, acList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			aCard.Size=UDim2.new(1,0,0,acList.AbsoluteContentSize.Y+14)
 		end))
-		local sb=Instance.new("TextButton"); sb.Size=UDim2.new(0.5,-2,1,0); sb.Position=UDim2.new(0.5,2,0,0)
-		sb.Text="■ stop dummy"; sb.BackgroundColor3=Color3.fromRGB(14,14,14); sb.TextColor3=Color3.fromRGB(80,80,80)
-		sb.Font=Enum.Font.Code; sb.TextSize=10; sb.BorderSizePixel=0; sb.ZIndex=5; sb.Parent=r; mkCorner(sb,5)
-		table.insert(Data.connections, sb.MouseButton1Click:Connect(stopAllDummyTracks))
+
+		local ao=0
+		local function ar(h) ao+=1; local r=Instance.new("Frame"); r.Size=UDim2.new(1,0,0,h); r.BackgroundTransparency=1; r.BorderSizePixel=0; r.ZIndex=6; r.LayoutOrder=ao; r.Parent=aCard; return r end
+
+		do
+			local hr=ar(20)
+			local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-25,1,0); lbl.BackgroundTransparency=1
+			lbl.TextColor3=Color3.fromRGB(180,180,180); lbl.Font=Enum.Font.Code; lbl.TextSize=10
+			lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Text="DO: " .. (actionData.type or "play"); lbl.ZIndex=7; lbl.Parent=hr
+			local db=Instance.new("TextButton"); db.Size=UDim2.new(0,20,1,0); db.Position=UDim2.new(1,-20,0,0)
+			db.Text="×"; db.BackgroundColor3=Color3.fromRGB(150,50,50); db.TextColor3=Color3.fromRGB(255,255,255)
+			db.Font=Enum.Font.GothamBold; db.TextSize=12; db.BorderSizePixel=0; db.ZIndex=7; db.Parent=hr; mkCorner(db,3)
+			table.insert(Data.connections, db.MouseButton1Click:Connect(function()
+				table.remove(ruleData.actions, actionIdx); aCard:Destroy(); dumpCfg()
+			end))
+		end
+
+		local actionOpts={"play","stop","speed","priority","weight","fade","wait","macro","var","flash"}
+		local typeIdx=1
+		for i,v in ipairs(actionOpts) do if v==(actionData.type or "play") then typeIdx=i; break end end
+		local typeBtn=mkBtn(ar(24), actionOpts[typeIdx], Color3.fromRGB(50,70,50), Color3.fromRGB(150,200,150))
+		table.insert(Data.connections, typeBtn.MouseButton1Click:Connect(function()
+			typeIdx=(typeIdx%#actionOpts)+1; actionData.type=actionOpts[typeIdx]; typeBtn.Text=actionOpts[typeIdx]
+			dumpCfg()
+		end))
+
+		local paramBox=mkInput(ar(24), actionData.param or "", "parameters...")
+		table.insert(Data.connections, paramBox:GetPropertyChangedSignal("Text"):Connect(function() actionData.param=paramBox.Text; dumpCfg() end))
+
+		return aCard
 	end
 
-	
+	for i,action in ipairs(ruleData.actions or {}) do buildActionRow(action, i) end
+
 	do
-		local r=mkRow(28)
-		local mb=Instance.new("TextBox"); mb.Size=UDim2.new(0.77,-4,1,0); mb.Text=""
-		mb.PlaceholderText="macro on dummy..."; mb.BackgroundColor3=Color3.fromRGB(8,8,8)
-		mb.TextColor3=Color3.fromRGB(240,240,240); mb.Font=Enum.Font.Code; mb.TextSize=10; mb.BorderSizePixel=0; mb.ZIndex=5; mb.Parent=r; mkCorner(mb,4)
-		do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(65,65,65); s.Thickness=1; s.Transparency=0.5; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=mb end
-		local rb=Instance.new("TextButton"); rb.Size=UDim2.new(0.23,-4,1,0); rb.Position=UDim2.new(0.77,4,0,0)
-		rb.Text="run"; rb.BackgroundColor3=Color3.fromRGB(28,28,28); rb.TextColor3=Color3.fromRGB(210,210,210)
-		rb.Font=Enum.Font.Code; rb.TextSize=11; rb.BorderSizePixel=0; rb.ZIndex=5; rb.Parent=r; mkCorner(rb,4)
-		table.insert(Data.connections, rb.MouseButton1Click:Connect(function()
-			local m=mb.Text:match("^%s*(.-)%s*$"); if m~="" then runMacroOnDummy(m) end
+		local row=mkRow(26)
+		local addActBtn=mkBtn(row, "+ Add Action", Color3.fromRGB(50,50,70), Color3.fromRGB(150,150,200))
+		table.insert(Data.connections, addActBtn.MouseButton1Click:Connect(function()
+			local newAct={type="play", param=""}
+			ruleData.actions = ruleData.actions or {}
+			table.insert(ruleData.actions, newAct); buildActionRow(newAct, #ruleData.actions); dumpCfg()
 		end))
 	end
 
-	
 	do
-		local r=mkRow(24)
-		local btn=Instance.new("TextButton"); btn.Size=UDim2.new(1,0,1,0)
-		btn.Text="X delete rule"; btn.BackgroundColor3=Color3.fromRGB(200,50,50); btn.TextColor3=Color3.fromRGB(255,255,255)
-		btn.Font=Enum.Font.Code; btn.TextSize=11; btn.BorderSizePixel=0; btn.ZIndex=5; btn.Parent=r; mkCorner(btn,5)
-		table.insert(Data.connections, btn.MouseButton1Click:Connect(function()
+		local row=mkRow(24)
+		local chainBox=mkInput(row, ruleData.chainTo or "", "chain to rule name...")
+		local chainLbl=Instance.new("TextLabel"); chainLbl.Size=UDim2.new(0.3,0,1,0); chainLbl.Position=UDim2.new(0.7,5,0,0)
+		chainLbl.BackgroundTransparency=1; chainLbl.TextColor3=Color3.fromRGB(120,120,120); chainLbl.Font=Enum.Font.Code; chainLbl.TextSize=9
+		chainLbl.Text="then →"; chainLbl.ZIndex=5; chainLbl.Parent=row
+		table.insert(Data.connections, chainBox:GetPropertyChangedSignal("Text"):Connect(function() ruleData.chainTo=chainBox.Text; dumpCfg() end))
+	end
+
+	do
+		local row=mkRow(24)
+		local delBtn=mkBtn(row, "Delete Rule", Color3.fromRGB(80,40,40), Color3.fromRGB(220,120,120))
+		table.insert(Data.connections, delBtn.MouseButton1Click:Connect(function()
 			for i,r2 in ipairs(Data.advReplacements) do if r2==ruleData then table.remove(Data.advReplacements,i); break end end
 			rFrame:Destroy(); dumpCfg()
 		end))
 	end
+
+
 end
 
 table.insert(Data.connections, UI.addAdvReplBtn.MouseButton1Click:Connect(function()
@@ -2539,8 +3751,8 @@ local function addFavRow(id, displayName)
 	local fFrame = Instance.new("Frame"); fFrame.Name = "fav_"..id; fFrame.Size = UDim2.new(1,-5,0,25); fFrame.BackgroundTransparency = 1; fFrame.ZIndex = 3; fFrame.Parent = UI.favsList
 	local fBtn = Instance.new("TextButton"); fBtn.Size = UDim2.new(1,-95,1,0); fBtn.BackgroundColor3 = Color3.fromRGB(28,28,28); fBtn.TextColor3 = Color3.fromRGB(210,175,60); fBtn.TextXAlignment = Enum.TextXAlignment.Left
 	fBtn.Text = "★ " .. id .. " | " .. (displayName or "Unknown"); fBtn.BorderSizePixel = 0; fBtn.Font = Enum.Font.Code; fBtn.TextSize = 12; fBtn.ZIndex = 4; fBtn.Parent = fFrame; mkCorner(fBtn,3)
-	local fPreviewBtn = Instance.new("TextButton"); fPreviewBtn.Size = UDim2.new(0,42,1,0); fPreviewBtn.Position = UDim2.new(1,-95,0,0)
-	fPreviewBtn.Text = "👁 View"; fPreviewBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); fPreviewBtn.TextColor3 = Color3.fromRGB(210,210,210); fPreviewBtn.BorderSizePixel = 0; fPreviewBtn.Font = Enum.Font.Code; fPreviewBtn.TextSize = 11; fPreviewBtn.ZIndex = 4; fPreviewBtn.Parent = fFrame; mkCorner(fPreviewBtn,3)
+	local fPreviewBtn = Instance.new("ImageButton"); fPreviewBtn.Size = UDim2.new(0,42,1,0); fPreviewBtn.Position = UDim2.new(1,-95,0,0)
+	fPreviewBtn.Image = "rbxassetid://6523858394"; fPreviewBtn.ImageTransparency = 0; fPreviewBtn.BackgroundTransparency = 1; fPreviewBtn.BorderSizePixel = 0; fPreviewBtn.AutoButtonColor = false; fPreviewBtn.ScaleType = Enum.ScaleType.Fit; fPreviewBtn.ImageColor3 = Color3.fromRGB(210,210,210); fPreviewBtn.ZIndex = 4; fPreviewBtn.Parent = fFrame; mkCorner(fPreviewBtn,3)
 	local fCopyBtn = Instance.new("TextButton"); fCopyBtn.Size = UDim2.new(0,42,1,0); fCopyBtn.Position = UDim2.new(1,-48,0,0)
 	fCopyBtn.Text = "Copy"; fCopyBtn.BackgroundColor3 = Color3.fromRGB(42,42,42); fCopyBtn.TextColor3 = Color3.fromRGB(210,210,210); fCopyBtn.BorderSizePixel = 0; fCopyBtn.Font = Enum.Font.Code; fCopyBtn.TextSize = 11; fCopyBtn.ZIndex = 4; fCopyBtn.Parent = fFrame; mkCorner(fCopyBtn,3)
 	local fUnstarBtn = Instance.new("TextButton"); fUnstarBtn.Size = UDim2.new(0,0,1,0); fUnstarBtn.BackgroundTransparency = 1; fUnstarBtn.ZIndex = 1; fUnstarBtn.Text = ""; fUnstarBtn.Parent = fFrame
@@ -2562,8 +3774,8 @@ local function addLogRow(id, name, key, priority)
 	local entry = Instance.new("TextButton"); entry.Size = UDim2.new(1,-142,1,0); entry.BackgroundColor3 = Color3.fromRGB(20,20,20); entry.TextColor3 = Color3.fromRGB(160,160,160); entry.TextXAlignment = Enum.TextXAlignment.Left
 	entry.Text = "(1) [" .. (priority or "N/A") .. "] " .. id .. " | " .. name .. " @" .. (Data.animTimestamps[key] or os.date("%H:%M:%S"))
 	entry.BorderSizePixel = 0; entry.Font = Enum.Font.Code; entry.TextSize = 12; entry.TextTruncate = Enum.TextTruncate.AtEnd; entry.ZIndex = 4; entry.Visible = true; entry.Parent = entryFrame; mkCorner(entry,3)
-	local previewBtn = Instance.new("TextButton"); previewBtn.Size = UDim2.new(0,20,1,0); previewBtn.Position = UDim2.new(1,-140,0,0)
-	previewBtn.BackgroundColor3 = Color3.fromRGB(20,20,20); previewBtn.TextColor3 = Color3.fromRGB(210,210,210); previewBtn.Text = "👁"; previewBtn.BorderSizePixel = 0; previewBtn.Font = Enum.Font.GothamSemibold; previewBtn.TextSize = 12; previewBtn.ZIndex = 4; previewBtn.Visible = true; previewBtn.Parent = entryFrame; mkCorner(previewBtn,3)
+	local previewBtn = Instance.new("ImageButton"); previewBtn.Size = UDim2.new(0,20,1,0); previewBtn.Position = UDim2.new(1,-140,0,0)
+	previewBtn.Image = "rbxassetid://6523858394"; previewBtn.ImageTransparency = 0; previewBtn.BackgroundTransparency = 1; previewBtn.BorderSizePixel = 0; previewBtn.AutoButtonColor = false; previewBtn.ScaleType = Enum.ScaleType.Fit; previewBtn.ImageColor3 = Color3.fromRGB(210,210,210); previewBtn.ZIndex = 4; previewBtn.Visible = true; previewBtn.Parent = entryFrame; mkCorner(previewBtn,3)
 	local favBtn = Instance.new("TextButton"); favBtn.Size = UDim2.new(0,20,1,0); favBtn.Position = UDim2.new(1,-118,0,0)
 	favBtn.BackgroundColor3 = Color3.fromRGB(38,38,38); favBtn.TextColor3 = Color3.fromRGB(210,175,60); favBtn.Text = Data.favorites[id] and "★" or "☆"; favBtn.BorderSizePixel = 0; favBtn.Font = Enum.Font.GothamSemibold; favBtn.TextSize = 12; favBtn.ZIndex = 4; favBtn.Visible = true; favBtn.Parent = entryFrame; mkCorner(favBtn,3)
 	local nameBtn = Instance.new("TextButton"); nameBtn.Size = UDim2.new(0,46,1,0); nameBtn.Position = UDim2.new(1,-96,0,0)
@@ -2731,44 +3943,137 @@ end
 
 local advReplActiveThreads = {}
 
-local function fireAdvReplacement(rule, triggerPriority)
+local function fireAdvReplacement(rule, triggerInfo)
 	if not rule.enabled then return end
-	if rule.triggerPriority and rule.triggerPriority ~= "any" then
-		if rule.triggerPriority ~= triggerPriority then return end
+	if tick() - (rule.lastFired or 0) < (rule.cooldown or 0) then return end
+	rule.lastFired = tick()
+
+
+	if rule.conditions then
+		for _, cond in ipairs(rule.conditions) do
+
+		end
 	end
+
 	local token = {}
 	table.insert(advReplActiveThreads, token)
 	task.spawn(function()
-		local delay = rule.triggerDelay or 0
-		if delay > 0 then task.wait(delay) end
 		local animator = grabAnimator(); if not animator then return end
-		local longestDuration = 0
-		for _, layer in ipairs(rule.layers) do
-			if not layer.id or layer.id == "" then continue end
-			local startOffset = layer.startOffset or 0
-			local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. layer.id
-			local track; pcall(function() track = animator:LoadAnimation(anim) end)
-			if track then
-				local pri = Enum.AnimationPriority[layer.priority] or Enum.AnimationPriority.Action4
-				track.Priority = pri; track.Looped = layer.loop or false
-				track:Play(0, layer.weight or 1, layer.speed or 1); Data.scriptTracks[track] = true
-				if startOffset > 0 then
-					task.defer(function() if track then track.TimePosition = math.clamp(startOffset,0,track.Length) end end)
+
+		for _, action in ipairs(rule.actions or {}) do
+			local actionType = action.type
+			local param = action.param or ""
+
+			if actionType == "play" then
+				local parts = {}
+				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
+				local id = grabId(parts[1]) or ""
+				local speed = tonumber(parts[2]) or 1
+				local loop = parts[3] == "true"
+				local priority = parts[4] or "Action4"
+				local weight = tonumber(parts[5]) or 1
+				local startOffset = tonumber(parts[6]) or 0
+
+				if id ~= "" then
+					local anim = Instance.new("Animation"); anim.AnimationId = "rbxassetid://" .. id
+					local track; pcall(function() track = animator:LoadAnimation(anim) end)
+					if track then
+						local pri = Enum.AnimationPriority[priority] or Enum.AnimationPriority.Action4
+						track.Priority = pri; track.Looped = loop
+						track:Play(0, weight, speed); Data.scriptTracks[track] = true
+						if startOffset > 0 then
+							task.defer(function() if track then track.TimePosition = math.clamp(startOffset,0,track.Length) end end)
+						end
+						track.Stopped:Connect(function() Data.scriptTracks[track] = nil end)
+					end
 				end
-				track.Stopped:Connect(function() Data.scriptTracks[track] = nil end)
-				
-				if not layer.loop and track.Length > 0 then
-					local effectiveDuration = (track.Length - startOffset) / (layer.speed or 1)
-					if effectiveDuration > longestDuration then longestDuration = effectiveDuration end
+
+			elseif actionType == "stop" then
+
+				for t in pairs(Data.scriptTracks) do
+					if grabId(t.Animation.AnimationId):find(param, 1, true) then
+						t:Stop(0); Data.scriptTracks[t] = nil
+					end
 				end
+
+			elseif actionType == "speed" then
+				local parts = {}
+				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
+				local pattern = parts[1] or ""
+				local newSpeed = tonumber(parts[2]) or 1
+				for t in pairs(Data.scriptTracks) do
+					if grabId(t.Animation.AnimationId):find(pattern, 1, true) then
+						t:AdjustSpeed(newSpeed)
+					end
+				end
+
+			elseif actionType == "priority" then
+				local parts = {}
+				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
+				local pattern = parts[1] or ""
+				local newPri = Enum.AnimationPriority[parts[2]] or Enum.AnimationPriority.Action4
+				for t in pairs(Data.scriptTracks) do
+					if grabId(t.Animation.AnimationId):find(pattern, 1, true) then
+						t.Priority = newPri
+					end
+				end
+
+			elseif actionType == "weight" then
+				local parts = {}
+				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
+				local pattern = parts[1] or ""
+				local newWeight = tonumber(parts[2]) or 1
+				for t in pairs(Data.scriptTracks) do
+					if grabId(t.Animation.AnimationId):find(pattern, 1, true) then
+						t:AdjustWeight(newWeight, 0)
+					end
+				end
+
+			elseif actionType == "fade" then
+				local parts = {}
+				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
+				local pattern = parts[1] or ""
+				local fadeTime = tonumber(parts[2]) or 0.5
+				for t in pairs(Data.scriptTracks) do
+					if grabId(t.Animation.AnimationId):find(pattern, 1, true) then
+						t:AdjustWeight(0, fadeTime)
+						task.delay(fadeTime, function() if t then t:Stop(0); Data.scriptTracks[t] = nil end end)
+					end
+				end
+
+			elseif actionType == "wait" then
+				local waitTime = tonumber(param) or 1
+				task.wait(waitTime)
+
+			elseif actionType == "macro" then
+				if param ~= "" then
+					runMacro(param)
+				end
+
+			elseif actionType == "var" then
+
+				local parts = {}
+				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
+				local op = parts[1]
+				local varName = parts[2]
+				local value = parts[3]
+
+
+			elseif actionType == "flash" then
+				local parts = {}
+				for p in param:gmatch("[^,]+") do table.insert(parts, p:match("^%s*(.-)%s*$")) end
+				local msg = parts[1] or "Rule fired!"
+				local duration = tonumber(parts[2]) or 2
+				local color = parts[3] or "blue"
+				flashNotif(msg, duration, color)
 			end
 		end
-		
-		if rule.chainToId and rule.chainToId ~= "" then
-			if longestDuration > 0 then task.wait(longestDuration) end
+
+
+		if rule.chainTo and rule.chainTo ~= "" then
 			for _, chainRule in ipairs(Data.advReplacements) do
-				if chainRule.triggerAnimId == rule.chainToId and chainRule.enabled and chainRule ~= rule then
-					fireAdvReplacement(chainRule, triggerPriority)
+				if chainRule.name == rule.chainTo and chainRule.enabled and chainRule ~= rule then
+					fireAdvReplacement(chainRule, triggerInfo)
 					break
 				end
 			end
@@ -2798,17 +4103,46 @@ local function trackSeen(track, playerName)
 	end
 	if playerName == player.Name and not Data.scriptTracks[track] then
 		for _, rule in ipairs(Data.advReplacements) do
-			if rule.triggerAnimId == id and rule.enabled then
-				stopTrack(track)
-				fireAdvReplacement(rule, track.Priority.Name)
-				Data.seenTracks[track] = true
-				return
+			if rule.enabled then
+				local triggerMatch = false
+				local triggerInfo = {
+					animId = id,
+					animName = anim.Name or "Unknown",
+					player = playerName,
+					priority = track.Priority.Name
+				}
+
+				for _, trigger in ipairs(rule.triggers or {}) do
+					local triggerType = trigger.type
+					local param = trigger.param or trigger.value or ""
+
+					if triggerType == "animId" then
+						local trigId = grabId(param)
+						if trigId and id == trigId then triggerMatch = true; break end
+					elseif triggerType == "animName" then
+						if (anim.Name or "Unknown"):find(param, 1, true) then triggerMatch = true; break end
+					elseif triggerType == "player" then
+						if playerName == param then triggerMatch = true; break end
+					elseif triggerType == "priority" then
+						if track.Priority.Name == param then triggerMatch = true; break end
+					elseif triggerType == "anyAnim" then
+						triggerMatch = true; break
+					end
+				end
+
+				if triggerMatch then
+					stopTrack(track)
+					fireAdvReplacement(rule, triggerInfo)
+					Data.seenTracks[track] = true
+					return
+				end
 			end
 		end
 	end
 	if playerName ~= player.Name and not State.globalLogging then return end
 	if Data.seenTracks[track] then return end
 	Data.seenTracks[track] = true
+	State.performance.totalLogs = (State.performance.totalLogs or 0) + 1
 	logIt(id, anim.Name or "Unknown", playerName, fixPriority(track.Priority.Name))
 	local conn; conn = track.Stopped:Connect(function()
 		Data.seenTracks[track] = nil
@@ -2922,13 +4256,66 @@ local function doCmd(cmd, isRelease)
 		State.looped = not State.looped; refreshLoopBtn(); dumpCfg()
 	elseif action == "clear" and not isRelease then
 		nukeList()
+	elseif action == "global" and not isRelease then
+		State.globalLogging = not State.globalLogging; refreshGlobalBtn(); dumpCfg()
+	elseif action == "autocopy" and not isRelease then
+		State.autoCopy = not State.autoCopy; refreshAutoCopyBtn(); dumpCfg()
+	elseif action == "priority" and not isRelease then
+		local pri = parts[2]; if pri then
+			local priEnum = Enum.AnimationPriority[pri]
+			if priEnum then for track in pairs(Data.scriptTracks) do track.Priority = priEnum end end
+		end
+	elseif action == "weight" and not isRelease then
+		local w = tonumber(parts[2]); if w then for track in pairs(Data.scriptTracks) do track:AdjustWeight(w, 0.1) end end
+	elseif action == "fade" and not isRelease then
+		local t = tonumber(parts[2]) or 0.5; for track in pairs(Data.scriptTracks) do track:AdjustWeight(0, t); task.wait(t); track:Stop() end
+	elseif action == "reverse" and not isRelease then
+		for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(track.Speed * -1) end end
+	elseif action == "scrub" and not isRelease then
+		local pos = tonumber(parts[2]); if pos then for track in pairs(Data.scriptTracks) do if track.IsPlaying then track.TimePosition = math.clamp(pos, 0, track.Length) end end end
+	elseif action == "length" and not isRelease then
+		local len = tonumber(parts[2]); if len then for track in pairs(Data.scriptTracks) do if track.IsPlaying then track.Length = len end end end
+	elseif action == "export" and not isRelease then
+		local out = {}
+		for key, entry in pairs(Data.animFrames) do
+			if key:find("__frame", 1, true) then continue end
+			local pureId = key:match("^([%d]+)")
+			table.insert(out, {id=pureId, key=key, name=entry.Text, count=Data.animCounts[key] or 1,
+				lastSeen=Data.animTimestamps[key] or "?", favorited=Data.favorites[pureId] or false, customName=Data.customNames[pureId] or nil})
+		end
+		local json = Services.HttpService:JSONEncode(out)
+		if writefile then
+			writefile("bacon_logger_export.json", json)
+			flashNotif("Exported to file", 2, Color3.fromRGB(140,210,145))
+		else
+			yoink(json)
+			flashNotif("Copied to clipboard", 2, Color3.fromRGB(140,210,145))
+		end
+	elseif action == "import" and not isRelease then
+		if readfile and isfile and isfile("bacon_logger_import.json") then
+			local ok, data = pcall(function() return Services.HttpService:JSONDecode(readfile("bacon_logger_import.json")) end)
+			if ok and type(data) == "table" then
+				for _, entry in ipairs(data) do
+					if entry.favorited then Data.favorites[entry.id] = true end
+					if entry.customName then Data.customNames[entry.id] = entry.customName end
+				end
+				dumpCfg()
+				flashNotif("Imported successfully", 2, Color3.fromRGB(140,210,145))
+			else
+				flashNotif("Import failed", 2, Color3.fromRGB(210,130,130))
+			end
+		else
+			flashNotif("No import file found", 2, Color3.fromRGB(210,130,130))
+		end
 	end
 end
 
-local function isMacro(str) return str:find(";") ~= nil or str:lower():match("^play%s") ~= nil end
+local function isMacro(str) return str:find(";") ~= nil or str:lower():match("^play%s") ~= nil or str:lower():match("^ramp%s") ~= nil or str:lower():match("^var%s") ~= nil or str:lower():match("^repeat%s") ~= nil end
 local function doMacro(macroStr, bindData, stopFlag)
 	task.spawn(function()
 		local steps = macroStr:split(";")
+		local variables = {}
+		local ramping = {}
 		for _, step in ipairs(steps) do
 			if not stopFlag.active then break end
 			step = step:match("^%s*(.-)%s*$"); if step == "" then continue end
@@ -2948,10 +4335,140 @@ local function doMacro(macroStr, bindData, stopFlag)
 				end
 			elseif cmd == "speed" then
 				local num = tonumber(parts[2]); if num then for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(num) end end end
+			elseif cmd == "ramp" then
+				local startSpeed = tonumber(parts[2]) or 1; local endSpeed = tonumber(parts[3]) or 1; local duration = tonumber(parts[4]) or 1
+				local startTime = tick()
+				local initialSpeeds = {}
+				for track in pairs(Data.scriptTracks) do if track.IsPlaying then initialSpeeds[track] = track.Speed end end
+				while tick() - startTime < duration and stopFlag.active do
+					local t = (tick() - startTime) / duration
+					local currentSpeed = startSpeed + (endSpeed - startSpeed) * t
+					for track, initial in pairs(initialSpeeds) do
+						if track.IsPlaying then track:AdjustSpeed(currentSpeed) end
+					end
+					task.wait(0.05)
+				end
 			elseif cmd == "loop" then State.looped = not State.looped; refreshLoopBtn()
 			elseif cmd == "freeze" or cmd == "pause" then
 				State.isFrozen = not State.isFrozen
 				for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(State.isFrozen and 0 or 1) end end
+			elseif cmd == "priority" then
+				local pri = parts[2]; if pri then
+					local priEnum = Enum.AnimationPriority[pri]
+					if priEnum then for track in pairs(Data.scriptTracks) do track.Priority = priEnum end end
+				end
+			elseif cmd == "weight" then
+				local w = tonumber(parts[2]); if w then for track in pairs(Data.scriptTracks) do track:AdjustWeight(w, 0.1) end end
+			elseif cmd == "fade" then
+				local t = tonumber(parts[2]) or 0.5; for track in pairs(Data.scriptTracks) do track:AdjustWeight(0, t); task.wait(t); track:Stop() end
+			elseif cmd == "reverse" then
+				for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(track.Speed * -1) end end
+			elseif cmd == "scrub" then
+				local pos = tonumber(parts[2]); if pos then for track in pairs(Data.scriptTracks) do if track.IsPlaying then track.TimePosition = math.clamp(pos, 0, track.Length) end end end
+			elseif cmd == "step" then
+				local num = tonumber(parts[2]) or 0.1
+				for track in pairs(Data.scriptTracks) do if track.IsPlaying then track.TimePosition = math.clamp(track.TimePosition + num, 0, track.Length) end end
+			elseif cmd == "length" then
+				local len = tonumber(parts[2]); if len then for track in pairs(Data.scriptTracks) do if track.IsPlaying then track.Length = len end end end
+			elseif cmd == "var" then
+				local name = parts[2]; local value = tonumber(parts[3]); if name and value then variables[name] = value end
+			elseif cmd == "add" then
+				local name = parts[2]; local amount = tonumber(parts[3]); if name and amount and variables[name] then variables[name] = variables[name] + amount end
+			elseif cmd == "mul" then
+				local name = parts[2]; local factor = tonumber(parts[3]); if name and factor and variables[name] then variables[name] = variables[name] * factor end
+			elseif cmd == "use" then
+				local name = parts[2]; if name and variables[name] then
+					local value = variables[name]
+					for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(value) end end
+				end
+			elseif cmd == "if" then
+				local var = parts[2]; local op = parts[3]; local val = tonumber(parts[4])
+				if var and op and val and variables[var] then
+					local condition = false
+					if op == ">" then condition = variables[var] > val
+					elseif op == "<" then condition = variables[var] < val
+					elseif op == "=" or op == "==" then condition = variables[var] == val
+					elseif op == "!=" then condition = variables[var] ~= val
+					elseif op == ">=" then condition = variables[var] >= val
+					elseif op == "<=" then condition = variables[var] <= val
+					end
+					if not condition then continue end
+				end
+			elseif cmd == "goto" then
+				local label = parts[2]; if label then
+					local found = false
+					for i, s in ipairs(steps) do
+						if s:match("^%s*label%s+" .. label .. "%s*$") then
+							steps = {table.unpack(steps, i)}
+							found = true
+							break
+						end
+					end
+					if not found then continue end
+				end
+			elseif cmd == "label" then
+			elseif cmd == "repeat" then
+				local count = tonumber(parts[2]) or 1; local subSteps = {}
+				local i = 2
+				while i <= #steps do
+					local nextStep = steps[i]:match("^%s*(.-)%s*$")
+					if nextStep:lower() == "endrepeat" then break end
+					table.insert(subSteps, steps[i])
+					i = i + 1
+				end
+				for rep = 1, count do
+					if not stopFlag.active then break end
+					for _, subStep in ipairs(subSteps) do
+						if not stopFlag.active then break end
+						local subParts = subStep:split(" "); local subCmd = subParts[1]:lower()
+						if subCmd == "play" then
+							local id = subParts[2]; local spd = tonumber(subParts[3]) or bindData.speed or 1; local lp = (subParts[4] == "true") or bindData.loop or false
+							if id and id ~= "" then fireAnim(id, spd, lp) end
+						elseif subCmd == "wait" then
+							local t = tonumber(subParts[2]) or 0.5; local elapsed = 0
+							while elapsed < t and stopFlag.active do task.wait(0.05); elapsed = elapsed + 0.05 end
+						elseif subCmd == "stop" then
+							local id = subParts[2]
+							if id and id ~= "" then killAnim(id)
+							else
+								for track in pairs(Data.scriptTracks) do pcall(function() track:Stop() end) end
+								for k in pairs(Data.scriptTracks) do Data.scriptTracks[k] = nil end
+							end
+						end
+					end
+				end
+			elseif cmd == "endrepeat" then
+			elseif cmd == "random" then
+				local min = tonumber(parts[2]) or 0; local max = tonumber(parts[3]) or 1
+				local value = min + math.random() * (max - min)
+				for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(value) end end
+			elseif cmd == "sin" then
+				local freq = tonumber(parts[2]) or 1; local amp = tonumber(parts[3]) or 1; local offset = tonumber(parts[4]) or 0; local duration = tonumber(parts[5]) or 1
+				local startTime = tick()
+				while tick() - startTime < duration and stopFlag.active do
+					local t = tick() - startTime
+					local value = math.sin(t * freq * 2 * math.pi) * amp + offset
+					for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(value) end end
+					task.wait(0.05)
+				end
+			elseif cmd == "cos" then
+				local freq = tonumber(parts[2]) or 1; local amp = tonumber(parts[3]) or 1; local offset = tonumber(parts[4]) or 0; local duration = tonumber(parts[5]) or 1
+				local startTime = tick()
+				while tick() - startTime < duration and stopFlag.active do
+					local t = tick() - startTime
+					local value = math.cos(t * freq * 2 * math.pi) * amp + offset
+					for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(value) end end
+					task.wait(0.05)
+				end
+			elseif cmd == "lerp" then
+				local start = tonumber(parts[2]) or 1; local end_ = tonumber(parts[3]) or 1; local duration = tonumber(parts[4]) or 1
+				local startTime = tick()
+				while tick() - startTime < duration and stopFlag.active do
+					local t = (tick() - startTime) / duration
+					local value = start + (end_ - start) * t
+					for track in pairs(Data.scriptTracks) do if track.IsPlaying then track:AdjustSpeed(value) end end
+					task.wait(0.05)
+				end
 			end
 		end
 		stopFlag.active = false
@@ -2959,10 +4476,58 @@ local function doMacro(macroStr, bindData, stopFlag)
 end
 
 local function isCmd(str)
-	local COMMAND_PREFIXES = {"pause","freeze","speed","ban","unban","stop","step","loop","clear"}
+	local COMMAND_PREFIXES = {"pause","freeze","speed","ban","unban","stop","step","loop","clear","global","autocopy","priority","weight","fade","reverse","scrub","length","export","import"}
 	local low = str:lower()
 	for _, c in pairs(COMMAND_PREFIXES) do if low:match("^" .. c) then return true end end
 	return false
+end
+
+local function runQuickCommand(raw)
+	local cmd = tostring(raw or ""):match("^%s*(.-)%s*$")
+	if cmd == "" then return end
+	if cmd:sub(1,1) == "/" then cmd = cmd:sub(2) end
+	local low = cmd:lower()
+	if low == "capture" then
+		captureCurrentTrack()
+		return
+	end
+	if isCmd(cmd) then
+		doCmd(cmd, false)
+		flashNotif("Ran command: " .. cmd, 1.6, nil, "success")
+		return
+	end
+	if isMacro(cmd) then
+		local tempBind = {speed = tonumber(UI.speedBox.Text) or 1, loop = State.looped}
+		doMacro(cmd, tempBind, {active = true})
+		flashNotif("Macro started", 1.6, nil, "success")
+		return
+	end
+	local numeric = grabId(cmd)
+	if numeric then
+		UI.idBox.Text = numeric
+		flashNotif("Set ID box to " .. numeric, 1.6, nil, "info")
+		return
+	end
+	flashNotif("Unknown quick command", 2, nil, "warn")
+end
+
+table.insert(Data.connections, UI.commandPaletteBtn.MouseButton1Click:Connect(function()
+	UI.commandPalette.Visible = not UI.commandPalette.Visible
+end))
+table.insert(Data.connections, UI.commandRunBtn.MouseButton1Click:Connect(function()
+	runQuickCommand(UI.commandBar.Text)
+end))
+table.insert(Data.connections, UI.commandBar.FocusLost:Connect(function(enterPressed)
+	if enterPressed then runQuickCommand(UI.commandBar.Text) end
+end))
+for _, child in ipairs(UI.commandPalette:GetChildren()) do
+	if child:IsA("TextButton") then
+		table.insert(Data.connections, child.MouseButton1Click:Connect(function()
+			UI.commandBar.Text = child.Name
+			runQuickCommand(child.Name)
+			UI.commandPalette.Visible = false
+		end))
+	end
 end
 
 table.insert(Data.connections, Services.UserInputService.InputBegan:Connect(function(input, processed)
@@ -3090,4 +4655,83 @@ local function tickLoop()
 	end
 end
 table.insert(Data.connections, Services.RunService.Stepped:Connect(tickLoop))
+local function migrateAdvReplacements()
+	for _, rule in ipairs(Data.advReplacements) do
+
+		if rule.layers and not rule.triggers then
+			rule.triggers = {}
+			rule.actions = {}
+			rule.variables = rule.variables or {}
+			rule.conditions = rule.conditions or {}
+			rule.cooldown = rule.cooldown or 0
+			rule.lastFired = rule.lastFired or 0
+
+			if rule.triggerAnimId then
+				table.insert(rule.triggers, {type = "animId", param = rule.triggerAnimId})
+			elseif rule.triggerAnimName then
+				table.insert(rule.triggers, {type = "animName", param = rule.triggerAnimName})
+			else
+				table.insert(rule.triggers, {type = "anyAnim", param = ""})
+			end
+
+
+			for _, layer in ipairs(rule.layers) do
+				local action = {
+					type = "play",
+					param = string.format("%s,%s,%s,%s,%s,%s",
+						layer.id or "",
+						layer.speed or 1,
+						layer.loop and "true" or "false",
+						layer.priority or "Action4",
+						layer.weight or 1,
+						layer.startOffset or 0
+					)
+				}
+				table.insert(rule.actions, action)
+			end
+
+			if rule.chainToId then
+				rule.chainTo = rule.chainToId
+			end
+
+
+			rule.layers = nil
+			rule.triggerAnimId = nil
+			rule.triggerAnimName = nil
+			rule.triggerPriority = nil
+			rule.triggerDelay = nil
+			rule.chainToId = nil
+		end
+	end
+
+
+	if not State.advancedFilters then
+		State.advancedFilters = {
+			enabled = false,
+			currentPreset = "Default",
+			presets = {
+				["Default"] = {
+					name = "Default",
+					filters = {
+						{type = "search", param = State.filterPlayer or "", enabled = true},
+						{type = "player", param = State.filterPlayer or "", enabled = true},
+						{type = "priority", param = State.filterPriority or "", enabled = true}
+					},
+					logic = "AND"
+				}
+			},
+			activeFilters = {
+				{type = "search", param = State.filterPlayer or "", enabled = true},
+				{type = "player", param = State.filterPlayer or "", enabled = true},
+				{type = "priority", param = State.filterPriority or "", enabled = true}
+			},
+			logic = "AND"
+		}
+	end
+end
+
 table.insert(Data.connections, Services.RunService.RenderStepped:Connect(tickLoop))
+
+migrateAdvReplacements()
+if dumpCfg then dumpCfg() end
+print("baconlogger finished loading, enjoy the script dude,")
