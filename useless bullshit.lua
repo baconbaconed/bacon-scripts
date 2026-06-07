@@ -187,6 +187,18 @@ local grabbedNPC  = nil
 local grabbedRoot = nil
 local localGrabArmed = false
 
+-- Telekinesis Hold gun (press to grab + float NPC, release to toss)
+local tkGunEnabled   = false
+local tkHeld         = nil   -- currently held NPC model
+local tkHeldRoot     = nil   -- its HumanoidRootPart
+local tkSavedPlatform= nil   -- prior PlatformStand to restore on release
+local TK_FLOAT_Y     = 6     -- studs above the cursor hit point to hover
+local TK_DRAG        = 16    -- follow strength toward the cursor
+
+-- Freeze gun (click to stun/freeze an NPC, click again to release)
+local freezeGunEnabled = false
+local frozenNPCs       = {}  -- [model] = { ws, jp, jh, ar, ps } saved stats
+
 -- Targeting helpers for tools
 local _npcToolsRayParams = RaycastParams.new()
 _npcToolsRayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -1903,7 +1915,7 @@ local function takeNPC(model)
             npcCam.pitch=math.clamp(npcCam.pitch+inp.Delta.Y*0.005,-1.2,0.4)
           end
         elseif inp.UserInputType==Enum.UserInputType.MouseWheel then
-            npcCam.dist = math.clamp(npcCam.dist - inp.Delta.Z*2, 3, 40)
+            npcCam.dist = math.clamp(npcCam.dist - inp.Delta.Z*3, 2, 60)
         end
     end)
     table.insert(npcConns,mc)
@@ -2177,6 +2189,23 @@ local function unloadScript()
     grabbedNPC = nil
     grabbedRoot = nil
     localGrabArmed = false
+
+    tkGunEnabled = false
+    freezeGunEnabled = false
+    if tkHeld then
+        local h = tkHeld:FindFirstChildOfClass("Humanoid")
+        if h then pcall(function() h.PlatformStand = (tkSavedPlatform == true) end) end
+    end
+    tkHeld = nil; tkHeldRoot = nil; tkSavedPlatform = nil
+    for model, s in pairs(frozenNPCs) do
+        local h = model and model:FindFirstChildOfClass("Humanoid")
+        if h then pcall(function()
+            h.WalkSpeed = s.ws; h.JumpPower = s.jp
+            pcall(function() h.JumpHeight = s.jh end)
+            h.AutoRotate = s.ar; h.PlatformStand = s.ps
+        end) end
+    end
+    frozenNPCs = {}
 
     if _G._setNPCPick then pcall(function() _G._setNPCPick(false) end) end
     _G._setNPCPick = nil
@@ -2804,6 +2833,92 @@ npcControlLL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     npcControlPanel.CanvasSize=UDim2.new(0,0,0,npcControlLL.AbsoluteContentSize.Y+8)
 end)
 
+-- ── NPC SEARCH BOX (pins to top of Control panel via negative LayoutOrder) ──
+local npcSearchBox = Instance.new("TextBox")
+npcSearchBox.Size = UDim2.new(1,0,0,24)
+npcSearchBox.BackgroundColor3 = B_DEF
+npcSearchBox.BorderSizePixel = 0
+npcSearchBox.Text = ""
+npcSearchBox.PlaceholderText = "🔍 Search NPCs..."
+npcSearchBox.PlaceholderColor3 = T3
+npcSearchBox.TextColor3 = T1
+npcSearchBox.TextSize = 11
+npcSearchBox.Font = Enum.Font.Gotham
+npcSearchBox.ClearTextOnFocus = false
+npcSearchBox.TextXAlignment = Enum.TextXAlignment.Left
+npcSearchBox.LayoutOrder = -2
+stampGui(npcSearchBox); corner(npcSearchBox,4)
+Instance.new("UIPadding", npcSearchBox).PaddingLeft = UDim.new(0,6)
+npcSearchBox.Parent = npcControlPanel
+
+local npcSearchResults = Instance.new("ScrollingFrame")
+npcSearchResults.Size = UDim2.new(1,0,0,0)
+npcSearchResults.BackgroundColor3 = SURFACE
+npcSearchResults.BorderSizePixel = 0
+npcSearchResults.ScrollBarThickness = 3
+npcSearchResults.ScrollBarImageColor3 = ACC2
+npcSearchResults.CanvasSize = UDim2.new(0,0,0,0)
+npcSearchResults.Visible = false
+npcSearchResults.LayoutOrder = -1
+stampGui(npcSearchResults); corner(npcSearchResults,4)
+npcSearchResults.Parent = npcControlPanel
+local npcSearchLL = Instance.new("UIListLayout", npcSearchResults)
+npcSearchLL.SortOrder = Enum.SortOrder.LayoutOrder
+npcSearchLL.Padding = UDim.new(0,2)
+
+local _searchBtns = {}
+local function _clearSearchResults()
+    for _,b in ipairs(_searchBtns) do pcall(function() b:Destroy() end) end
+    _searchBtns = {}
+end
+local function _collectNPCs()
+    local out = {}
+    local function tryAdd(o)
+        if o:IsA("Model") and isNPCModel(o) then out[#out+1] = o end
+    end
+    for _,o in ipairs(workspace:GetChildren()) do
+        tryAdd(o)
+        if o:IsA("Model") or o:IsA("Folder") then
+            for _,c in ipairs(o:GetChildren()) do tryAdd(c) end
+        end
+    end
+    return out
+end
+local function _runNPCSearch(q)
+    _clearSearchResults()
+    q = string.lower(q or "")
+    if q == "" then
+        npcSearchResults.Visible = false
+        npcSearchResults.Size = UDim2.new(1,0,0,0)
+        return
+    end
+    local matched = {}
+    for _,m in ipairs(_collectNPCs()) do
+        if string.find(string.lower(m.Name), q, 1, true) then matched[#matched+1] = m end
+    end
+    table.sort(matched, function(a,b) return string.lower(a.Name) < string.lower(b.Name) end)
+    local shown = 0
+    for _,m in ipairs(matched) do
+        shown += 1
+        if shown > 40 then break end
+        local rb = mkB({Size=UDim2.new(1,0,0,20),BackgroundColor3=B_DEF,
+            Text="  "..m.Name,TextColor3=T1,TextSize=11,Font=Enum.Font.Gotham,
+            TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=shown}, npcSearchResults)
+        rb.MouseButton1Click:Connect(function()
+            pcall(function() takeNPC(m) end)
+            npcSearchBox.Text = ""
+            _runNPCSearch("")
+        end)
+        _searchBtns[#_searchBtns+1] = rb
+    end
+    npcSearchResults.Visible = (shown > 0)
+    npcSearchResults.Size = UDim2.new(1,0,0, math.min(shown,6)*22 + 2)
+    npcSearchResults.CanvasSize = UDim2.new(0,0,0, shown*22 + 2)
+end
+npcSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    _runNPCSearch(npcSearchBox.Text)
+end)
+
 -- Auras panel (scrollable for overflow)
 local npcAurasPanel=Instance.new("ScrollingFrame")
 npcAurasPanel.Size=UDim2.new(1,0,1,0); npcAurasPanel.BackgroundTransparency=1
@@ -3083,6 +3198,31 @@ sitGunBtn.MouseButton1Click:Connect(function()
     sitGunBtn.Text = "Sit Gun: "..(sitGunEnabled and "ON ✓" or "OFF")
 end)
 
+local tkGunBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=B_DEF,
+    Text="Telekinesis Gun: OFF",TextColor3=T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=4},npcToolsPanel)
+local freezeGunBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=B_DEF,
+    Text="Freeze Gun: OFF",TextColor3=T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=5},npcToolsPanel)
+
+local function refreshTKFreezeBtns()
+    tkGunBtn.BackgroundColor3 = tkGunEnabled and Color3.fromRGB(90,40,120) or B_DEF
+    tkGunBtn.TextColor3       = tkGunEnabled and Color3.fromRGB(220,170,255) or T1
+    tkGunBtn.Text = "Telekinesis Gun: "..(tkGunEnabled and "ON ✓" or "OFF")
+    freezeGunBtn.BackgroundColor3 = freezeGunEnabled and Color3.fromRGB(20,70,120) or B_DEF
+    freezeGunBtn.TextColor3       = freezeGunEnabled and Color3.fromRGB(150,210,255) or T1
+    freezeGunBtn.Text = "Freeze Gun: "..(freezeGunEnabled and "ON ✓" or "OFF")
+end
+
+tkGunBtn.MouseButton1Click:Connect(function()
+    tkGunEnabled = not tkGunEnabled
+    if tkGunEnabled then freezeGunEnabled = false end   -- both use LMB; keep one active
+    refreshTKFreezeBtns()
+end)
+freezeGunBtn.MouseButton1Click:Connect(function()
+    freezeGunEnabled = not freezeGunEnabled
+    if freezeGunEnabled then tkGunEnabled = false end
+    refreshTKFreezeBtns()
+end)
+
 local npcActiveSTab = "Control"
 local function setNpcSTab(name)
     npcActiveSTab = name
@@ -3118,6 +3258,61 @@ if hasFileSystem then saveConfig(true) end
 -- ─────────────────────────────────────────────────────────────
 -- [15]  CLICK HANDLER  (select parts / SPC / pick NPC)
 -- ─────────────────────────────────────────────────────────────
+-- Telekinesis: release LMB to toss the held NPC toward the cursor
+reg(Mouse.Button1Up:Connect(function()
+    if not tkHeld then return end
+    local model, root = tkHeld, tkHeldRoot
+    tkHeld = nil; tkHeldRoot = nil
+    if root and root.Parent then
+        local dir = currentMouseHit - root.Position
+        if dir.Magnitude > 0.001 then
+            pcall(function()
+                root.AssemblyLinearVelocity = dir.Unit * GRAB_TOSS_POWER + Vector3.new(0, 20, 0)
+            end)
+        end
+    end
+    if model then
+        local h = model:FindFirstChildOfClass("Humanoid")
+        if h then pcall(function() h.PlatformStand = (tkSavedPlatform == true) end) end
+    end
+    tkSavedPlatform = nil
+end))
+
+-- Per-frame enforcement: float a telekinesis-held NPC, and keep frozen NPCs pinned
+reg(RunService.Heartbeat:Connect(function()
+    -- Telekinesis float toward the cursor hit point
+    if tkHeld then
+        local root = tkHeldRoot
+        if not root or not root.Parent then
+            tkHeld = nil; tkHeldRoot = nil
+        else
+            local target = currentMouseHit + Vector3.new(0, TK_FLOAT_Y, 0)
+            pcall(function()
+                root.AssemblyLinearVelocity = (target - root.Position) * TK_DRAG
+                root.AssemblyAngularVelocity = Vector3.zero
+            end)
+        end
+    end
+    -- Keep every frozen NPC at zero velocity, stunned, walk/jump disabled
+    for model, _ in pairs(frozenNPCs) do
+        if not model.Parent then
+            frozenNPCs[model] = nil
+        else
+            local root = model:FindFirstChild("HumanoidRootPart")
+            local h = model:FindFirstChildOfClass("Humanoid")
+            if root then pcall(function()
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+            end) end
+            if h then pcall(function()
+                h.WalkSpeed = 0; h.JumpPower = 0
+                pcall(function() h.JumpHeight = 0 end)
+                h.PlatformStand = true
+            end) end
+        end
+    end
+end))
+
 reg(Mouse.Button1Down:Connect(function()
     local clickTarget = Mouse.Target
     if activeMode=="Draw" then isDrawing=true end
@@ -3191,6 +3386,61 @@ reg(Mouse.Button1Down:Connect(function()
                 grabbedRoot = nil
             end
         end
+    end
+
+    -- Telekinesis Hold Gun: press to grab & float an NPC (release tosses it)
+    if tkGunEnabled then
+        local origin = Camera.CFrame.Position
+        local dir = (currentMouseHit - origin)
+        if dir.Magnitude > 0.001 then
+            local hit = workspace:Raycast(origin, dir.Unit * FINGER_GUN_RANGE, _npcToolsRayParams)
+            if hit and hit.Instance then
+                local model = hit.Instance:FindFirstAncestorOfClass("Model") or hit.Instance.Parent
+                if model and isNPCModel(model) then
+                    tkHeld     = model
+                    tkHeldRoot = model:FindFirstChild("HumanoidRootPart")
+                    local h = model:FindFirstChildOfClass("Humanoid")
+                    if h then tkSavedPlatform = h.PlatformStand; pcall(function() h.PlatformStand = true end) end
+                    if tkHeldRoot then pcall(function() tkHeldRoot.AssemblyLinearVelocity = Vector3.zero end) end
+                end
+            end
+        end
+        return
+    end
+
+    -- Freeze Gun: click an NPC to stun/freeze it; click again to release it
+    if freezeGunEnabled then
+        local origin = Camera.CFrame.Position
+        local dir = (currentMouseHit - origin)
+        if dir.Magnitude > 0.001 then
+            local hit = workspace:Raycast(origin, dir.Unit * FINGER_GUN_RANGE, _npcToolsRayParams)
+            if hit and hit.Instance then
+                local model = hit.Instance:FindFirstAncestorOfClass("Model") or hit.Instance.Parent
+                if model and isNPCModel(model) then
+                    local h = model:FindFirstChildOfClass("Humanoid")
+                    if frozenNPCs[model] then
+                        -- already frozen → restore saved stats and release
+                        local s = frozenNPCs[model]
+                        if h then pcall(function()
+                            h.WalkSpeed = s.ws; h.JumpPower = s.jp
+                            pcall(function() h.JumpHeight = s.jh end)
+                            h.AutoRotate = s.ar; h.PlatformStand = s.ps
+                        end) end
+                        frozenNPCs[model] = nil
+                    elseif h then
+                        -- freeze → save current stats, then zero everything + stun
+                        local jh = 0; pcall(function() jh = h.JumpHeight end)
+                        frozenNPCs[model] = {ws=h.WalkSpeed, jp=h.JumpPower, jh=jh, ar=h.AutoRotate, ps=h.PlatformStand}
+                        pcall(function()
+                            h.WalkSpeed = 0; h.JumpPower = 0
+                            pcall(function() h.JumpHeight = 0 end)
+                            h.AutoRotate = false; h.PlatformStand = true
+                        end)
+                    end
+                end
+            end
+        end
+        return
     end
 
     -- Click Area mode: set the formation center point
