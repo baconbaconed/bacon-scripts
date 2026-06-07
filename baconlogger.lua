@@ -2177,7 +2177,7 @@ mkCorner(UI.vpFrame,4); mkStroke(UI.vpFrame, Color3.fromRGB(42,42,42), 1)
 UI.vpCamera = Instance.new("Camera"); UI.vpCamera.Parent = UI.vpFrame; UI.vpFrame.CurrentCamera = UI.vpCamera
 UI.worldModel = Instance.new("WorldModel"); UI.worldModel.Parent = UI.vpFrame
 UI.vpFrame.Ambient = Color3.fromRGB(95,95,95); UI.vpFrame.LightDirection = Vector3.new(-1,-2,-1)
-local vpCamHint = Instance.new("TextLabel"); vpCamHint.Size = UDim2.new(1,-10,0,12); vpCamHint.Position = UDim2.new(0,5,0,280); vpCamHint.Text = "Left/Right-drag: rotate  |  Scroll: zoom"
+local vpCamHint = Instance.new("TextLabel"); vpCamHint.Size = UDim2.new(1,-10,0,12); vpCamHint.Position = UDim2.new(0,5,0,260); vpCamHint.Text = "Left/Right-drag: rotate  |  Scroll: zoom"
 vpCamHint.BackgroundTransparency = 1; vpCamHint.TextColor3 = Color3.fromRGB(100,100,100); vpCamHint.Font = Enum.Font.Code; vpCamHint.TextSize = 10; vpCamHint.ZIndex = 6; vpCamHint.Parent = UI.viewportWin
 local worldModel = UI.worldModel
 local vpCamera = UI.vpCamera
