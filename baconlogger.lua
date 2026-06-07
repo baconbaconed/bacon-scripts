@@ -1705,7 +1705,6 @@ local function captureCurrentTrack()
 	UI.idBox.Text = id
 	UI.speedBox.Text = string.format("%.2f", chosen.Speed or 1)
 	UI.timeBox.Text = string.format("%.2f", chosen.TimePosition or 0)
-	UI.priorityFilterBox.Text = chosen.Priority and chosen.Priority.Name or UI.priorityFilterBox.Text
 	flashNotif("Captured track " .. id, 2, nil, "success")
 	return true
 end
@@ -4889,4 +4888,3 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(tickLoo
 migrateAdvReplacements()
 if dumpCfg then dumpCfg() end
 print("baconlogger finished loading, enjoy the script dude,")
--- soooo tuff 67 phonk sigma trollface trollge cool sonion fart
