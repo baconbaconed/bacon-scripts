@@ -934,6 +934,108 @@ UI.advancedFiltersToggle.BorderSizePixel = 0; UI.advancedFiltersToggle.Font = En
 mkCorner(UI.advancedFiltersToggle, 4)
 local advancedFiltersStroke = Instance.new("UIStroke"); advancedFiltersStroke.Color = Color3.fromRGB(42,42,42); advancedFiltersStroke.Thickness = 1; advancedFiltersStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; advancedFiltersStroke.Parent = UI.advancedFiltersToggle
 
+local function evaluateFilter(filter, animData)
+	local filterType = filter.type
+	local param = filter.param or ""
+	local enabled = filter.enabled ~= false
+
+	if not enabled then return true end
+
+	local id = animData.id or ""
+	local name = animData.name or ""
+	local player = animData.player or ""
+	local priority = animData.priority or ""
+
+	if filterType == "search" then
+		if param == "" then return true end
+		return id:lower():find(param:lower(), 1, true) or name:lower():find(param:lower(), 1, true)
+	elseif filterType == "player" then
+		if param == "" then return true end
+		return player:lower():find(param:lower(), 1, true)
+	elseif filterType == "priority" then
+		if param == "" then return true end
+		return priority:lower():find(param:lower(), 1, true)
+	elseif filterType == "id_exact" then
+		return id == param
+	elseif filterType == "name_exact" then
+		return name == param
+	elseif filterType == "player_exact" then
+		return player == param
+	elseif filterType == "priority_exact" then
+		return priority == param
+	elseif filterType == "id_pattern" then
+		return id:find(param, 1, true)
+	elseif filterType == "name_pattern" then
+		return name:find(param, 1, true)
+	elseif filterType == "count_min" then
+		local minCount = tonumber(param) or 0
+		return (animData.count or 1) >= minCount
+	elseif filterType == "count_max" then
+		local maxCount = tonumber(param) or math.huge
+		return (animData.count or 1) <= maxCount
+	elseif filterType == "favorited" then
+		local shouldBeFavorited = param == "true"
+		return (animData.favorited or false) == shouldBeFavorited
+	end
+
+	return true
+end
+
+local function shouldShowAnimation(animData)
+	if not State.advancedFilters.enabled then
+		local query = (UI.searchBox and UI.searchBox.Text or ""):lower()
+		local pf = (UI.playerFilterBox and UI.playerFilterBox.Text or ""):lower()
+		local priF = (UI.priorityFilterBox and UI.priorityFilterBox.Text or ""):lower()
+
+		local text = animData.name:lower()
+		return (query == "" or animData.id:lower():find(query,1,true) or text:find(query,1,true))
+			and (pf == "" or text:find(pf,1,true))
+			and (priF == "" or text:find(priF,1,true))
+	end
+
+	local filters = State.advancedFilters.activeFilters
+	local logic = State.advancedFilters.logic
+
+	if logic == "AND" then
+		for _, filter in ipairs(filters) do
+			if not evaluateFilter(filter, animData) then
+				return false
+			end
+		end
+		return true
+	elseif logic == "OR" then
+		for _, filter in ipairs(filters) do
+			if evaluateFilter(filter, animData) then
+				return true
+			end
+		end
+		return false
+	end
+
+	return true
+end
+
+local function doFilter()
+	for id, entry in pairs(Data.animFrames) do
+		if id:find("__frame", 1, true) then continue end
+
+		local animData = {
+			id = id:match("^([%d]+)") or id,
+			name = entry.Text,
+			player = "",
+			priority = "",
+			count = Data.animCounts[id] or 1,
+			favorited = Data.favorites[id:match("^([%d]+)") or id] or false
+		}
+
+		local shouldShow = shouldShowAnimation(animData)
+		local container = entry.Parent
+		if container and container:IsA("Frame") then
+			container.Visible = shouldShow
+		end
+	end
+end
+
 local function refreshAdvancedFiltersBtn()
 	UI.advancedFiltersToggle.Text = "Advanced Filters: " .. (State.advancedFilters.enabled and "ON" or "OFF")
 	UI.advancedFiltersToggle.BackgroundColor3 = State.advancedFilters.enabled and Color3.fromRGB(22,38,24) or Color3.fromRGB(14,14,14)
@@ -1667,26 +1769,6 @@ table.insert(Data.connections, UI.minimize.MouseButton1Click:Connect(function()
 	end
 end))
 
-local function doFilter()
-	for id, entry in pairs(Data.animFrames) do
-		if id:find("__frame", 1, true) then continue end
-
-		local animData = {
-			id = id:match("^([%d]+)") or id,
-			name = entry.Text,
-			player = "", 
-			priority = "", 
-			count = Data.animCounts[id] or 1,
-			favorited = Data.favorites[id:match("^([%d]+)") or id] or false
-		}
-
-		local shouldShow = shouldShowAnimation(animData)
-		local container = entry.Parent
-		if container and container:IsA("Frame") then
-			container.Visible = shouldShow
-		end
-	end
-end
 table.insert(Data.connections, UI.searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 	if not State.advancedFilters.enabled then
 		State.advancedFilters.activeFilters[1].param = UI.searchBox.Text
@@ -2406,12 +2488,59 @@ local function makeSpawnDummy()
 	local rootPart = char:FindFirstChild("HumanoidRootPart")
 	if not rootPart then return end
 	local spawnPos = rootPart.CFrame * CFrame.new(0, 0, -6)
+
+	if State.vpRigType == "R15" then
+		local r15, r15anim, r15root
+		local ok = pcall(function()
+			r15 = Services.Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
+		end)
+		if ok and r15 then
+			r15.Name = "SpawnDummy"
+			r15root = r15:FindFirstChild("HumanoidRootPart")
+			local r15hum = r15:FindFirstChildOfClass("Humanoid")
+			if r15root and r15hum then
+				r15hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+				r15hum.WalkSpeed = 0; r15hum.JumpPower = 0
+				r15root.Anchored = false; r15root.CanCollide = false; r15root.Transparency = 1
+				r15.PrimaryPart = r15root
+				r15:SetPrimaryPartCFrame(spawnPos)
+
+				local rigColor = Color3.fromRGB(160,160,160)
+				for _, p in ipairs(r15:GetDescendants()) do
+					if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+						p.Color = rigColor
+					end
+				end
+
+				local r15head = r15:FindFirstChild("Head")
+				if r15head then
+					for _, obj in ipairs(r15head:GetChildren()) do
+						if obj:IsA("Decal") or obj:IsA("SurfaceAppearance") or obj:IsA("FaceControls") then obj:Destroy() end
+					end
+					pcall(function() r15head.TextureID = "" end)
+					local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4)
+					nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic
+					nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = r15
+					local nw = Instance.new("Weld"); nw.Part0 = r15head; nw.Part1 = nose; nw.C0 = CFrame.new(0,0,-0.65); nw.Parent = r15head
+				end
+				r15anim = r15hum:FindFirstChildOfClass("Animator")
+				if not r15anim then r15anim = Instance.new("Animator"); r15anim.Parent = r15hum end
+				r15.Parent = workspace
+				Data.spawnDummy = r15; Data.spawnDummyAnimator = r15anim
+				return
+			end
+		end
+
+	end
+
+
 	local model = Instance.new("Model"); model.Name = "SpawnDummy"
 	local function part(name, size)
 		local p = Instance.new("Part"); p.Name = name; p.Size = size; p.BrickColor = BrickColor.new("Medium stone grey")
 		p.Material = Enum.Material.SmoothPlastic; p.Anchored = false; p.CanCollide = false; p.CastShadow = false; p.Parent = model; return p
 	end
-	local root = part("HumanoidRootPart", Vector3.new(2,2,1)); root.Transparency = 1; root.CanCollide = false; local torso = part("Torso", Vector3.new(2,2,1)); local head = part("Head", Vector3.new(2,1,1))
+	local root = part("HumanoidRootPart", Vector3.new(2,2,1)); root.Transparency = 1; root.CanCollide = false
+	local torso = part("Torso", Vector3.new(2,2,1)); local head = part("Head", Vector3.new(1.1589776277542114, 1.1820125579833984, 1.1606383323669434))
 	local rArm = part("Right Arm", Vector3.new(1,2,1)); local lArm = part("Left Arm", Vector3.new(1,2,1))
 	local rLeg = part("Right Leg", Vector3.new(1,2,1)); local lLeg = part("Left Leg", Vector3.new(1,2,1))
 	root.CFrame = spawnPos; root.Anchored = false; model.PrimaryPart = root
@@ -2586,8 +2715,19 @@ local function makeRig()
 				r15hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; r15hum.WalkSpeed = 0; r15hum.JumpPower = 0
 				r15root.Anchored = true; r15root.Transparency = 1; r15.PrimaryPart = r15root
 				r15root.CFrame = CFrame.new(0,5,0)
+
+				local rigColor = Color3.fromRGB(160,160,160)
+				for _, p in ipairs(r15:GetDescendants()) do
+					if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+						p.Color = rigColor
+					end
+				end
 				local r15head = r15:FindFirstChild("Head")
 				if r15head then
+					for _, obj in ipairs(r15head:GetChildren()) do
+						if obj:IsA("Decal") or obj:IsA("SurfaceAppearance") or obj:IsA("FaceControls") then obj:Destroy() end
+					end
+					pcall(function() r15head.TextureID = "" end)
 					local nose = Instance.new("Part"); nose.Name = "Nose"; nose.Size = Vector3.new(0.3,0.3,0.4); nose.Color = Color3.fromRGB(200,50,50); nose.Material = Enum.Material.SmoothPlastic; nose.Anchored = false; nose.CanCollide = false; nose.CastShadow = false; nose.Parent = r15
 					local nw = Instance.new("Weld"); nw.Part0 = r15head; nw.Part1 = nose; nw.C0 = CFrame.new(0,0,-0.65); nw.Parent = r15head
 				end
@@ -2605,7 +2745,7 @@ local function makeRig()
 		local p = Instance.new("Part"); p.Name = name; p.Size = size; p.BrickColor = BrickColor.new("Medium stone grey")
 		p.Material = Enum.Material.SmoothPlastic; p.Anchored = false; p.CanCollide = false; p.CastShadow = false; p.Parent = model; return p
 	end
-	local root = part("HumanoidRootPart", Vector3.new(2,2,1)); local torso = part("Torso", Vector3.new(2,2,1)); local head = part("Head", Vector3.new(2,1,1))
+	local root = part("HumanoidRootPart", Vector3.new(2,2,1)); local torso = part("Torso", Vector3.new(2,2,1)); local head = part("Head", Vector3.new(1.1589776277542114, 1.1820125579833984, 1.1606383323669434))
 	local rArm = part("Right Arm", Vector3.new(1,2,1)); local lArm = part("Left Arm", Vector3.new(1,2,1))
 	local rLeg = part("Right Leg", Vector3.new(1,2,1)); local lLeg = part("Left Leg", Vector3.new(1,2,1))
 	root.Anchored = true; root.Transparency = 1; root.CFrame = CFrame.new(0,5,0); model.PrimaryPart = root
@@ -2645,6 +2785,7 @@ local function stripRigAppearance(rig)
 		if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("BodyColors") then obj:Destroy() end
 	end
 	local defaultColor = Color3.fromRGB(160,160,160)
+
 	for _, name in ipairs({"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg"}) do
 		local p = rig:FindFirstChild(name)
 		if p then
@@ -2652,8 +2793,21 @@ local function stripRigAppearance(rig)
 			for _, m in ipairs(p:GetChildren()) do if m:IsA("SpecialMesh") or m:IsA("BlockMesh") then m:Destroy() end end
 		end
 	end
+
+	for _, name in ipairs({"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}) do
+		local p = rig:FindFirstChild(name)
+		if p then p.Color = defaultColor end
+	end
+
 	local head = rig:FindFirstChild("Head")
-	if head then local mesh = Instance.new("SpecialMesh"); mesh.MeshType = Enum.MeshType.Head; mesh.Scale = Vector3.new(1,1,1); mesh.Parent = head end
+	if head then
+		for _, obj in ipairs(head:GetChildren()) do if obj:IsA("Decal") or obj:IsA("SurfaceAppearance") or obj:IsA("FaceControls") then obj:Destroy() end end
+		pcall(function() head.TextureID = "" end)
+		if not head:FindFirstChildOfClass("SpecialMesh") and rig:FindFirstChild("Torso") then
+
+			local mesh = Instance.new("SpecialMesh"); mesh.MeshType = Enum.MeshType.Head; mesh.Scale = Vector3.new(1,1,1); mesh.Parent = head
+		end
+	end
 	removeClownNosePart(rig)
 end
 
@@ -2705,7 +2859,14 @@ end
 
 local function applyFromDescription(rig, desc)
 	local hum = rig:FindFirstChildOfClass("Humanoid"); if not hum then return false end
-	local ok = pcall(function() hum:ApplyDescription(desc) end); return ok
+	local ok = pcall(function() hum:ApplyDescription(desc) end)
+
+	local head = rig:FindFirstChild("Head")
+	if head then
+		for _, obj in ipairs(head:GetChildren()) do if obj:IsA("Decal") or obj:IsA("SurfaceAppearance") or obj:IsA("FaceControls") then obj:Destroy() end end
+		pcall(function() head.TextureID = "" end)
+	end
+	return ok
 end
 
 local function applyPlayerSkin(query)
@@ -3086,89 +3247,6 @@ end
 
 local PRIORITY_OPTIONS = {"Action4","Action3","Action2","Action","Movement","Idle","Core"}
 
-
-local function evaluateFilter(filter, animData)
-	local filterType = filter.type
-	local param = filter.param or ""
-	local enabled = filter.enabled ~= false
-
-	if not enabled then return true end
-
-	local id = animData.id or ""
-	local name = animData.name or ""
-	local player = animData.player or ""
-	local priority = animData.priority or ""
-
-	if filterType == "search" then
-		if param == "" then return true end
-		return id:lower():find(param:lower(), 1, true) or name:lower():find(param:lower(), 1, true)
-	elseif filterType == "player" then
-		if param == "" then return true end
-		return player:lower():find(param:lower(), 1, true)
-	elseif filterType == "priority" then
-		if param == "" then return true end
-		return priority:lower():find(param:lower(), 1, true)
-	elseif filterType == "id_exact" then
-		return id == param
-	elseif filterType == "name_exact" then
-		return name == param
-	elseif filterType == "player_exact" then
-		return player == param
-	elseif filterType == "priority_exact" then
-		return priority == param
-	elseif filterType == "id_pattern" then
-		return id:find(param, 1, true)
-	elseif filterType == "name_pattern" then
-		return name:find(param, 1, true)
-	elseif filterType == "count_min" then
-		local minCount = tonumber(param) or 0
-		return (animData.count or 1) >= minCount
-	elseif filterType == "count_max" then
-		local maxCount = tonumber(param) or math.huge
-		return (animData.count or 1) <= maxCount
-	elseif filterType == "favorited" then
-		local shouldBeFavorited = param == "true"
-		return (animData.favorited or false) == shouldBeFavorited
-	end
-
-	return true
-end
-
-local function shouldShowAnimation(animData)
-	if not State.advancedFilters.enabled then
-
-		local query = (UI.searchBox and UI.searchBox.Text or ""):lower()
-		local pf = (UI.playerFilterBox and UI.playerFilterBox.Text or ""):lower()
-		local priF = (UI.priorityFilterBox and UI.priorityFilterBox.Text or ""):lower()
-
-		local text = animData.name:lower()
-		return (query == "" or animData.id:lower():find(query,1,true) or text:find(query,1,true))
-			and (pf == "" or text:find(pf,1,true))
-			and (priF == "" or text:find(priF,1,true))
-	end
-
-
-	local filters = State.advancedFilters.activeFilters
-	local logic = State.advancedFilters.logic
-
-	if logic == "AND" then
-		for _, filter in ipairs(filters) do
-			if not evaluateFilter(filter, animData) then
-				return false
-			end
-		end
-		return true
-	elseif logic == "OR" then
-		for _, filter in ipairs(filters) do
-			if evaluateFilter(filter, animData) then
-				return true
-			end
-		end
-		return false
-	end
-
-	return true
-end
 
 local function saveFilterPreset(name)
 	State.advancedFilters.presets[name] = {
@@ -4735,3 +4813,4 @@ table.insert(Data.connections, Services.RunService.RenderStepped:Connect(tickLoo
 migrateAdvReplacements()
 if dumpCfg then dumpCfg() end
 print("baconlogger finished loading, enjoy the script dude,")
+-- typeshit
