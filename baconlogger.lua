@@ -35,6 +35,8 @@ local Data = {
 	animLastFired = {},
 	animFireIntervals = {},
 	loopingAnims = {},
+	hookedAnimators = setmetatable({}, {__mode = "k"}),
+	globalLogConnections = {},
 	ghostChar = nil,
 	spawnDummy = nil,
 	spawnDummyAnimator = nil,
@@ -793,6 +795,7 @@ local function button(text, y, callback, bgColor, borderColor, textColor)
 end
 
 local refreshColors
+local refreshGlobalAnimatorLogging = function() end
 
 
 button("Play", 255, function()
@@ -867,7 +870,7 @@ local function refreshGlobalBtn()
 	globalToggleStroke.Color = State.globalLogging and Color3.fromRGB(45,80,48) or Color3.fromRGB(42,42,42)
 end
 table.insert(Data.connections, UI.globalToggle.MouseButton1Click:Connect(function()
-	State.globalLogging = not State.globalLogging; refreshGlobalBtn(); dumpCfg()
+	State.globalLogging = not State.globalLogging; refreshGlobalBtn(); refreshGlobalAnimatorLogging(); dumpCfg()
 end))
 
 UI.autoCopyToggle = Instance.new("TextButton")
@@ -4312,17 +4315,73 @@ local function suppressCompeting(track)
 	for t in pairs(Data.scriptTracks) do if t.IsPlaying then t:AdjustWeight(1,0) end end
 end
 
+local function resolveAnimatorOwnerName(animator)
+	if not animator then return "Unknown" end
+	local parent = animator.Parent
+	local firstModel = parent and parent:FindFirstAncestorOfClass("Model")
+	local model = firstModel
+	while model do
+		local owner = Services.Players:GetPlayerFromCharacter(model)
+		if owner then return owner.Name end
+		model = model.Parent and model.Parent:FindFirstAncestorOfClass("Model")
+	end
+	if firstModel then return firstModel.Name end
+	if parent then return parent.Name end
+	return animator.Name or "Animator"
+end
+
 local function hookAnimator(animator, playerName)
 	if not animator then return end
+	local function getLogName()
+		if type(playerName) == "function" then
+			local ok, result = pcall(playerName, animator)
+			if ok and result and result ~= "" then return tostring(result) end
+			return "Unknown"
+		end
+		return tostring(playerName or resolveAnimatorOwnerName(animator))
+	end
+	if Data.hookedAnimators[animator] then
+		for _, track in pairs(animator:GetPlayingAnimationTracks()) do trackSeen(track, getLogName()) end
+		return
+	end
+	Data.hookedAnimators[animator] = true
 	table.insert(Data.connections, animator.AnimationPlayed:Connect(function(track)
-		if playerName == player.Name then
+		local logName = getLogName()
+		if logName == player.Name then
 			local scriptAnimActive = false
 			for t in pairs(Data.scriptTracks) do if t.IsPlaying then scriptAnimActive = true; break end end
 			if scriptAnimActive and not Data.scriptTracks[track] then suppressCompeting(track); return end
 		end
-		trackSeen(track, playerName)
+		trackSeen(track, logName)
 	end))
-	for _, track in pairs(animator:GetPlayingAnimationTracks()) do trackSeen(track, playerName) end
+	for _, track in pairs(animator:GetPlayingAnimationTracks()) do trackSeen(track, getLogName()) end
+end
+
+refreshGlobalAnimatorLogging = function()
+	for _, conn in ipairs(Data.globalLogConnections) do
+		pcall(function() conn:Disconnect() end)
+	end
+	Data.globalLogConnections = {}
+	if not State.globalLogging then return end
+
+	for _, inst in ipairs(game:GetDescendants()) do
+		if inst:IsA("Animator") then
+			hookAnimator(inst, resolveAnimatorOwnerName)
+		end
+	end
+
+	local conn = game.DescendantAdded:Connect(function(inst)
+		if not State.globalLogging then return end
+		if inst:IsA("Animator") then
+			task.defer(function()
+				if State.globalLogging and inst.Parent then
+					hookAnimator(inst, resolveAnimatorOwnerName)
+				end
+			end)
+		end
+	end)
+	table.insert(Data.globalLogConnections, conn)
+	table.insert(Data.connections, conn)
 end
 
 local function onJoin(p)
@@ -4410,7 +4469,7 @@ local function doCmd(cmd, isRelease)
 	elseif action == "clear" and not isRelease then
 		nukeList()
 	elseif action == "global" and not isRelease then
-		State.globalLogging = not State.globalLogging; refreshGlobalBtn(); dumpCfg()
+		State.globalLogging = not State.globalLogging; refreshGlobalBtn(); refreshGlobalAnimatorLogging(); dumpCfg()
 	elseif action == "autocopy" and not isRelease then
 		State.autoCopy = not State.autoCopy; refreshAutoCopyBtn(); dumpCfg()
 	elseif action == "priority" and not isRelease then
@@ -4771,7 +4830,7 @@ local function loadCfg()
 				Data.advReplacements = data.advReplacements
 				for _, rule in ipairs(Data.advReplacements) do addAdvReplUI(rule) end
 			end
-			refreshLoopBtn(); refreshGlobalBtn(); refreshAutoCopyBtn()
+			refreshLoopBtn(); refreshGlobalBtn(); refreshGlobalAnimatorLogging(); refreshAutoCopyBtn()
 			for id, rep in pairs(Data.replacements) do addReplUI(id, rep.targetId, rep.speed, rep.loop, rep.enabled ~= false) end
 			for id, isFav in pairs(Data.favorites) do if isFav then addFavRow(id, Data.customNames[id] or id) end end
 		end
