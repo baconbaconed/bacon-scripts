@@ -1,17 +1,4 @@
---[[
-╔════════════════════════════════════════════════════════════════════╗
-║     ATOMIZER  —  LocalScript                                 ║
-║  Gate:  sethiddenproperty required (silent exit if absent)   ║
-║  40 formation modes · sub-tabbed compact UI                  ║
-║  Ownership: SimRadius + alternating micro-bump every frame   ║
-║  Draw: click-drag + neon 3D path indicators                  ║
-║  Selection: unanchored parts only (never modifies .Anchored) ║
-╚════════════════════════════════════════════════════════════════════╝
---]]
 
--- ─────────────────────────────────────────────────────────────
--- [0]  ENVIRONMENT CHECK
--- ─────────────────────────────────────────────────────────────
 do
     local ok = false
     if type(sethiddenproperty) == "function" then
@@ -22,9 +9,7 @@ do
     end
     if not ok then return end
 end
--- ─────────────────────────────────────────────────────────────
--- [1]  SERVICES
--- ─────────────────────────────────────────────────────────────
+
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -35,14 +20,13 @@ local LP     = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse  = LP:GetMouse()
 
--- GUI constants packed (5 registers → 1)
 local GUI = {
     DISPLAY_ORDER = 100000,
     ESP_ORDER     = 100001,
     ESP_ACCENT    = Color3.fromRGB(80, 255, 210),
     Z             = 64,
 }
--- HL fields accessed directly as HL.fillColor etc. — no duplicate locals
+
 local HL = {
     fillColor           = Color3.fromRGB(80, 255, 210),
     outlineColor        = Color3.fromRGB(80, 255, 210),
@@ -65,16 +49,15 @@ local function stampGui(obj, z)
     end
 end
 
--- [2]  STATE & TUNABLE VALUES
--- ─────────────────────────────────────────────────────────────
+
 local connections   = {}
 local selectedParts = {}
 local partOffsets   = {}
 local highlights    = {}
-local npcHighlights = {}  -- Track highlighted NPCs (auras/guns)
-local spcHighlight  = nil  -- Track SPC grabbed part highlight
+local npcHighlights = {} 
+local spcHighlight  = nil  
 
--- ESP ScreenGui for UI labels (created early to ensure availability)
+
 local EspScreenGui = Instance.new("ScreenGui")
 EspScreenGui.Name             = "AtomizerESP"
 EspScreenGui.ResetOnSpawn     = false
@@ -85,7 +68,7 @@ EspScreenGui.Parent           = getGuiParent()
 
 local function reg(c) table.insert(connections,c); return c end
 
--- Tunable values — single locals, no wrapper table
+
 local activeMode   = "Tornado"
 local partSpeed    = 25
 local maxVelocity  = math.huge
@@ -111,7 +94,7 @@ local autoSelectNear       = false
 local autoSelectLastScan   = 0
 local AUTO_SELECT_INTERVAL = 5
 
--- Toggles
+
 local frozen          = false
 local frozenTargets   = {}
 local globalOwnership = false
@@ -119,34 +102,29 @@ local attracting      = false
 local attractTimer    = 0
 local fakeCollisions  = false
 
--- Smooth movement targets
 local partTargets = {}
 local _bumpSign   = 1
 
--- Minigun state — single locals
 local minigunIdx       = 1
 local minigunShotStart = 0
 local minigunLastIdx   = 0
 local MINIGUN_STUCK    = 12
 
--- Satellite state — single locals
 local satFired           = {}
 local satTarget          = Vector3.zero
 local SAT_TTL            = 2.0
 local satTouchConns      = {}
 local anchorBombAnchored = {}
 
--- Single Part Control
 local spcActive = false
 local spcPart   = nil
 local spcDepth  = 15
 local spcYOff   = 0
 
--- DroneV2
 local dv2Target = nil
-local dv2Label  = nil   -- assigned after UI build
+local dv2Label  = nil 
 
--- Draw / Comet / Slinky — single locals
+
 local drawTrail      = {}
 local drawIndicators = {}
 local isDrawing      = false
@@ -155,7 +133,7 @@ local COMET_MAX      = 500
 local slinkyHistory  = {}
 local SLINKY_MAX     = 400
 
--- NPC state — single locals
+
 local npcTarget               = nil
 local npcSaved                = {}
 local npcConns                = {}
@@ -166,7 +144,7 @@ local npcControlJumpPower     = 50
 local npcControlFreezeAutoJump = true
 local npcControlHaltMoveTo    = true
 
--- NPC Auras — single locals
+
 local killAura         = false  local killAuraRange   = 25
 local sitAura          = false  local sitAuraRange    = 25
 local jumpAura         = false  local jumpAuraRange   = 25
@@ -175,7 +153,7 @@ local freezeAura       = false  local freezeAuraRange = 25
 local speedAuraEnabled = false  local speedAuraRange  = 30  local speedAuraSpeed = 30
 local spinAuraEnabled  = false  local spinAuraRange   = 30  local spinAuraSpeed  = 6
 
--- Guns — single locals
+
 local fingerGunEnabled = false
 local grabGunEnabled   = false
 local sitGunEnabled    = false
@@ -183,7 +161,7 @@ local grabbedNPC       = nil
 local grabbedRoot      = nil
 local localGrabArmed   = false
 
--- Telekinesis + Freeze gun state
+
 local NX = {
     tkGun = false, held = nil, root = nil, savedPS = nil,
     FLOAT_Y = 2, DRAG = 16,
@@ -191,17 +169,15 @@ local NX = {
     dead = false,
 }
 
--- Tool ray params
+
 local _npcToolsRayParams = RaycastParams.new()
 _npcToolsRayParams.FilterType = Enum.RaycastFilterType.Exclude
 
--- Gun constants — single locals
 local GRAB_HOVER_Y_OFFSET = 3
 local GRAB_TOSS_POWER     = 720
 local GRAB_DRAG_POWER     = 180
 local FINGER_GUN_RANGE    = 10000
 
--- Part Limits / Formation / ESP
 local useLimits    = false
 local partLimit    = 10
 local formationType = "Mouse"
@@ -209,9 +185,6 @@ local clickFormPos  = Vector3.zero
 local useESP        = false
 local lastVelWrite  = {}
 
--- ─────────────────────────────────────────────────────────────
--- [2.5]  CONFIG  (executor workspace: atomizer_saves.txt)
--- ─────────────────────────────────────────────────────────────
 local CONFIG_FILE = "atomizer_saves.txt"
 local hasFileSystem = type(readfile) == "function" and type(writefile) == "function"
 local _lastConfigSave = 0
@@ -333,7 +306,7 @@ end
 
 loadConfig()
 
--- Mode list  (40 modes, 4-col grid)
+
 local MODES = {
     "Mouse",   "Tornado",    "Ring",      "Orbit",
     "Spiral",  "Wave",       "Halo",      "Drone",
@@ -349,21 +322,8 @@ local MODES = {
 }
 
 
--- ─────────────────────────────────────────────────────────────
--- [3]  OWNERSHIP HEARTBEAT
--- Strategy:
---   • SimulationRadius = math.huge on EVERY pipeline stage (Pre, Heartbeat, Stepped)
---   • AlignPosition.Position write each stage — constraint property writes are the
---     strongest ownership signal available from a LocalScript; more reliable than
---     velocity writes alone, especially near other players whose SimRadius competes.
---   • Alternating micro-jolt on AssemblyLinearVelocity (never the same value twice)
---     makes the ownership heuristic treat us as "actively simulating" even when the
---     part is nearly stationary.
---   • ServerResponse BodyForce kept for legacy parts; Force is randomised each frame
---     so the server sees continuous non-zero change from our client.
--- ─────────────────────────────────────────────────────────────
 
--- Ownership assertion sign states — packed into one table (3 registers → 1)
+
 local _OWN = { preSim=1, hb=1, render=1 }
 local preSimConn = RunService.PreSimulation and
     RunService.PreSimulation:Connect(function()
@@ -373,16 +333,16 @@ local preSimConn = RunService.PreSimulation and
         for _, part in ipairs(selectedParts) do
             if part and part.Parent and not part.Anchored then
                 pcall(function()
-                    -- Constraint position write: strongest ownership signal
+
                     local AP = getNetAP(part)
                     if AP then
                         AP.MaxForce    = math.huge
                         AP.MaxVelocity = math.huge
-                        -- Write position to current target or current pos — either asserts ownership
+
                         local tgt = partTargets[part]
                         AP.Position = (tgt and tgt.position) or part.Position
                     end
-                    -- Micro-jolt: alternating sign so it's never a constant the server can filter
+    
                     part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
                         + Vector3.new(0, jolt, 0)
                 end)
@@ -390,8 +350,6 @@ local preSimConn = RunService.PreSimulation and
         end
     end) or nil
 
--- Heartbeat: post-physics catch — reclaims any part the physics step may have
--- transferred to another player's simulation zone.
 local ownerConn = RunService.Heartbeat:Connect(function()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     _OWN.hb = -_OWN.hb
@@ -406,12 +364,10 @@ local ownerConn = RunService.Heartbeat:Connect(function()
                     local tgt = partTargets[part]
                     AP.Position = (tgt and tgt.position) or part.Position
                 end
-                -- Alternating jolt — different magnitude from PreSimulation so
-                -- both writes are distinguishable in the replication stream.
+
                 part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
                     + Vector3.new(0, jolt, 0)
-                -- Legacy ServerResponse BodyForce: randomise Force so the server
-                -- always sees a changing value from our client.
+
                 local sr = part:FindFirstChild("ServerResponse")
                 if sr and sr:IsA("BodyForce") then
                     sr.Force = Vector3.new(
@@ -424,8 +380,7 @@ local ownerConn = RunService.Heartbeat:Connect(function()
     end
 end)
 
--- RenderStepped: runs before the physics step, giving us a third assertion point.
--- Also keeps SimulationRadius pinned during the render pipeline.
+
 local renderOwnerConn = RunService.RenderStepped:Connect(function()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     _OWN.render = -_OWN.render
@@ -433,7 +388,7 @@ local renderOwnerConn = RunService.RenderStepped:Connect(function()
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
             pcall(function()
-                -- Third constraint write per frame — covers the render→physics window
+
                 local AP = getNetAP(part)
                 if AP then
                     AP.MaxForce    = math.huge
@@ -448,9 +403,7 @@ local renderOwnerConn = RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- SMOOTH CONSTRAINT-BASED MOVEMENT (inspired by OWNERSHIP FUCKERY ownership pokes)
--- Uses AlignPosition/AlignOrientation with rigidity + infinite force for instant, all-parts-per-frame target snaps.
+
 local function getNetAttach(part)
     return part and part:FindFirstChild("NetAttach")
 end
@@ -489,9 +442,7 @@ function syncAlignTarget(part, target)
         AO.CFrame             = target.rotation or part.CFrame
     end
 
-    -- Re-pin SimulationRadius every sync in case it drifted.
-    -- This is cheap (no replication) and covers the case where another player's
-    -- SimRadius temporarily wins the distance race.
+
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
 end
 
@@ -510,25 +461,16 @@ local function getMoveResponsiveness(multiplier)
     return math.clamp(base * (multiplier or 1), 30, 200)
 end
 
--- ─────────────────────────────────────────────────────────────
--- [4]  SELECTION  (unanchored parts ONLY — never modifies .Anchored)
--- ─────────────────────────────────────────────────────────────
--- AlignOrientation rotation targets are optional for modes that need facing.
--- Keep disabled by default so position formations stay stable.
 local useRotationTargets = false
 
--- Per-part Touched connections for instant ownership reclaim on contact
 local partTouchConns = {}
 
--- Preserve original collision like OWNERSHIP FUCKERY, then keep selected parts non-collidable.
 partCollisionState = {}
 local partCollisionConns = {}
 
--- Fired the moment a selected part makes contact with anything.
--- Re-asserts SimulationRadius + bumps velocity + syncs constraints within the same physics step
--- that triggered the ownership heuristic — before the server confirms the transfer.
+
 local function disableSelectedCollision(part)
-    if not fakeCollisions then return end  -- Only disable if toggle is enabled
+    if not fakeCollisions then return end 
     if not (part and part.Parent) then return end
 
     if partCollisionState[part] == nil then
@@ -560,14 +502,11 @@ end
 
 local function reclaimOnTouch(part)
     if not part or not part.Parent then return end
-    -- Touch is the most dangerous ownership-loss event: another player's character
-    -- is now inside the part's collision bounds, which triggers an immediate
-    -- ownership transfer heuristic. Assert everything at once in the same call.
+
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     local target = partTargets[part]
     pcall(function()
-        -- Three independent signals in one pcall for minimum latency:
-        -- 1. Constraint position write (strongest signal)
+
         local AP = getNetAP(part)
         if AP then
             AP.MaxForce    = math.huge
@@ -580,13 +519,13 @@ local function reclaimOnTouch(part)
             AO.MaxAngularVelocity = math.huge
             AO.CFrame             = (target and target.rotation) or part.CFrame
         end
-        -- 2. Alternating velocity jolt
+
         local sign = (tick() % 0.2 < 0.1) and 1 or -1
         part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
             + Vector3.new(0, sign * 0.01, 0)
-        -- 3. Zero angular velocity so the part doesn't spin away on contact
+
         part.AssemblyAngularVelocity = Vector3.zero
-        -- 4. ServerResponse force randomise
+
         local sr = part:FindFirstChild("ServerResponse")
         if sr and sr:IsA("BodyForce") then
             sr.Force = Vector3.new(0, part.AssemblyMass * 100000, 0)
@@ -641,7 +580,7 @@ local function clearModeState(prevMode, nextMode)
         end
     end
 
-    -- Remove leftover spin/rotation carryover when changing movement families.
+
     for _, part in ipairs(selectedParts) do
         if part and part.Parent then
             pcall(function()
@@ -703,7 +642,6 @@ local function _wallTarget(index, total, part, t)
     return ctr + root.CFrame.RightVector * (col * spacingX) + Vector3.new(0, row * spacingY, 0)
 end
 
--- ESP UI tracker (part -> tag table)
 local espLabels = {}
 
 local function createEspTag(part)
@@ -780,8 +718,7 @@ local function addHL(part)
         espLabels[part] = tag
         highlights[part] = tag.frame
     else
-        -- Highlight renders through walls when DepthMode = AlwaysOnTop.
-        -- Parent to the part itself for proper rendering.
+
         local hl = Instance.new("Highlight")
         hl.Adornee             = part
         hl.FillColor           = HL.fillColor
@@ -794,7 +731,6 @@ local function addHL(part)
     end
 end
 
--- Re-apply current hl settings to all live Highlight instances
 local function refreshAllHighlights()
     for part, hl in pairs(highlights) do
         if hl:IsA("Highlight") then
@@ -815,7 +751,7 @@ local function removeHL(part)
     end
 end
 
--- Highlight NPC model (for auras/guns)
+
 local function addNpcHighlight(model, color)
     if not model or npcHighlights[model] then return end
     local hl = Instance.new("Highlight")
@@ -836,7 +772,7 @@ local function removeNpcHighlight(model)
     end
 end
 
--- Highlight SPC grabbed part
+
 local function updateSpcHighlight(part)
     if spcHighlight then
         spcHighlight:Destroy()
@@ -917,11 +853,10 @@ local function selectPart(part)
     if not part or not part:IsA("BasePart") then return end
     if part.Anchored then return end
     if part==workspace.Terrain then return end
-    if isPlayerPart(part) then return end  -- skip ALL player characters
+    if isPlayerPart(part) then return end  
     if isSelected(part) then return end
 local r=math.random
-    -- Per-part jitter uses explicit XYZ sizing instead of a single scale.
-    -- This keeps random micro-spread stable across modes.
+
     local spreadX = formSizeX
     local spreadZ = formSizeZ
     local liftY   = formSizeY
@@ -933,17 +868,14 @@ local r=math.random
     table.insert(selectedParts,part)
     addHL(part)
     pcall(function() disableSelectedCollision(part) end)
-    -- Touched fires client-side the moment contact happens, letting us
-    -- reassert ownership inside the same physics step that triggered the transfer
+
     partTouchConns[part] = part.Touched:Connect(function()
         reclaimOnTouch(part)
     end)
     
-    -- ════════════════════════════════════════════════════════════════
-    -- OWNERSHIP FUCKERY WIZARDRY: Align constraint movement + ownership pokes
-    -- ════════════════════════════════════════════════════════════════
+
 pcall(function()
-        -- Remove legacy movers if an older version left them behind.
+
         local oldBP = part:FindFirstChild("NetBP")
         if oldBP then oldBP:Destroy() end
         local oldBG = part:FindFirstChild("NetBG")
@@ -955,7 +887,6 @@ pcall(function()
         local oldAtt = part:FindFirstChild("NetAttachment")
         if oldAtt then oldAtt:Destroy() end
 
-        -- Match OWNERSHIP FUCKERY structure: part.NetAttach contains NetAP/NetAO.
         local attach = part:FindFirstChild("NetAttach")
         if not attach then
             attach = Instance.new("Attachment", part)
@@ -989,7 +920,6 @@ pcall(function()
         AO.CFrame = part.CFrame
         AO.Attachment0 = attach
 
-        -- ServerResponse is deferred one render step like the reference script.
         task.spawn(function()
             RunService.RenderStepped:Wait()
             if part.Parent and part:FindFirstChild("NetAttach") and not part:FindFirstChild("ServerResponse") then
@@ -1001,7 +931,6 @@ pcall(function()
             end
         end)
 
-        -- Ensure movement target exists so newly selected parts never freeze.
         if not partTargets[part] then
             partTargets[part] = {
                 position = part.Position,
