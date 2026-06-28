@@ -1057,9 +1057,7 @@ local function runAutoSelectScan()
     autoSelectLastScan = tick()
 end
 
--- ─────────────────────────────────────────────────────────────
--- [5]  DRAW INDICATORS
--- ─────────────────────────────────────────────────────────────
+
 local function addDrawDot(pos)
     local p=Instance.new("Part")
     p.Size=Vector3.new(0.28,0.28,0.28); p.Position=pos+Vector3.new(0,1.1,0)
@@ -1074,9 +1072,9 @@ clearDrawDots = function()
     drawIndicators={}; drawTrail={}
 end
 
--- Cached mouse world position (updated each Heartbeat).
+
 local currentMouseHit = Vector3.zero
--- Ray params packed (2 registers → 1 + 2 aliases)
+
 local RAY = { mouse = RaycastParams.new(), ground = RaycastParams.new() }
 RAY.mouse.FilterType  = Enum.RaycastFilterType.Exclude
 RAY.ground.FilterType = Enum.RaycastFilterType.Exclude
@@ -1124,10 +1122,7 @@ end
 local function updateMouseHit()
     _mouseRayParams.FilterDescendantsInstances = getMouseExcludeList()
 
-    -- Roblox’s GetMouseLocation() is in the top-left screen space.
-    -- Camera:ScreenPointToRay expects coordinates in the same space (UI inset handled by WorldToScreen).
-    -- The script previously used the raw pixel, which can feel vertically “low”.
-    -- We correct using GuiService inset so the ray matches on-screen cursor.
+
     local mousePos = UserInputService:GetMouseLocation()
     local inset = GuiService:GetGuiInset()
     local x = mousePos.X
@@ -1142,9 +1137,7 @@ local function updateMouseHit()
     end
 end
 
--- ─────────────────────────────────────────────────────────────
--- [6]  MODE TARGET CALCULATORS
--- ─────────────────────────────────────────────────────────────
+
 local function sampleDrawTrailPoint(index, total)
     local trailLen = #drawTrail
     if trailLen < 2 then
@@ -1180,7 +1173,7 @@ local function sampleDrawTrailPoint(index, total)
 end
 
 local function getFormationCenterTarget()
-    -- Returns the center point for formation based on formationType
+
     if formationType == "Player" then
         local char = LP.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -1194,7 +1187,7 @@ local function getFormationCenterTarget()
         return currentMouseHit
     elseif formationType == "ClickArea" then
         return clickFormPos ~= Vector3.zero and clickFormPos or currentMouseHit
-    else  -- "Mouse" or default
+    else
         return currentMouseHit
     end
 end
@@ -1207,17 +1200,17 @@ local function getTarget(index, total, part, t)
     local ratio  = total>1 and (index-1)/(total-1) or 0
     local angle  = (index-1)/math.max(total,1)*math.pi*2
     
-    -- Scaling based on form size sliders
+
     local scX = math.max(0, formSizeX) / 10
     local scZ = math.max(0, formSizeZ) / 10
-    local scR = math.max(scX, scZ)  -- Use max for better responsive control
+    local scR = math.max(scX, scZ)  
     local scY = math.max(0, formSizeY) / 3
 
     if attracting then
         return rp+(partOffsets[part] or Vector3.zero)*0.4+Vector3.new(0,2*scY,0)
     end
 
-    -- ── existing modes ─────────────────────────────────────────
+
     if activeMode=="Mouse" then
         return mHit+(partOffsets[part] or Vector3.zero)*2.5
 
@@ -1276,10 +1269,10 @@ local function getTarget(index, total, part, t)
 
     elseif activeMode=="Comet" then
         if #cometHistory<2 then return rp end
-        -- index 1 = newest trail point, higher index = further back (tail)
+
         local trailLen = math.min(#cometHistory - 1, math.max(total * 3, 10))
         local histIdx  = math.max(1, #cometHistory - math.floor(ratio * trailLen))
-        -- jitter stays fixed size — scR was pulling parts off the trail at high scale
+
         return cometHistory[histIdx] + (partOffsets[part] or Vector3.zero) * 0.6
 
     elseif activeMode=="Wall" then
@@ -1297,23 +1290,20 @@ local function getTarget(index, total, part, t)
     elseif activeMode=="Beam" then
         return (rp+Vector3.new(0,2*scY,0)):Lerp(mHit,ratio)
 
-    -- ── new modes ──────────────────────────────────────────────
+
     elseif activeMode=="Sphere" then
-        -- Even “sphere-ish” distribution with symmetric scaling.
-        -- Uses cosY as latitude and sinY as horizontal radius.
+
         local phi=(1+math.sqrt(5))/2; local i=index-1
         local theta=2*math.pi*i/phi
         local cosY=1-2*(i/math.max(total-1,1))
         local sinY=math.sqrt(math.max(0,1-cosY*cosY))
 
-        -- Restore original sphere radii behavior (uses scX/scY/scZ directly).
-        -- The previous normalization caused radius collapse/tightening.
+
         local rx = formRadius * scX
         local ry = formRadius * scY
         local rz = formRadius * scZ
 
-        -- Reduce vertical exaggeration: keep “sphere” height closer to X/Z.
-        -- cosY term is the latitude; scale it down slightly.
+
         local yLatScale = 0.28
         return Vector3.new(
             mHit.X + sinY*math.cos(theta+t*0.2)*rx,
@@ -1393,7 +1383,7 @@ local function getTarget(index, total, part, t)
         return Vector3.new(x, topY - fall, z)
 
     elseif activeMode=="Galaxy" then
-        -- 3-arm spiral galaxy rotating around cursor
+
         local arms   = 3
         local arm    = (index-1) % arms
         local posInArm = math.floor((index-1) / arms)
@@ -1406,16 +1396,16 @@ local function getTarget(index, total, part, t)
         return Vector3.new(mHit.X+math.cos(spiral)*r*scX, mHit.Y+tilt+1*scY, mHit.Z+math.sin(spiral)*r*scZ)
 
     elseif activeMode=="Blackhole" then
-        -- Parts spiral inward to a singularity then snap back, looping (not affected by size sliders)
+
         local cycle  = (t*0.75) % 1
-        local pull   = math.max(0, 1 - cycle*2.2)          -- 1→0 in first half
+        local pull   = math.max(0, 1 - cycle*2.2)          
         local r      = formRadius * pull
-        local spin   = angle - t*5*(1.2 - pull*0.9)        -- faster at centre
+        local spin   = angle - t*5*(1.2 - pull*0.9)        
         local h      = pull * 4
         return Vector3.new(mHit.X+math.cos(spin)*r, mHit.Y+h, mHit.Z+math.sin(spin)*r)
 
     elseif activeMode=="Lemniscate" then
-        -- Smooth figure-8 / lemniscate of Bernoulli (ribbon of parts)
+
         local phase  = ratio * math.pi*2 + t*0.65
         local denom  = 1 + math.sin(phase)^2 + 0.001
         local a      = formRadius * scR * 1.6
@@ -1425,7 +1415,7 @@ local function getTarget(index, total, part, t)
         return Vector3.new(mHit.X+x, mHit.Y+2*scY+y, mHit.Z+z)
 
     elseif activeMode=="Blender" then
-        -- Each part orbits in its own unique random plane → chaotic sphere
+
         local off    = partOffsets[part] or Vector3.zero
         local ax     = math.sin(off.X*3.14+1)
         local ay     = math.cos(off.Y*2.71+2)
@@ -1443,7 +1433,7 @@ local function getTarget(index, total, part, t)
         return mHit + Vector3.new(0,3*scY,0) + p1*(math.cos(ph)*r*scX) + p2*(math.sin(ph)*r*scZ)
 
     elseif activeMode=="Crown" then
-        -- Alternating tall spikes and low ring arcs above player head
+
         local isSpike = (index-1)%2 == 0
         local spokes  = math.ceil(total/2)
         local si      = math.floor((index-1)/2)
@@ -1457,7 +1447,7 @@ local function getTarget(index, total, part, t)
         end
 
     elseif activeMode=="Swarm" then
-        -- Organic wandering swarm near cursor with insect-like micro-jitter
+
         local off    = partOffsets[part] or Vector3.zero
         local wanderX = math.sin(t*1.1 + index*2.3 + off.X) * formRadius*scX
         local wanderY = math.sin(t*0.9 + index*1.7 + off.Y) * formRadius*0.55*scY
@@ -1469,14 +1459,12 @@ local function getTarget(index, total, part, t)
         return mHit + Vector3.new(wanderX,wanderY,wanderZ) + jitter + Vector3.new(0,2*scY,0)
 
     elseif activeMode=="Satellite" then
-        -- First quarter of parts form spaced rings above the player.
-        -- The rest orbit as a wide halo at the same height.
-        -- Parts flagged in satFired fly straight to satTarget.
+
         local high     = 20 * scY
         local clusterN = math.max(1, math.ceil(total / 4))
 
         if satFired[part] then
-            return satTarget   -- beam part: fly to fire position
+            return satTarget   
         end
 
         if index <= clusterN then
@@ -1491,7 +1479,7 @@ local function getTarget(index, total, part, t)
                 y,
                 rp.Z + math.sin(a) * r)
         else
-            -- Halo ring: evenly spaced, slowly rotating
+      
             local hi = index - clusterN
             local hn = math.max(total - clusterN, 1)
             local a  = (hi - 1) / hn * math.pi * 2 + t * 0.28
@@ -1503,13 +1491,13 @@ local function getTarget(index, total, part, t)
         end
 
     elseif activeMode=="Minigun" then
-        -- Active part flies to cursor. All others stack behind player like a magazine.
+
         if index == minigunIdx then
             return mHit
         end
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return rp end
-        -- Queue position — skip the slot of the currently firing part
+ 
         local qp   = index < minigunIdx and index or (index - 1)
         local cols = math.max(math.min(3, total - 1), 1)
         local col  = ((qp - 1) % cols) - math.floor((cols - 1) / 2)
@@ -1520,7 +1508,7 @@ local function getTarget(index, total, part, t)
             + Vector3.new(0, 1.5, 0)
 
     elseif activeMode=="Seek" then
-        -- Each part homes toward nearest NPC in workspace
+
         local npc = getNearestNPC(part.Position, 200)
         if npc then
             local npcRoot = npc:FindFirstChild("HumanoidRootPart")
@@ -1529,11 +1517,11 @@ local function getTarget(index, total, part, t)
         return mHit + (partOffsets[part] or Vector3.zero)
 
     elseif activeMode=="AnchorBomb" then
-        -- All parts fly to cursor at max speed then anchor themselves
+
         return mHit + (partOffsets[part] or Vector3.zero) * 0.3
 
     elseif activeMode=="Slinky" then
-        -- Each part trails behind the previous link in recorded mouse history
+
         local step = math.max(2, math.floor(index * (formRadius * 0.35 + 1.5)))
         local idx  = math.max(1, #slinkyHistory - step)
         local pos  = slinkyHistory[idx] or mHit
@@ -1541,7 +1529,7 @@ local function getTarget(index, total, part, t)
         return pos + Vector3.new(off.X*0.35*scX, off.Y*0.35, off.Z*0.35*scZ) + Vector3.new(0, 2 * scY, 0)
 
     elseif activeMode=="Fountain" then
-        -- Parts cycle upward arcs from the cursor like a water jet
+
         local jet = (t * 2.2 + ratio * 1.8) % 1
         local h   = math.sin(jet * math.pi) * formRadius * 2.8 * scY
         local off = partOffsets[part] or Vector3.zero
@@ -1549,7 +1537,7 @@ local function getTarget(index, total, part, t)
         return mHit + offScaled + Vector3.new(0, h + 1.5 * scY, 0)
 
     elseif activeMode=="Bounce" then
-        -- Ping-pong between cursor and a point above the player
+
         local phase = (t * 1.4 + index * 0.12) % 2
         local alpha = phase < 1 and phase or (2 - phase)
         local off   = partOffsets[part] or Vector3.zero
@@ -1557,14 +1545,14 @@ local function getTarget(index, total, part, t)
         return mHit:Lerp(rp + Vector3.new(0, 7 * scY, 0), alpha) + offScaled
 
     elseif activeMode=="Ripple" then
-        -- Expanding ring waves emanating from the cursor
+
         local maxR = math.max(scX, scZ)
         local waveR = ((t * 2.4 - index * 0.18) % (formRadius * 2.2 * maxR + 1)) + 1
         local a     = angle + t * 0.25
         return Vector3.new(mHit.X + math.cos(a) * waveR * scX, mHit.Y + 2 * scY, mHit.Z + math.sin(a) * waveR * scZ)
 
     elseif activeMode=="Juggle" then
-        -- Toss parts in parabolic arcs at staggered phases
+
         local toss = math.sin(t * 2.4 + index * 0.75)
         local h    = (toss + 1) * 0.5 * formRadius * scY * 2.2 + 2 * scY
         local spreadX = formRadius * 0.35 * scX
@@ -1575,25 +1563,25 @@ local function getTarget(index, total, part, t)
             mHit.Z + math.sin(angle) * spreadZ)
 
     elseif activeMode=="Constellation" then
-        -- Fixed star pattern that slowly rotates around the formation center
+
         local a   = angle + t * 0.45
         local r   = formRadius * scR * (0.85 + 0.15 * math.sin(index * 1.9 + t))
         local bob = math.sin(t * 1.8 + index * 0.6) * 0.4 * scY
         return Vector3.new(mHit.X + math.cos(a) * r * scX, mHit.Y + 2.5 * scY + bob, mHit.Z + math.sin(a) * r * scZ)
 
-    -- ── added short modes (pretty + some homing/fling feel) ──────────────
+
     elseif activeMode=="Rose" then
-        -- Parametric rose curve r = a * cos(kθ): crisp petals.
-        local k = 3 + ((total % 4) - 1)  -- 2..4 (variety)
+
+        local k = 3 + ((total % 4) - 1)  
         local theta = angle + t * 0.6
         local a = formRadius * scR * (0.75 + 0.25*math.sin(t*1.3 + ratio*6))
         local r = a * math.cos(k * theta)
-        -- Lift with a second harmonic for depth
+
         local y = 2*scY + (math.sin(theta*0.5 + t*1.7 + index*0.12) * 0.8 + ratio*0.3) * (6*scY)
         return Vector3.new(mHit.X + math.cos(theta) * r * scX, mHit.Y + y, mHit.Z + math.sin(theta) * r * scZ)
 
     elseif activeMode=="OrbitSin" then
-        -- Orbit with “breathing” radial sinusoid + gentle vertical sine.
+
         local a = angle + t*0.9
         local baseR = math.max(0.001, formRadius * scR)
         local r = baseR * (0.75 + 0.25*math.sin(t*2.1 + ratio*6 + index*0.08))
@@ -1601,7 +1589,7 @@ local function getTarget(index, total, part, t)
         return Vector3.new(mHit.X + math.cos(a)*r*scX, mHit.Y + y, mHit.Z + math.sin(a)*r*scZ)
 
     elseif activeMode=="Liss" then
-        -- Clean 3D Lissajous curve using rational multipliers.
+
         local u = ratio*math.pi*2 + t*0.55
         local x = math.sin(3*u + t*0.3 + index*0.02)
         local y = math.cos(2*u - t*0.22 + index*0.03)
@@ -1614,22 +1602,21 @@ local function getTarget(index, total, part, t)
             mHit.Z + z*ampZ*scZ)
 
     elseif activeMode=="Swing" then
-        -- Pendulum-like swing with rotating plane + small cursor “fling” bump when far.
+
         local swingA = angle + math.sin(t*1.2)*0.35 + t*0.25
         local swingLen = (formRadius*scR) * (0.7 + 0.3*math.sin(t*2.0 + ratio*5))
         local pos = Vector3.new(
             mHit.X + math.cos(swingA)*swingLen*scX,
             mHit.Y + (2.5*scY + math.sin(t*1.6 + index*0.08)*scY*3),
             mHit.Z + math.sin(swingA)*swingLen*scZ)
-        -- fling-ish bias: move outward when far from cursor hit
+
         local toCursor = currentMouseHit - pos
         local d = toCursor.Magnitude
         if d > 25 then
             local extra = math.clamp((d-25)/60, 0, 2) * (0.18*scR)
             pos = pos + toCursor.Unit * extra
         end
-        -- Keep formation target consistent with “under mouse” expectation.
-        -- When using Mouse/ClickArea formation, explicitly blend toward cursor.
+
         if formationType == "Mouse" or formationType == "ClickArea" then
             local blend = math.clamp(d / 80, 0, 1) * 0.35
             pos = pos:Lerp(currentMouseHit + Vector3.new(0, 2*scY, 0), blend)
@@ -1640,15 +1627,13 @@ local function getTarget(index, total, part, t)
     return mHit
 end
 
--- ─────────────────────────────────────────────────────────────
--- [7]  PART CONTROL LOOP
--- ─────────────────────────────────────────────────────────────
+
 local function tickParts()
     local t     = tick()
     local total = #selectedParts
     local char  = LP.Character
     
-    -- Apply part limits
+
     local partsToUse = total
     if useLimits and total > partLimit then
         partsToUse = partLimit
@@ -1664,8 +1649,7 @@ local function tickParts()
         end
     end
 
-    -- Global ownership sweep — throttled to every 3 frames, 2-level scan only
-    -- (avoids GetDescendants on a large map every single heartbeat)
+
     if globalOwnership and cRoot then
         _bumpSign = -_bumpSign
         local bump   = Vector3.new(0, 0.008 * _bumpSign, 0)
@@ -1688,7 +1672,7 @@ local function tickParts()
         end
     end
 
-    -- Single Part Control
+
     if spcActive and spcPart and spcPart.Parent then
         local tgt = currentMouseHit + Vector3.new(0, spcYOff, 0)
         local diff = tgt - spcPart.Position
@@ -1696,13 +1680,13 @@ local function tickParts()
         local agSPC = Vector3.new(0, workspace.Gravity / 60, 0)
         pcall(function()
             spcPart.AssemblyLinearVelocity = dist > 0.05
-                and diff.Unit * (dist * partSpeed * 2) + agSPC  -- No velocity cap
+                and diff.Unit * (dist * partSpeed * 2) + agSPC  
                 or  agSPC
             spcPart.AssemblyAngularVelocity = Vector3.zero
         end)
     end
 
-    -- DroneV2 target scan
+
     if activeMode=="DroneV2" and total>0 then
         local myRoot=char and char:FindFirstChild("HumanoidRootPart")
         dv2Target=nil
@@ -1733,13 +1717,13 @@ local function tickParts()
         dv2Label.Text="Inactive"; dv2Target=nil
     end
 
-    -- Attract timer
+
     if attracting then
         attractTimer+=1/60
         if attractTimer>=2 then attracting=false; attractTimer=0 end
     end
 
-    -- Minigun: next shot only after the active part reaches the cursor (or stuck timeout)
+
     if activeMode=="Minigun" and #selectedParts > 0 then
         if minigunIdx > #selectedParts then minigunIdx = 1 end
         if minigunIdx ~= minigunLastIdx then
@@ -1761,7 +1745,7 @@ local function tickParts()
         minigunLastIdx = 0
     end
 
-    -- Satellite: expire beam parts back to formation once they arrive or time out
+
     if activeMode=="Satellite" then
         local now = tick()
         for p, fireTime in pairs(satFired) do
@@ -1782,7 +1766,7 @@ local function tickParts()
         end
     end
 
-    -- Per-part movement now drives constraint targets directly.
+
     local isWall   = activeMode=="Wall"
     local isMG     = activeMode=="Minigun"
     local isSat    = activeMode=="Satellite"
@@ -1795,7 +1779,7 @@ local function tickParts()
         if not part or not part.Parent then
             removeHL(part); table.remove(selectedParts,i); frozenTargets[part]=nil; partTargets[part]=nil
         else
-            -- Skip part if part limits are active and we've exceeded them
+
             if useLimits and i > partsToUse then
                 pcall(function()
                     part.AssemblyLinearVelocity = Vector3.zero
@@ -1820,17 +1804,17 @@ local function tickParts()
                 local targetRotation = part.CFrame
                 local responsiveness = getMoveResponsiveness(1)
 
-                -- Minigun: active firing part launches at high speed
+
                 if isMG and i==minigunIdx then
                     responsiveness = getMoveResponsiveness(4.8)
                 end
 
-                -- Satellite beam parts: high-speed travel toward satTarget
+
                 if isSat and satFired[part] then
                     responsiveness = getMoveResponsiveness(55.0)
                 end
 
-                -- AnchorBomb: anchor part when it arrives at cursor
+
                 if isAB then
                     if dist < 5 then
                         pcall(function() part.Anchored = true end)
@@ -1840,25 +1824,25 @@ local function tickParts()
 
                 if isDV2 and dv2Target then
                     pcall(function()
-                        -- Massive spin for FE fling
+
                         part.AssemblyAngularVelocity = Vector3.new(
                             (math.random() - 0.5) * 1500,
                             (math.random() - 0.5) * 1500,
                             (math.random() - 0.5) * 1500
                         )
-                        -- Let AlignPosition do the movement; keep the spin effect only.
+
                         if not partTargets[part] then partTargets[part]={} end
                         partTargets[part].position = tgt
                         partTargets[part].rotation = part.CFrame
                         partTargets[part].responsiveness = getMoveResponsiveness(3.5)
                         syncAlignTarget(part, partTargets[part])
 
-                        -- Add fling Touched connection if not already present
+
                         if not satTouchConns[part] then
                             satTouchConns[part] = part.Touched:Connect(function(hit)
                                 if not hit or not hit.Parent or hit.Anchored then return end
                                 if hit == workspace.Terrain then return end
-                                -- Re-apply massive spin on touch to maintain fling
+
                                 pcall(function()
                                     part.AssemblyAngularVelocity = Vector3.new(
                                         (math.random() - 0.5) * 1500,
@@ -1895,9 +1879,7 @@ local function tickParts()
     end
 end
 
--- ─────────────────────────────────────────────────────────────
--- [8]  NPC CONTROL
--- ─────────────────────────────────────────────────────────────
+
 local function freezePlayer(f)
     local char=LP.Character; if not char then return end
     local h=char:FindFirstChildOfClass("Humanoid")
@@ -1924,7 +1906,7 @@ local function releaseNPC()
     if ch then Camera.CameraSubject=ch end
     UserInputService.MouseBehavior=Enum.MouseBehavior.Default
     Mouse.Icon=""
-    -- Reset control button UI
+
     if npcCtrlBtn then
         npcCtrlBtn.BackgroundColor3=PAL.B_DEF
         npcCtrlBtn.TextColor3=PAL.T1
@@ -1940,15 +1922,15 @@ local function takeNPC(model)
     npcTarget=model; npcSaved={ws=hum.WalkSpeed,jp=hum.JumpPower,ar=hum.AutoRotate}
     freezePlayer(true)
     Camera.CameraType=Enum.CameraType.Scriptable
-    npcCam.dist = 12  -- Reset to default distance on take
+    npcCam.dist = 12  
     
-    -- Apply control settings immediately
+
     hum.WalkSpeed = npcControlWalkSpeed
     hum.JumpPower = npcControlJumpPower
     hum.AutoRotate = npcControlFreezeAutoJump and false or true
 
     npcCam.yaw=math.atan2(root.CFrame.LookVector.X,root.CFrame.LookVector.Z)
-    npcCam.pitch = -0.25  -- Start looking slightly downward
+    npcCam.pitch = -0.25  
 
     npcCam._lastMouse=UserInputService:GetMouseLocation()
     local cc=RunService.RenderStepped:Connect(function()
@@ -1968,15 +1950,13 @@ local function takeNPC(model)
     end)
     table.insert(npcConns,cc)
 
-    -- Native-style right-click drag: rotate only while RMB is held. Cursor
-    -- stays free; its position is pinned during the drag so MouseMovement.Delta
-    -- is reliable, then restored to Default on release.
+
     local rotating=false
     local rcDown=UserInputService.InputBegan:Connect(function(inp,gpe)
         if not npcTarget then return end
         if inp.UserInputType==Enum.UserInputType.MouseButton2 then
             rotating=true
-            -- cursor stays free; rotation reads polled position deltas
+
         end
     end)
     table.insert(npcConns,rcDown)
@@ -1990,7 +1970,7 @@ local function takeNPC(model)
 
     local mc=UserInputService.InputChanged:Connect(function(inp)
         if inp.UserInputType==Enum.UserInputType.MouseMovement then
-          if rotating and false then -- handled in camera loop via polled mouse deltas
+          if rotating and false then 
             npcCam.yaw=npcCam.yaw+inp.Delta.X*0.005
             npcCam.pitch=math.clamp(npcCam.pitch+inp.Delta.Y*0.005,-1.2,0.4)
           end
@@ -2027,13 +2007,10 @@ local function takeNPC(model)
         end
     end)
     table.insert(npcConns,jc)
-    -- Leave mouse behavior unchanged so shiftlock remains available
+
     return true
 end
 
--- ─────────────────────────────────────────────────────────────
--- [9]  NPC AURAS
--- ─────────────────────────────────────────────────────────────
 local function isNPCModel(model)
     if model == LP.Character then return false end
     for _, plr in ipairs(Players:GetPlayers()) do
@@ -2048,14 +2025,14 @@ local function tickAuras()
     if not (killAura or sitAura or jumpAura or followAura or freezeAura
         or speedAuraEnabled or spinAuraEnabled
         or fingerGunEnabled or grabGunEnabled or sitGunEnabled) then
-        -- Clear all NPC highlights if no auras/guns are active
+
         for model in pairs(npcHighlights) do
             removeNpcHighlight(model)
         end
         return
     end
 
-    -- Run every 8 frames (~7.5/sec) — plenty for auras/tools, avoids per-frame map scan
+
     _auraFrame = (_auraFrame + 1) % 8
     if _auraFrame ~= 0 then return end
 
@@ -2064,9 +2041,9 @@ local function tickAuras()
     if not myRoot then return end
     local myPos  = myRoot.Position
 
-    -- Tool targeting helpers
+
     local function getMouseRayHit(maxDist)
-        -- Uses currentMouseHit updated by Heartbeat.
+
         local origin = Camera.CFrame.Position
         local dir = (currentMouseHit - origin)
         if not dir or dir.Magnitude < 0.001 then return nil end
@@ -2084,7 +2061,7 @@ local function tickAuras()
 
         local d = (tr.Position - myPos).Magnitude
 
-        -- Existing NPC Auras
+
         if killAura  and d <= killAuraRange  then pcall(function() h.Health = 0; addNpcHighlight(obj, Color3.fromRGB(255, 50, 50)) end) end
         if sitAura   and d <= sitAuraRange   then pcall(function() h.Sit = true; addNpcHighlight(obj, Color3.fromRGB(50, 100, 255)) end) end
         if jumpAura  and d <= jumpAuraRange  then pcall(function() h.Jump = true; addNpcHighlight(obj, Color3.fromRGB(50, 200, 100)) end) end
@@ -2092,9 +2069,7 @@ local function tickAuras()
         if freezeAura and d <= freezeAuraRange then
             pcall(function()
                 addNpcHighlight(obj, Color3.fromRGB(140, 140, 255))
-                -- Fear-aura behavior:
-                -- - Always keep NPCs retreating when inside the aura
-                -- - If already at/near the edge, they effectively "freeze" (no further move)
+
                 h.WalkSpeed = 16
                 h.JumpPower = 50
                 h.AutoRotate = true
@@ -2123,14 +2098,14 @@ local function tickAuras()
             end)
         end
 
-        -- Speed Aura
+
         if speedAuraEnabled and d <= speedAuraRange then
-            -- Boost (use max to avoid shrinking from other scripts)
+
             pcall(function()
                 h.WalkSpeed = math.max(h.WalkSpeed, speedAuraSpeed)
                 addNpcHighlight(obj, Color3.fromRGB(120, 255, 150))
             end)
-            -- Tiny close-range push toward player so it feels responsive
+
             if d <= speedAuraRange * 0.35 then
                 local dir = (myPos - tr.Position)
                 if dir.Magnitude > 0.01 then
@@ -2141,18 +2116,17 @@ local function tickAuras()
             end
         end
 
-        -- Spin Aura
+
         if spinAuraEnabled and d <= spinAuraRange then
-            -- Yaw spin around world Y toward player.
+
             local toMe = (myPos - tr.Position)
             if toMe.Magnitude > 0.001 then
                 local yaw = math.atan2(toMe.X, toMe.Z)
-                -- Keep visual rotation stable: use angular velocity.
-                -- Note: Roblox angular velocity is in radians/sec.
+
                 pcall(function()
                     tr.AssemblyAngularVelocity = Vector3.new(0, spinAuraSpeed, 0)
                     addNpcHighlight(obj, Color3.fromRGB(210, 145, 255))
-                    -- Encourage facing when close
+
                     if d <= spinAuraRange * 0.4 then
                         h:MoveTo(myPos)
                     end
@@ -2165,7 +2139,7 @@ local function tickAuras()
             end
         end
 
-        -- Tools: only affect the currently controlled npcTarget
+
         if obj == npcTarget then
             local toolHit = nil
             if (fingerGunEnabled or grabGunEnabled or sitGunEnabled) then
@@ -2173,7 +2147,7 @@ local function tickAuras()
             end
 
             if sitGunEnabled then
-                -- sit when in broad tool range
+
                 if d <= speedAuraRange * 10 then
                     pcall(function() h.Sit = true; addNpcHighlight(obj, Color3.fromRGB(50, 150, 200)) end)
                 end
@@ -2204,7 +2178,6 @@ local function tickAuras()
         end
     end
 
-    -- 2-level scan covers direct workspace children + one folder/model deep
     local affectedNPCs = {}
     local function markAffected(obj)
         if obj:IsA("Model") and isNPCModel(obj) then
@@ -2222,7 +2195,6 @@ local function tickAuras()
         end
     end
 
-    -- Remove highlights from NPCs no longer affected
     for model in pairs(npcHighlights) do
         if not affectedNPCs[model] or not model.Parent then
             removeNpcHighlight(model)
@@ -2230,9 +2202,7 @@ local function tickAuras()
     end
 end
 
--- ─────────────────────────────────────────────────────────────
--- [10]  UI — PALETTE  (rose / dusty pink)
--- ─────────────────────────────────────────────────────────────
+
 do
     local P={}
     P.BG      = Color3.fromRGB(12,  8, 14)
@@ -2240,7 +2210,7 @@ do
     P.BORDER  = Color3.fromRGB(62, 38, 66)
     P.TBAR    = Color3.fromRGB(28, 16, 34)
     P.ACC     = Color3.fromRGB(215, 125, 168)
-    P.ACC2    = Color3.fromRGB(148,  92, 128)
+    P.ACC2    = Color3.fromRGB(148,  92, 128) 
     P.B_DEF   = Color3.fromRGB(36,  22, 42)
     P.B_RED   = Color3.fromRGB(158,  30, 48)
     P.B_GRN   = Color3.fromRGB( 22,  90, 46)
@@ -2254,9 +2224,7 @@ do
 end
 local PAL = GUI.PAL
 
--- ─────────────────────────────────────────────────────────────
--- [10]  UI HELPERS  (CoreGui / gethui only — stays above in-game UI)
--- ─────────────────────────────────────────────────────────────
+
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name             = "Atomizer"
@@ -2267,7 +2235,7 @@ ScreenGui.DisplayOrder     = GUI.DISPLAY_ORDER
 ScreenGui.Parent           = getGuiParent()
 
 local function unloadScript()
-    -- stop runtime loops first (prevents “still running after unload”)
+
     pcall(function() if ownerConn then ownerConn:Disconnect() end end)
     pcall(function() if renderOwnerConn then renderOwnerConn:Disconnect() end end)
     pcall(function() if preSimConn then preSimConn:Disconnect() end end)
@@ -2387,7 +2355,7 @@ function mkB(props,parent)
     b.MouseLeave:Connect(function() b.BackgroundColor3=base end)
     return b
 end
--- Tab / toggle buttons: no hover lerp (avoids fighting setSTab / refreshModes colors)
+
 function mkTab(props,parent)
     local b=Instance.new("TextButton"); b.AutoButtonColor=false; b.BorderSizePixel=0
     for k,v in pairs(props) do b[k]=v end
@@ -2395,17 +2363,17 @@ function mkTab(props,parent)
     return b
 end
 
--- Thin horizontal divider
+
 function mkDiv(parent,order)
     return mkF({Size=UDim2.new(1,0,0,1),BackgroundColor3=PAL.BORDER,LayoutOrder=order},parent)
 end
--- Section label
+
 function mkSec(text,parent,order)
     return mkL({Size=UDim2.new(1,0,0,16),Text=text,TextColor3=PAL.ACC2,TextSize=9,
         Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=order},parent)
 end
 
--- 2-column button row helper
+
 function mkRow2(parent,order,p1,p2)
     local row=mkF({Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,LayoutOrder=order},parent)
     local o1={}; for k,v in pairs(p1) do o1[k]=v end; o1.Size=UDim2.new(0.5,-2,1,0); o1.Position=UDim2.new(0,0,0,0)
@@ -2415,7 +2383,7 @@ function mkRow2(parent,order,p1,p2)
     return row,b1,b2
 end
 
--- Slider
+
 function mkSlider(parent,ltext,lo,hi,def,order,onChange)
     local wrap=mkF({Size=UDim2.new(1,0,0,42),BackgroundColor3=PAL.SURFACE,LayoutOrder=order},parent)
     corner(wrap,5)
@@ -2445,13 +2413,9 @@ function mkSlider(parent,ltext,lo,hi,def,order,onChange)
     return wrap
 end
 
--- ─────────────────────────────────────────────────────────────
--- [11]  MAIN FRAME  (built in function — avoids 200 local register cap)
--- ─────────────────────────────────────────────────────────────
--- UI declared as global to avoid local register overflow
+
 UI = nil
 
--- Helper function to build minimize button
 function buildMinButton(TBar)
     local MinBtn=mkB({Size=UDim2.new(0,24,0,24),Position=UDim2.new(1,-58,0,9),
         BackgroundColor3=Color3.fromRGB(32,32,42),Text="-",TextColor3=PAL.T1,TextSize=13,
@@ -2459,7 +2423,7 @@ function buildMinButton(TBar)
     return MinBtn
 end
 
--- Helper function to build close button
+
 function buildCloseButton(TBar)
     local CloseBtn=mkB({Size=UDim2.new(0,24,0,24),Position=UDim2.new(1,-30,0,9),
         BackgroundColor3=PAL.B_RED,Text="X",TextColor3=Color3.new(1,1,1),TextSize=12,
@@ -2469,14 +2433,14 @@ function buildCloseButton(TBar)
     end)
 end
 
--- Helper function to build title bar buttons
+
 function buildTitleBarButtons(TBar)
     local MinBtn = buildMinButton(TBar)
     buildCloseButton(TBar)
     return MinBtn
 end
 
--- Helper function to build title bar with buttons
+
 function buildTitleBar(Main, MINI)
     local TBar=mkF({Size=UDim2.new(1,0,0,MINI),BackgroundColor3=PAL.TBAR,ZIndex=GUI.Z+1},Main)
     corner(TBar,8)
@@ -2491,7 +2455,6 @@ function buildTitleBar(Main, MINI)
     return TBar, MinBtn
 end
 
--- Helper function to setup drag functionality
 function setupDrag(Main, TBar)
     local dragging,dStart,dOrigin=false,nil,nil
     reg(TBar.InputBegan:Connect(function(inp)
@@ -2510,7 +2473,7 @@ function setupDrag(Main, TBar)
     end))
 end
 
--- Helper function to build body with minimize functionality
+
 function buildBody(Main, MinBtn, W, H, MINI)
     local Body=mkF({Size=UDim2.new(1,0,1,-MINI),Position=UDim2.new(0,0,0,MINI),BackgroundTransparency=1},Main)
     local minimized=false
@@ -2521,7 +2484,7 @@ function buildBody(Main, MinBtn, W, H, MINI)
     return Body
 end
 
--- Helper function to build main frame and title bar
+
 function buildMainFrame()
     local W,H,MINI=440,560,42
 
@@ -2540,7 +2503,6 @@ function buildMainFrame()
     return Main, Body
 end
 
--- Helper function to build main tab row
 function buildMainTabs(Body)
     local mTabRow=mkF({Size=UDim2.new(1,-12,0,28),Position=UDim2.new(0,6,0,6),BackgroundTransparency=1},Body)
     local mTabLL=Instance.new("UIListLayout",mTabRow)
@@ -2562,20 +2524,19 @@ function buildMainTabs(Body)
         mTabBtns[name]=b; b.MouseButton1Click:Connect(function() setMTab(name) end)
     end
 
-    -- Content area
     local Cont=mkF({Size=UDim2.new(1,-12,1,-42),Position=UDim2.new(0,6,0,36),BackgroundTransparency=1},Body)
 
     return Cont, mPanels, setMTab
 end
 
--- Helper function to build Parts panel with all sub-tabs
+
 function buildPartsPanel(Cont, mPanels)
     local W=440
 
     local partsRoot=mkF({Size=UDim2.new(1,0,1,0),BackgroundTransparency=1},Cont)
     mPanels["Parts"]=partsRoot
 
-    -- Sub-tab row
+
     local sTabRow=mkF({Size=UDim2.new(1,0,0,26),BackgroundColor3=PAL.SURFACE},partsRoot)
     corner(sTabRow,5)
     local sTabLL=Instance.new("UIListLayout",sTabRow)
@@ -2600,7 +2561,6 @@ function buildPartsPanel(Cont, mPanels)
         sTabBtns[name]=b; b.MouseButton1Click:Connect(function() setSTab(name) end)
     end
 
-    -- Sub-panel container
     local spCont=mkF({Size=UDim2.new(1,0,1,-30),Position=UDim2.new(0,0,0,28),BackgroundTransparency=1},partsRoot)
 
     local function makeSubPanel(name)
@@ -2609,7 +2569,7 @@ function buildPartsPanel(Cont, mPanels)
         return p
     end
 
-    -- ── SEL sub-panel (scrollable) ─────────────────────────────────
+
     local function buildSelSubPanel(spCont, sPanels)
         local selSF=Instance.new("ScrollingFrame")
         selSF.Size=UDim2.new(1,0,1,0); selSF.BackgroundTransparency=1; selSF.BorderSizePixel=0
@@ -2692,7 +2652,7 @@ function buildPartsPanel(Cont, mPanels)
         return selInfo, clickSelBtn, clearBtn, refreshAutoSelectButtons, clickSelActive
     end
 
-    -- Helper function to build formation section
+
     local function buildFormationSection(selP)
         mkDiv(selP,8)
         mkSec("FORMATION", selP, 9)
@@ -2713,7 +2673,6 @@ function buildPartsPanel(Cont, mPanels)
         return freezeBtn
     end
 
-    -- Helper function to build ownership section
     local function buildOwnershipSection(selP)
         mkDiv(selP,12)
         mkSec("OWNERSHIP", selP, 13)
@@ -2736,7 +2695,7 @@ function buildPartsPanel(Cont, mPanels)
             fakeColBtn.BackgroundColor3=fakeCollisions and Color3.fromRGB(22,38,75) or PAL.B_DEF
             fakeColBtn.TextColor3=fakeCollisions and Color3.fromRGB(130,175,255) or PAL.T1
             fakeColBtn.Text="Fake Collisions: "..(fakeCollisions and "ON ✓" or "OFF")
-            -- Re-apply collision state to all selected parts
+
             for _, part in ipairs(selectedParts) do
                 if fakeCollisions then
                     pcall(function() disableSelectedCollision(part) end)
@@ -2752,7 +2711,7 @@ function buildPartsPanel(Cont, mPanels)
     local freezeBtn = buildFormationSection(selSF)
     buildOwnershipSection(selSF)
 
-    -- ── MODES sub-panel (scrollable) ───────────────────────────────
+
     local function buildModesSubPanel(spCont, sPanels)
         local W=440
         local modSF=Instance.new("ScrollingFrame")
@@ -2767,7 +2726,7 @@ function buildPartsPanel(Cont, mPanels)
             modSF.CanvasSize=UDim2.new(0,0,0,modLL.AbsoluteContentSize.Y+8)
         end)
 
-        -- Mode grid  (4 cols, auto height)
+
         local mGrid=mkF({Size=UDim2.new(1,0,0,0),BackgroundTransparency=1,LayoutOrder=1},modSF)
         local mgL=Instance.new("UIGridLayout",mGrid)
         local cellW=math.floor((W-18-9)/4)
@@ -2806,7 +2765,6 @@ function buildPartsPanel(Cont, mPanels)
         mkDiv(modSF,2)
         mkSec("FORMATION TARGET", modSF, 3)
 
-        -- Formation type buttons (2x2 grid)
         local formTypeBtns = {}
         local function mkFormBtn(props, parent, pos)
             local o={}; for k,v in pairs(props) do o[k]=v end
@@ -2846,12 +2804,11 @@ function buildPartsPanel(Cont, mPanels)
 
         mkSec("SCALE & DRAW", modSF, 6)
 
-        -- Formation-axis sizing (primary control for all modes except Mouse/Blackhole)
         mkSlider(modSF,"Form Size X",0,100,formSizeX,7,function(v) formSizeX=v end)
         mkSlider(modSF,"Form Size Y",0,100,formSizeY,8,function(v) formSizeY=v end)
         mkSlider(modSF,"Form Size Z",0,100,formSizeZ,9,function(v) formSizeZ=v end)
 
-        -- Offset/height bias used by all modes
+
         mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v end)
 
         mkL({Size=UDim2.new(1,0,0,14),
@@ -2869,7 +2826,7 @@ function buildPartsPanel(Cont, mPanels)
 
     buildModesSubPanel(spCont, sPanels)
 
-    -- ── PARAMS sub-panel (scrollable) ─────────────────────────────
+
     local function buildParamsSubPanel(spCont, sPanels)
         local parSF=Instance.new("ScrollingFrame")
         parSF.Size=UDim2.new(1,0,1,0); parSF.BackgroundTransparency=1; parSF.BorderSizePixel=0
@@ -2881,8 +2838,8 @@ function buildPartsPanel(Cont, mPanels)
         end)
 
         mkSec("VELOCITY", parSF, 1)
-        mkSlider(parSF,"Part Speed",   1,120,partSpeed,   2,function(v) partSpeed=v end)
-        -- Max Velocity removed: now unlimited (math.huge) for smooth constraint-based movement
+        mkSlider(parSF,"Part Speed",   1,120,partSpeed,   2,function(v) partSpeed=v end)                                                --haha penis
+
         mkDiv(parSF,4)
         mkSec("MODE PARAMETERS", parSF, 5)
         mkSlider(parSF,"Form Radius",  2, 25,formRadius,  6,function(v) formRadius=v end)
@@ -2902,7 +2859,6 @@ function buildPartsPanel(Cont, mPanels)
 
     buildParamsSubPanel(spCont, sPanels)
 
-    -- ── TOOLS sub-panel ────────────────────────────────────────────
     local function buildToolsSubPanel(makeSubPanel)
         local toolP = Instance.new("ScrollingFrame")
         toolP.Size = UDim2.new(1,0,1,0)
@@ -2984,7 +2940,6 @@ function buildPartsPanel(Cont, mPanels)
         mkDiv(toolP,13)
         mkSec("HIGHLIGHT", toolP, 14)
 
-        -- Mode toggle: Highlight (through-wall) vs ESP UI labels
         local espBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Mode: Highlight (through walls)",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=15},toolP)
         espBtn.MouseButton1Click:Connect(function()
@@ -2999,7 +2954,6 @@ function buildPartsPanel(Cont, mPanels)
         mkL({Size=UDim2.new(1,0,0,12),Text="Preset colors (fill + outline)",
             TextColor3=PAL.T3,TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=17},toolP)
 
-        -- Color preset row 1
         local hlRow1=mkF({Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,LayoutOrder=18},toolP)
         local hlPresets = {
             {name="Teal",   fill=Color3.fromRGB(80,255,210),  outline=Color3.fromRGB(80,255,210)},
@@ -3030,13 +2984,13 @@ function buildPartsPanel(Cont, mPanels)
 
         mkSec("HIGHLIGHT STYLE", toolP, 20)
 
-        -- Fill transparency slider
+
         mkSlider(toolP,"Fill Opacity",0,1,1-HL.fillTransparency,21,function(v)
-            HL.fillTransparency = 1 - v   -- slider is "opacity" so invert
+            HL.fillTransparency = 1 - v   
             refreshAllHighlights()
         end)
 
-        -- Outline visibility toggle
+
         local hlOutlineBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Outline: ON",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=22},toolP)
         hlOutlineBtn.MouseButton1Click:Connect(function()
@@ -3048,7 +3002,7 @@ function buildPartsPanel(Cont, mPanels)
             refreshAllHighlights()
         end)
 
-        -- Depth mode toggle (through walls vs occluded)
+
         local hlDepthBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=Color3.fromRGB(18,55,24),
             Text="Through Walls: ON ✓",TextColor3=Color3.fromRGB(110,210,130),
             TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=23},toolP)
@@ -3072,9 +3026,9 @@ function buildPartsPanel(Cont, mPanels)
     return selInfo, clickSelBtn, clearBtn, freezeBtn, spcBtn, clickSelActive
 end
 
--- NPC search box builder — receives the target panel via getgenv ctx
+
 local function buildNpcSearchBox(npcControlPanel)
-    local SB = {}  -- pack all locals into one register
+    local SB = {}  
     SB.box = Instance.new("TextBox")
     SB.box.Size = UDim2.new(1,0,0,24)
     SB.box.BackgroundColor3 = PAL.B_DEF
@@ -3154,9 +3108,6 @@ local function buildNpcSearchBox(npcControlPanel)
     SB.box:GetPropertyChangedSignal("Text"):Connect(function() runSearch(SB.box.Text) end)
 end
 
--- NPC full panel builder — all aura/gun/control population lives here,
--- completely separate from buildInterface to avoid register overflow.
--- Receives context via getgenv() table set by buildNpcPanel.
 local function buildNpcPanelFull()
     local ctx = getgenv()._atomizerNpcCtx
     if not ctx then return end
@@ -3170,7 +3121,7 @@ local function buildNpcPanelFull()
 
     buildNpcSearchBox(npcControlPanel)
 
-    -- Auras panel
+
     local npcAurasPanel = Instance.new("ScrollingFrame")
     do
         npcAurasPanel.Size=UDim2.new(1,0,1,0); npcAurasPanel.BackgroundTransparency=1
@@ -3185,7 +3136,7 @@ local function buildNpcPanelFull()
         end)
     end
 
-    -- Tools/guns panel
+ 
     local npcToolsPanel = Instance.new("ScrollingFrame")
     do
         npcToolsPanel.Size=UDim2.new(1,0,1,0); npcToolsPanel.BackgroundTransparency=1
@@ -3200,7 +3151,7 @@ local function buildNpcPanelFull()
         end)
     end
 
-    -- Control panel population
+
     do
         local _,pb,rb=mkRow2(npcControlPanel,2,
             {BackgroundColor3=PAL.B_DEF,Text=" Pick NPC",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham},
@@ -3303,7 +3254,7 @@ local function buildNpcPanelFull()
         if npcControlEnabled and npcTarget then local h=npcTarget:FindFirstChildOfClass("Humanoid"); if h then h.JumpPower=v end end end)
 
     mkDiv(npcControlPanel,21)
-    do  -- Freeze AutoJump + Halt MoveTo packed into one do block
+    do  
         local fajBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Freeze AutoJump: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=22},npcControlPanel)
         fajBtn.MouseButton1Click:Connect(function()
@@ -3322,10 +3273,9 @@ local function buildNpcPanelFull()
         end)
     end
 
-    -- AURAS PANEL — all 7 auras in a loop, zero button locals
+
     do
-        -- {label, flag_getter, flag_setter, range_getter, range_setter,
-        --  range_max, onColor, onText, layoutOrder}
+
         local AURA_DEFS = {
             {"Kill Aura",   function() return killAura end,         function(v) killAura=v end,
              function() return killAuraRange end,   function(v) killAuraRange=v end,
@@ -3360,7 +3310,7 @@ local function buildNpcPanelFull()
                 btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
             end)
             mkSlider(npcAurasPanel,lbl:match("^%S+").." Range",3,rMax,getR(),lo+1,setR)
-            -- Extra sliders for Speed/Spin
+
             if lbl=="Speed Aura" then
                 mkSlider(npcAurasPanel,"Speed Amount",1,200,speedAuraSpeed,lo+2,function(v) speedAuraSpeed=v end)
             elseif lbl=="Spin Aura" then
@@ -3369,7 +3319,7 @@ local function buildNpcPanelFull()
         end
     end
 
-    -- GUNS PANEL
+
     do
         local GUN_DEFS = {
             {"Finger Gun", function() return fingerGunEnabled end, function(v) fingerGunEnabled=v end,
@@ -3390,7 +3340,7 @@ local function buildNpcPanelFull()
                 btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
             end)
         end
-        -- TK + Freeze gun share a refresh (closed over both buttons)
+
         local tkBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Telekinesis Gun: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=4},npcToolsPanel)
         local fzBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
@@ -3407,7 +3357,7 @@ local function buildNpcPanelFull()
         fzBtn.MouseButton1Click:Connect(function() NX.freezeGun=not NX.freezeGun; if NX.freezeGun then NX.tkGun=false end; refreshTKFZ() end)
     end
 
-    -- Tab buttons + tab switcher
+
     local npcActiveSTab = "Control"
     local function setNpcSTab(name)
         npcActiveSTab = name
@@ -3425,10 +3375,10 @@ local function buildNpcPanelFull()
     end
     setNpcSTab("Control")
 
-    getgenv()._atomizerNpcCtx = nil  -- free the context table
+    getgenv()._atomizerNpcCtx = nil  
 end
 
--- buildNpcPanel now stores its locals in getgenv() so buildNpcPanelFull can access them
+
 function buildNpcPanel(Cont, mPanels)
     local npcRoot=mkF({Size=UDim2.new(1,0,1,0),BackgroundTransparency=1},Cont)
     mPanels["NPC"]=npcRoot
@@ -3458,7 +3408,7 @@ function buildNpcPanel(Cont, mPanels)
         TextColor3=PAL.T2,TextSize=10,Font=Enum.Font.Gotham,
         TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},npcControlPanel)
 
-    -- Store everything buildNpcPanelFull needs via getgenv()
+
     local npcSPanels = {Control=npcControlPanel}
     local npcSBtns   = {}
     local npcSTabs   = {"Control","Auras","Guns"}
@@ -3481,8 +3431,7 @@ local function buildInterface()
     local selInfo, clickSelBtn, clearBtn, freezeBtn, spcBtn, clickSelActive = buildPartsPanel(Cont, mPanels)
     local npcStat = buildNpcPanel(Cont, mPanels)
 
-    -- Populate all NPC panels (auras, guns, control) in a separate function
-    -- to stay well under the 200 local register cap in buildInterface itself.
+
     buildNpcPanelFull()
 
     setMTab("Parts")
@@ -3496,13 +3445,10 @@ local function buildInterface()
 end
 UI = buildInterface()
 
--- Write initial config to executor workspace (atomizer_saves.txt)
+
 if hasFileSystem then saveConfig(true) end
 
--- ─────────────────────────────────────────────────────────────
--- [15]  CLICK HANDLER  (select parts / SPC / pick NPC)
--- ─────────────────────────────────────────────────────────────
--- Telekinesis: release LMB to toss the held NPC toward the cursor
+
 reg(Mouse.Button1Up:Connect(function()
     if not NX.held then return end
     local model, root = NX.held, NX.root
@@ -3522,9 +3468,9 @@ reg(Mouse.Button1Up:Connect(function()
     NX.savedPS = nil
 end))
 
--- Per-frame enforcement: float a telekinesis-held NPC, and keep frozen NPCs pinned
+
 reg(RunService.Heartbeat:Connect(function()
-    -- Telekinesis float toward the cursor hit point
+
     if NX.held then
         local root = NX.root
         if not root or not root.Parent then
@@ -3537,7 +3483,7 @@ reg(RunService.Heartbeat:Connect(function()
             end)
         end
     end
-    -- Keep every frozen NPC at zero velocity, stunned, walk/jump disabled
+
     for model, _ in pairs(NX.frozen) do
         if not model.Parent then
             NX.frozen[model] = nil
@@ -3561,10 +3507,10 @@ reg(Mouse.Button1Down:Connect(function()
     local clickTarget = Mouse.Target
     if activeMode=="Draw" then isDrawing=true end
 
-    -- One-shot NPC tool firing (click-based)
+
     if fingerGunEnabled or sitGunEnabled or grabGunEnabled then
         local function raycastNpc()
-            -- Inline raycast so this click handler never depends on getMouseRayHit scope.
+
             local origin = Camera.CFrame.Position
             local dir = (currentMouseHit - origin)
             if not dir or dir.Magnitude < 0.001 then return nil end
@@ -3583,7 +3529,7 @@ reg(Mouse.Button1Down:Connect(function()
             return nil
         end
 
-        -- Finger Gun: kill first NPC humanoid hit
+
         if fingerGunEnabled then
             local model = raycastNpc()
             if model then
@@ -3593,7 +3539,6 @@ reg(Mouse.Button1Down:Connect(function()
             end
         end
 
-        -- Sit Gun: set Humanoid.Sit=true
         if sitGunEnabled then
             local model = raycastNpc()
             if model then
@@ -3603,7 +3548,7 @@ reg(Mouse.Button1Down:Connect(function()
             end
         end
 
-        -- Grab Gun: click-grab/drag, next click toss, repeat
+
         if grabGunEnabled then
             if not grabbedRoot or not grabbedNPC or not grabbedRoot.Parent then
                 local res = raycastNpc()
@@ -3611,12 +3556,12 @@ reg(Mouse.Button1Down:Connect(function()
                     grabbedNPC  = res
                     grabbedRoot = grabbedNPC and grabbedNPC:FindFirstChild("HumanoidRootPart") or nil
                     if grabbedRoot then
-                        -- start "armed" hover immediately
+
                         grabbedRoot.AssemblyLinearVelocity = Vector3.new(0,0,0)
                     end
                 end
             else
-                -- toss toward clicked point
+
                 local targetPos = currentMouseHit
                 local dir = targetPos - grabbedRoot.Position
                 if dir.Magnitude > 0.001 then
@@ -3632,7 +3577,6 @@ reg(Mouse.Button1Down:Connect(function()
         end
     end
 
-    -- Telekinesis Hold Gun: press to grab & float an NPC (release tosses it)
     if NX.tkGun then
         local origin = Camera.CFrame.Position
         local dir = (currentMouseHit - origin)
@@ -3652,7 +3596,7 @@ reg(Mouse.Button1Down:Connect(function()
         return
     end
 
-    -- Freeze Gun: click an NPC to stun/freeze it; click again to release it
+
     if NX.freezeGun then
         local origin = Camera.CFrame.Position
         local dir = (currentMouseHit - origin)
@@ -3663,7 +3607,7 @@ reg(Mouse.Button1Down:Connect(function()
                 if model and isNPCModel(model) then
                     local h = model:FindFirstChildOfClass("Humanoid")
                     if NX.frozen[model] then
-                        -- already frozen → restore saved stats and release
+
                         local s = NX.frozen[model]
                         if h then pcall(function()
                             h.WalkSpeed = s.ws; h.JumpPower = s.jp
@@ -3672,7 +3616,7 @@ reg(Mouse.Button1Down:Connect(function()
                         end) end
                         NX.frozen[model] = nil
                     elseif h then
-                        -- freeze → save current stats, then zero everything + stun
+
                         local jh = 0; pcall(function() jh = h.JumpHeight end)
                         NX.frozen[model] = {ws=h.WalkSpeed, jp=h.JumpPower, jh=jh, ar=h.AutoRotate, ps=h.PlatformStand}
                         pcall(function()
@@ -3687,13 +3631,11 @@ reg(Mouse.Button1Down:Connect(function()
         return
     end
 
-    -- Click Area mode: set the formation center point
     if formationType == "ClickArea" then
         clickFormPos = currentMouseHit
         return
     end
 
-    -- Satellite: fire all parts toward the cursor
     if activeMode=="Satellite" and #selectedParts > 0 then
         local now = tick()
         satTarget = currentMouseHit
@@ -3702,14 +3644,14 @@ reg(Mouse.Button1Down:Connect(function()
                 local part = selectedParts[i]
                 satFired[part] = now
 
-                -- Spin the part REALLY fast for fling effect
+ 
                 pcall(function()
                     part.AssemblyAngularVelocity = Vector3.new(
                         (math.random() - 0.5) * 2000,
                         (math.random() - 0.5) * 2000,
                         (math.random() - 0.5) * 2000
                     )
-                    -- Add linear velocity toward target for momentum transfer
+
                     local toTarget = (satTarget - part.Position).Unit
                     part.AssemblyLinearVelocity = toTarget * 500 + Vector3.new(
                         (math.random() - 0.5) * 100,
@@ -3718,14 +3660,14 @@ reg(Mouse.Button1Down:Connect(function()
                     )
                 end)
 
-                -- Add fling Touched connection - physics engine handles momentum transfer
+
                 if satTouchConns[part] then
                     pcall(function() satTouchConns[part]:Disconnect() end)
                 end
                 satTouchConns[part] = part.Touched:Connect(function(hit)
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if hit == workspace.Terrain then return end
-                    -- Re-apply velocity on each touch to maintain fling power
+
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.new(
                             (math.random() - 0.5) * 2000,
@@ -3775,7 +3717,7 @@ reg(Mouse.Button1Up:Connect(function()
     isDrawing=false
 end))
 
--- Tab/Escape release
+
 reg(UserInputService.InputBegan:Connect(function(inp,gpe)
     if gpe then return end
     if inp.KeyCode==Enum.KeyCode.Tab and npcTarget then
@@ -3789,9 +3731,7 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
     end
 end))
 
--- ─────────────────────────────────────────────────────────────
--- [16]  MAIN HEARTBEAT
--- ─────────────────────────────────────────────────────────────
+
 reg(RunService.Heartbeat:Connect(function()
     updateMouseHit()
 
@@ -3802,7 +3742,7 @@ reg(RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- Slinky: record mouse path for chain delay
+
     if activeMode=="Slinky" and #selectedParts>0 then
         local pos=currentMouseHit
         if #slinkyHistory==0 or (slinkyHistory[#slinkyHistory]-pos).Magnitude>0.12 then
@@ -3811,30 +3751,30 @@ reg(RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- Draw trail recording (only while mouse held)
+
     if activeMode=="Draw" and isDrawing and #selectedParts>0 then
         local pos=currentMouseHit
         if #drawTrail==0 or (drawTrail[#drawTrail]-pos).Magnitude>1.0 then
             table.insert(drawTrail,pos)
             if #drawTrail>600 then table.remove(drawTrail,1) end
-            if #drawTrail%8==0 then addDrawDot(pos) end  -- neon indicator every 8 pts
+            if #drawTrail%8==0 then addDrawDot(pos) end  
         end
     end
 
-    -- Main part control
+
     if #selectedParts>0 or spcActive or globalOwnership or activeMode=="Comet" then
         tickParts()
     end
 
-    -- NPC auras
+
     tickAuras()
 
-    -- Selection info
+
     UI.selInfo.Text="#"..#selectedParts.." selected · "..activeMode
         ..(frozen and " [FROZEN]" or "")..(attracting and " [ATTRACT]" or "")
         ..(hasFileSystem and " · cfg" or "")
 
-    -- Auto-save config
+
     saveConfig()
 end))
 
