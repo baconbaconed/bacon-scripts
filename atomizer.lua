@@ -732,7 +732,7 @@ end
 local espLabels = {}
 
 local function getPartScreenRect(part)
-
+    -- Prefer the part's bounding box (handles rotated/union/mesh parts reliably)
     local ok, pCFrame, pSize = pcall(function() return part:GetBoundingBox() end)
     local half
     if ok and pCFrame and pSize then
@@ -1058,7 +1058,8 @@ local function updateESP()
                 if visible and minX and minY and maxX and maxY then
                     frame.Visible = true
                     frame.Size = UDim2.fromOffset(math.max(10, maxX - minX + 8), math.max(10, maxY - minY + 8))
-
+                    -- Align box center to bounding-box screen center. Subtract GUI inset on Y
+                    -- to match label-style positioning and avoid vertical offset on some parents.
                     local centerX = (minX + maxX) * 0.5
                     local centerY = (minY + maxY) * 0.5 - inset.Y
                     frame.Position = UDim2.fromOffset(centerX, centerY)
@@ -3405,6 +3406,9 @@ function buildPartsPanel(Cont, mPanels)
             gOwnBtn.TextColor3=globalOwnership and Color3.fromRGB(130,175,255) or PAL.T1
             gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON ✓" or "OFF")
         end)
+        gOwnBtn.BackgroundColor3=globalOwnership and Color3.fromRGB(22,38,75) or PAL.B_DEF
+        gOwnBtn.TextColor3=globalOwnership and Color3.fromRGB(130,175,255) or PAL.T1
+        gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON ✓" or "OFF")
 
         mkSlider(selP,"Owner Radius",10,300,ownerRadius,15,function(v) ownerRadius=v end)
 
@@ -3424,6 +3428,9 @@ function buildPartsPanel(Cont, mPanels)
                 end
             end
         end)
+        fakeColBtn.BackgroundColor3=fakeCollisions and Color3.fromRGB(22,38,75) or PAL.B_DEF
+        fakeColBtn.TextColor3=fakeCollisions and Color3.fromRGB(130,175,255) or PAL.T1
+        fakeColBtn.Text="Fake Collisions: "..(fakeCollisions and "ON ✓" or "OFF")
     end
 
     local selInfo, clickSelBtn, clearBtn, _refreshAutoSel = buildSelSubPanel(spCont, sPanels)
@@ -3701,7 +3708,7 @@ function buildPartsPanel(Cont, mPanels)
         local espStyleBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Style: ESP Labels",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=16},toolP)
 
-
+        -- initialize button visuals from saved state
         espBtn.BackgroundColor3 = useESP and Color3.fromRGB(16,32,56) or PAL.B_DEF
         espBtn.TextColor3 = useESP and Color3.fromRGB(100,150,255) or PAL.T1
         espBtn.Text = "Mode: "..(useESP and "ESP UI" or "Highlight (through walls)")
