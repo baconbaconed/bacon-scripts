@@ -1,14 +1,14 @@
-
 do
     local ok = false
     if type(sethiddenproperty) == "function" then
         local lp = game:GetService("Players").LocalPlayer
-        pcall(sethiddenproperty, lp, "ReplicationFocus", workspace)
+        pcall(sethiddenproperty, lp, "ReplicationFocus", nil)
         ok = pcall(sethiddenproperty,
             lp, "SimulationRadius", math.huge)
     end
     if not ok then return end
 end
+workspace.FallenPartsDestroyHeight = 0/0
 
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -22,7 +22,7 @@ local Mouse  = LP:GetMouse()
 
 local GUI = {
     DISPLAY_ORDER = 100000,
-    ESP_ORDER     = 100001,
+    ESP_ORDER     = 99999,
     ESP_ACCENT    = Color3.fromRGB(80, 255, 210),
     Z             = 64,
 }
@@ -50,15 +50,20 @@ local function stampGui(obj, z)
 end
 
 
-local connections   = {}
-local selectedParts = {}
-local partOffsets   = {}
-local highlights    = {}
-local npcHighlights = {} 
-local spcHighlight  = nil  
+connections   = {}
+selectedParts = {}
+partOffsets   = {}
+highlights    = {}
+npcHighlights = {}
+spcHighlight  = nil
+selectionProxyModel     = nil
+selectionProxyHighlight = nil
+selectionProxyParts     = {}
+partPhysProperties      = {}
+local refreshAllHighlights
 
 
-local EspScreenGui = Instance.new("ScreenGui")
+EspScreenGui = Instance.new("ScreenGui")
 EspScreenGui.Name             = "AtomizerESP"
 EspScreenGui.ResetOnSpawn     = false
 EspScreenGui.IgnoreGuiInset   = true
@@ -69,100 +74,126 @@ EspScreenGui.Parent           = getGuiParent()
 local function reg(c) table.insert(connections,c); return c end
 
 
-local activeMode   = "Tornado"
-local partSpeed    = 25
-local maxVelocity  = math.huge
-local formRadius   = 7
-local formSizeX    = 10
-local formSizeY    = 3
-local formSizeZ    = 10
-local formOffsetY  = 0
-local formScale    = 1.0
-local wallDist     = 7
-local wallGap      = 0.1
-local flingForce   = 800
-local flingRange   = 200
-local tornadoSpeed = 4
-local spiralHeight = 14
-local waveAmp      = 3
-local orbitRadius  = 9
-local autoSelRange = 60
-local ownerRadius  = 100
+activeMode   = "Tornado"
+partSpeed    = 25
+maxVelocity  = math.huge
+formRadius   = 7
+formSizeX    = 10
+formSizeY    = 3
+formSizeZ    = 10
+formOffsetY  = 0
+formScale    = 1.0
+wallDist     = 7
+wallGap      = 0.1
+flingForce   = 1500
+flingRange   = 300
+tornadoSpeed = 4
+spiralHeight = 14
+waveAmp      = 3
+orbitRadius  = 9
+autoSelRange = 60
+ownerRadius  = 100
 
-local autoSelectAll        = false
-local autoSelectNear       = false
-local autoSelectLastScan   = 0
-local AUTO_SELECT_INTERVAL = 5
+autoSelectAll        = false
+autoSelectNear       = false
+autoSelectLastScan   = 0
+AUTO_SELECT_INTERVAL = 5
 
-
-local frozen          = false
-local frozenTargets   = {}
-local globalOwnership = false
-local attracting      = false
-local attractTimer    = 0
-local fakeCollisions  = false
-
-local partTargets = {}
-local _bumpSign   = 1
-
-local minigunIdx       = 1
-local minigunShotStart = 0
-local minigunLastIdx   = 0
-local MINIGUN_STUCK    = 12
-
-local satFired           = {}
-local satTarget          = Vector3.zero
-local SAT_TTL            = 2.0
-local satTouchConns      = {}
-local anchorBombAnchored = {}
-
-local spcActive = false
-local spcPart   = nil
-local spcDepth  = 15
-local spcYOff   = 0
-
-local dv2Target = nil
-local dv2Label  = nil 
+strengthenParts      = false
+strengthenDensity    = 100
 
 
-local drawTrail      = {}
-local drawIndicators = {}
-local isDrawing      = false
-local cometHistory   = {}
-local COMET_MAX      = 500
-local slinkyHistory  = {}
-local SLINKY_MAX     = 400
+frozen          = false
+frozenTargets   = {}
+globalOwnership = false
+clickSelActive  = false
+attracting      = false
+attractTimer    = 0
+fakeCollisions  = false
+
+partTargets = {}
+_bumpSign   = 1
+
+minigunIdx       = 1
+minigunShotStart = 0
+minigunLastIdx   = 0
+MINIGUN_STUCK    = 12
+
+satFired           = {}
+satTarget          = Vector3.zero
+SAT_TTL            = 2.0
+satTouchConns      = {}
+barrageTouchConns  = {}
+railgunTouchConns  = railgunTouchConns or {}
+railgunHitRegistered = railgunHitRegistered or false
+railgunHitTarget   = railgunHitTarget or nil
+anchorBombAnchored = {}
+
+spcActive = false
+spcPart   = nil
+spcDepth  = 15
+spcYOff   = 0
+
+dv2Target = nil
+dv2Label  = nil
+
+homingTarget = nil
+homingEndTime = 0
+homingLabel  = nil
+groundY = groundY or nil
+targetY = targetY or nil
+wobble = 0
+
+railgunChargeStart = 0
+railgunCharging = false
+railgunFired = false
+railgunPhase = "idle"
+railgunPhaseStart = 0
+railgunHitPos = Vector3.zero
+railgunLabel = nil
+
+barrageActive = false
+barrageLabel = nil
 
 
-local npcTarget               = nil
-local npcSaved                = {}
-local npcConns                = {}
-local npcCam                  = { yaw=0, pitch=-0.25, dist=12 }
-local npcControlEnabled       = false
-local npcControlWalkSpeed     = 16
-local npcControlJumpPower     = 50
-local npcControlFreezeAutoJump = true
-local npcControlHaltMoveTo    = true
+drawTrail      = {}
+drawIndicators = {}
+isDrawing      = false
+cometHistory   = {}
+COMET_MAX      = 500
+slinkyHistory  = {}
+SLINKY_MAX     = 400
 
 
-local killAura         = false  local killAuraRange   = 25
-local sitAura          = false  local sitAuraRange    = 25
-local jumpAura         = false  local jumpAuraRange   = 25
-local followAura       = false  local followAuraRange = 40
-local freezeAura       = false  local freezeAuraRange = 25
-local speedAuraEnabled = false  local speedAuraRange  = 30  local speedAuraSpeed = 30
-local spinAuraEnabled  = false  local spinAuraRange   = 30  local spinAuraSpeed  = 6
+npcTarget               = nil
+npcSaved                = {}
+npcConns                = {}
+npcCam                  = { yaw=0, pitch=-0.25, dist=12 }
+npcControlEnabled       = false
+npcControlWalkSpeed     = 16
+npcControlJumpPower     = 50
+npcControlFreezeAutoJump = true
+npcControlHaltMoveTo    = true
 
 
-local fingerGunEnabled = false
-local grabGunEnabled   = false
-local sitGunEnabled    = false
-local grabbedNPC       = nil
-local grabbedRoot      = nil
-local localGrabArmed   = false
+killAura         = false  killAuraRange   = 25
+sitAura          = false  sitAuraRange    = 25
+jumpAura         = false  jumpAuraRange   = 25
+followAura       = false  followAuraRange = 40
+freezeAura       = false  freezeAuraRange = 25
+speedAuraEnabled = false  speedAuraRange  = 30  speedAuraSpeed = 30
+spinAuraEnabled  = false  spinAuraRange   = 30  spinAuraSpeed  = 6
 
 
-local NX = {
+fingerGunEnabled = false
+grabGunEnabled   = false
+sitGunEnabled    = false
+grabbedNPC       = nil
+grabbedRoot      = nil
+localGrabArmed   = false
+
+
+NX = {
     tkGun = false, held = nil, root = nil, savedPS = nil,
     FLOAT_Y = 2, DRAG = 16,
     freezeGun = false, frozen = {},
@@ -170,32 +201,35 @@ local NX = {
 }
 
 
-local _npcToolsRayParams = RaycastParams.new()
+_npcToolsRayParams = RaycastParams.new()
 _npcToolsRayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local GRAB_HOVER_Y_OFFSET = 3
-local GRAB_TOSS_POWER     = 720
-local GRAB_DRAG_POWER     = 180
-local FINGER_GUN_RANGE    = 10000
+GRAB_HOVER_Y_OFFSET = 3
+GRAB_TOSS_POWER     = 720
+GRAB_DRAG_POWER     = 180
+FINGER_GUN_RANGE    = 10000
 
-local useLimits    = false
-local partLimit    = 10
-local formationType = "Mouse"
-local clickFormPos  = Vector3.zero
-local useESP        = false
-local lastVelWrite  = {}
+useLimits    = false
+partLimit    = 10
+formationType = "Mouse"
+clickFormPos  = Vector3.zero
+useESP        = false
+espStyle      = "Label"
+lastVelWrite  = {}
 
-local CONFIG_FILE = "atomizer_saves.txt"
-local hasFileSystem = type(readfile) == "function" and type(writefile) == "function"
-local _lastConfigSave = 0
-local CONFIG_SAVE_INTERVAL = 2.5
+CONFIG_FILE = "atomizer_saves.txt"
+hasFileSystem = type(readfile) == "function" and type(writefile) == "function"
+_lastConfigSave = 0
+CONFIG_SAVE_INTERVAL = 2.5
 
-local CONFIG_KEYS = {
+CONFIG_KEYS = {
     "partSpeed", "maxVelocity", "formRadius", "formScale", "formSizeX", "formSizeY", "formSizeZ", "formOffsetY",
     "wallDist", "wallGap", "flingForce", "flingRange", "tornadoSpeed", "spiralHeight", "waveAmp", "orbitRadius",
     "autoSelRange", "ownerRadius", "killAuraRange", "sitAuraRange", "jumpAuraRange",
     "followAuraRange", "freezeAuraRange", "useLimits", "partLimit",
-    "formationType", "useESP", "activeMode",
+    "formationType", "useESP", "espStyle", "activeMode",
+    "espColor", "espFillTransparency", "espOutlineTransparency", "globalOwnership", "fakeCollisions",
+    "strengthenParts", "strengthenDensity",
 }
 
 local function encodeConfig(cfg)
@@ -252,6 +286,8 @@ local function saveConfig(force)
     local now = tick()
     if not force and (now - _lastConfigSave) < CONFIG_SAVE_INTERVAL then return end
     _lastConfigSave = now
+    local c = GUI.ESP_ACCENT
+    local colorStr = math.floor(c.R * 255) .. ", " .. math.floor(c.G * 255) .. ", " .. math.floor(c.B * 255)
     local cfg = {
         partSpeed=partSpeed, maxVelocity=maxVelocity, formRadius=formRadius,
         formScale=formScale, formSizeX=formSizeX, formSizeY=formSizeY, formSizeZ=formSizeZ, formOffsetY=formOffsetY,
@@ -263,7 +299,10 @@ local function saveConfig(force)
         jumpAuraRange=jumpAuraRange, followAuraRange=followAuraRange,
         freezeAuraRange=freezeAuraRange,
         useLimits=useLimits, partLimit=partLimit,
-        formationType=formationType, useESP=useESP, activeMode=activeMode,
+        formationType=formationType, useESP=useESP, espStyle=espStyle, activeMode=activeMode,
+        espColor=colorStr, espFillTransparency=HL.fillTransparency, espOutlineTransparency=HL.outlineTransparency,
+        globalOwnership=globalOwnership, fakeCollisions=fakeCollisions,
+        strengthenParts=strengthenParts, strengthenDensity=strengthenDensity,
     }
     writeConfigFile(encodeConfig(cfg))
 end
@@ -301,7 +340,34 @@ local function loadConfig()
     if cfg.partLimit ~= nil then partLimit = cfg.partLimit end
     if cfg.formationType ~= nil then formationType = cfg.formationType end
     if cfg.useESP ~= nil then useESP = cfg.useESP end
+    if cfg.espStyle ~= nil then espStyle = cfg.espStyle end
     if cfg.activeMode ~= nil then activeMode = cfg.activeMode end
+    if cfg.espColor ~= nil then
+        local r, g, b = cfg.espColor:match("([%d.]+),%s*([%d.]+),%s*([%d.]+)")
+        if r and g and b then
+            GUI.ESP_ACCENT = Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b))
+            HL.fillColor = GUI.ESP_ACCENT
+            HL.outlineColor = GUI.ESP_ACCENT
+        end
+    end
+    if cfg.espFillTransparency ~= nil then
+        HL.fillTransparency = tonumber(cfg.espFillTransparency) or HL.fillTransparency
+    end
+    if cfg.espOutlineTransparency ~= nil then
+        HL.outlineTransparency = tonumber(cfg.espOutlineTransparency) or HL.outlineTransparency
+    end
+    if cfg.globalOwnership ~= nil then
+        globalOwnership = cfg.globalOwnership
+    end
+    if cfg.fakeCollisions ~= nil then
+        fakeCollisions = cfg.fakeCollisions
+    end
+    if cfg.strengthenParts ~= nil then
+        strengthenParts = cfg.strengthenParts
+    end
+    if cfg.strengthenDensity ~= nil then
+        strengthenDensity = cfg.strengthenDensity
+    end
 end
 
 loadConfig()
@@ -319,6 +385,7 @@ local MODES = {
     "Seek",    "AnchorBomb", "Slinky",    "Fountain",
     "Bounce",  "Ripple",     "Juggle",    "Constellation",
     "Rose",    "OrbitSin",   "Liss",      "Swing",
+    "Aura",    "Homing",     "Railgun",   "Barrage",
 }
 
 
@@ -330,6 +397,7 @@ local preSimConn = RunService.PreSimulation and
         pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
         _OWN.preSim = -_OWN.preSim
         local jolt = _OWN.preSim * 0.006
+        local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
         for _, part in ipairs(selectedParts) do
             if part and part.Parent and not part.Anchored then
                 pcall(function()
@@ -340,7 +408,9 @@ local preSimConn = RunService.PreSimulation and
                         AP.MaxVelocity = math.huge
 
                         local tgt = partTargets[part]
-                        AP.Position = (tgt and tgt.position) or part.Position
+                        if not isVelMode then
+                            AP.Position = (tgt and tgt.position) or part.Position
+                        end
                     end
     
                     part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
@@ -354,6 +424,7 @@ local ownerConn = RunService.Heartbeat:Connect(function()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     _OWN.hb = -_OWN.hb
     local jolt = _OWN.hb * 0.007
+    local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
             pcall(function()
@@ -362,7 +433,9 @@ local ownerConn = RunService.Heartbeat:Connect(function()
                     AP.MaxForce    = math.huge
                     AP.MaxVelocity = math.huge
                     local tgt = partTargets[part]
-                    AP.Position = (tgt and tgt.position) or part.Position
+                    if not isVelMode then
+                        AP.Position = (tgt and tgt.position) or part.Position
+                    end
                 end
 
                 part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
@@ -385,6 +458,7 @@ local renderOwnerConn = RunService.RenderStepped:Connect(function()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     _OWN.render = -_OWN.render
     local bump = _OWN.render * 0.005
+    local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
             pcall(function()
@@ -394,7 +468,9 @@ local renderOwnerConn = RunService.RenderStepped:Connect(function()
                     AP.MaxForce    = math.huge
                     AP.MaxVelocity = math.huge
                     local tgt = partTargets[part]
-                    AP.Position = (tgt and tgt.position) or part.Position
+                    if not isVelMode then
+                        AP.Position = (tgt and tgt.position) or part.Position
+                    end
                 end
                 part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
                     + Vector3.new(0, bump, 0)
@@ -421,12 +497,15 @@ end
 function syncAlignTarget(part, target)
     if not (part and part.Parent and target) then return end
 
+    local posResponsiveness = target.responsiveness or 120
+    local rotResponsiveness = target.rotResponsiveness or math.max(80, posResponsiveness * 0.7)
+
     local AP = getNetAP(part)
     if AP then
         AP.Mode               = Enum.PositionAlignmentMode.OneAttachment
         AP.MaxForce           = math.huge
         AP.MaxVelocity        = math.huge
-        AP.Responsiveness     = 120
+        AP.Responsiveness     = posResponsiveness
         AP.RigidityEnabled    = false
         AP.ApplyAtCenterOfMass = true
         AP.Position           = target.position or part.Position
@@ -437,7 +516,7 @@ function syncAlignTarget(part, target)
         AO.Mode               = Enum.OrientationAlignmentMode.OneAttachment
         AO.MaxTorque          = math.huge
         AO.MaxAngularVelocity = math.huge
-        AO.Responsiveness     = 80
+        AO.Responsiveness     = rotResponsiveness
         AO.RigidityEnabled    = true
         AO.CFrame             = target.rotation or part.CFrame
     end
@@ -447,6 +526,7 @@ function syncAlignTarget(part, target)
 end
 
 local smoothMovementConn = RunService.RenderStepped:Connect(function()
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
             pcall(function()
@@ -503,6 +583,8 @@ end
 local function reclaimOnTouch(part)
     if not part or not part.Parent then return end
 
+    local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
+
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     local target = partTargets[part]
     pcall(function()
@@ -511,7 +593,9 @@ local function reclaimOnTouch(part)
         if AP then
             AP.MaxForce    = math.huge
             AP.MaxVelocity = math.huge
-            AP.Position    = (target and target.position) or part.Position
+            if not isVelMode then
+                AP.Position    = (target and target.position) or part.Position
+            end
         end
         local AO = getNetAO(part)
         if AO then
@@ -570,6 +654,58 @@ local function clearModeState(prevMode, nextMode)
         if dv2Label and nextMode ~= "DroneV2" then
             dv2Label.Text = "Inactive"
         end
+        if prevMode == "DroneV2" then
+            for _, part in ipairs(selectedParts) do
+                if part and part.Parent then
+                    pcall(sethiddenproperty, part, "PhysicsRepRootPart", nil)
+                end
+                local AP = getNetAP(part)
+                if AP then AP.Enabled = true end
+                local AO = getNetAO(part)
+                if AO then AO.Enabled = true end
+            end
+        end
+    end
+    if prevMode == "Homing" or nextMode ~= "Homing" then
+        homingTarget = nil
+        homingEndTime = 0
+        if homingLabel and nextMode ~= "Homing" then
+            homingLabel.Text = "Inactive"
+        end
+        if prevMode == "Homing" then
+            for _, part in ipairs(selectedParts) do
+                if part and part.Parent then
+                    pcall(sethiddenproperty, part, "PhysicsRepRootPart", nil)
+                end
+                local AP = getNetAP(part)
+                if AP then AP.Enabled = true end
+                local AO = getNetAO(part)
+                if AO then AO.Enabled = true end
+            end
+        end
+    end
+    if prevMode == "Railgun" or nextMode ~= "Railgun" then
+        railgunChargeStart = 0
+        railgunCharging = false
+        railgunFired = false
+        railgunPhase = "idle"
+        railgunPhaseStart = 0
+        railgunHitPos = Vector3.zero
+        railgunHitRegistered = false
+        railgunHitTarget = nil
+        for part, conn in pairs(railgunTouchConns) do
+            pcall(function() conn:Disconnect() end)
+            railgunTouchConns[part] = nil
+        end
+        if railgunLabel and nextMode ~= "Railgun" then
+            railgunLabel.Text = "Inactive"
+        end
+    end
+    if prevMode == "Barrage" or nextMode ~= "Barrage" then
+        barrageActive = false
+        if barrageLabel and nextMode ~= "Barrage" then
+            barrageLabel.Text = "Inactive"
+        end
     end
     if prevMode == "AnchorBomb" and nextMode ~= "AnchorBomb" then
         for part in pairs(anchorBombAnchored) do
@@ -593,58 +729,66 @@ local function clearModeState(prevMode, nextMode)
     end
 end
 
-local _wallCache = nil
-local function _wallTarget(index, total, part, t)
-    local char   = LP.Character
-    local root   = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return currentMouseHit end
-
-    local mHit   = getFormationCenterTarget()
-    local rp     = root.Position
-    local scX    = math.max(0, formSizeX) / 10
-    local scZ    = math.max(0, formSizeZ) / 10
-    local scR    = math.max(scX, scZ)
-    local scY    = math.max(0, formSizeY) / 3
-
-    local ck     = total
-    local entry  = _wallCache
-    if not entry or not entry[total] then
-        local rootCF = root.CFrame
-        local totalX = 0
-        local totalY = 0
-        local n      = math.max(total, 1)
-        for i = 1, total do
-            local p = selectedParts[i]
-            if p and p.Parent then
-                totalX += (p.Size.X or 0)
-                totalY += (p.Size.Y or 0)
-            end
-        end
-        local avgX   = totalX / n
-        local avgY   = totalY / n
-        local cols   = math.ceil(math.sqrt(total))
-        local rows   = math.ceil(total / cols)
-        local spacingX = avgX + wallGap
-        local spacingY = avgY + wallGap
-        local ctr    = rp + rootCF.LookVector * wallDist * math.max(scX, scZ)
-        local xs     = { avgX = avgX, avgY = avgY, spacingX = spacingX, spacingY = spacingY, ctr = ctr, rows = rows, cols = cols }
-        _wallCache  = { [total] = xs }
-    end
-
-    local info  = _wallCache[total]
-    local cols  = info.cols
-    local ctr   = info.ctr
-    local spacingX = info.spacingX
-    local spacingY = info.spacingY
-    local col   = ((index - 1) % cols) - (cols - 1) / 2
-    local rows  = info.rows
-    local row   = math.floor((index - 1) / cols) - (rows - 1) / 2
-    return ctr + root.CFrame.RightVector * (col * spacingX) + Vector3.new(0, row * spacingY, 0)
-end
-
 local espLabels = {}
 
-local function createEspTag(part)
+local function getPartScreenRect(part)
+
+    local ok, pCFrame, pSize = pcall(function() return part:GetBoundingBox() end)
+    local half
+    if ok and pCFrame and pSize then
+        half = pSize * 0.5
+    else
+        half = part.Size * 0.5
+        pCFrame = part.CFrame
+    end
+
+    local localOffsets = {
+        Vector3.new(-half.X, -half.Y, -half.Z), Vector3.new(-half.X, -half.Y, half.Z),
+        Vector3.new(-half.X, half.Y, -half.Z),  Vector3.new(-half.X, half.Y, half.Z),
+        Vector3.new(half.X, -half.Y, -half.Z),  Vector3.new(half.X, -half.Y, half.Z),
+        Vector3.new(half.X, half.Y, -half.Z),   Vector3.new(half.X, half.Y, half.Z),
+    }
+
+    local minX, minY, maxX, maxY
+    local anyVisible = false
+    for _, offset in ipairs(localOffsets) do
+        local worldPos = pCFrame:PointToWorldSpace(offset)
+        local screenPos, onScreen = Camera:WorldToScreenPoint(worldPos)
+        if onScreen and screenPos.Z > 0 then
+            anyVisible = true
+            minX = minX and math.min(minX, screenPos.X) or screenPos.X
+            minY = minY and math.min(minY, screenPos.Y) or screenPos.Y
+            maxX = maxX and math.max(maxX, screenPos.X) or screenPos.X
+            maxY = maxY and math.max(maxY, screenPos.Y) or screenPos.Y
+        end
+    end
+    return anyVisible, minX, minY, maxX, maxY
+end
+
+local function createEspOverlay(part, style)
+    style = style or "Label"
+    if style == "Box" then
+        local tag = Instance.new("Frame")
+        tag.Name = "ESP_BOX_" .. part.Name
+        tag.Size = UDim2.new(0, 120, 0, 120)
+        tag.AnchorPoint = Vector2.new(0.5, 0.5)
+        tag.BackgroundTransparency = 1
+        tag.BorderSizePixel = 0
+        tag.Visible = true
+        tag.ZIndex = 20
+        tag.Parent = EspScreenGui
+
+        local stroke = Instance.new("UIStroke", tag)
+        stroke.Color = GUI.ESP_ACCENT
+        stroke.Thickness = 2
+        stroke.Transparency = 0
+
+        local corner = Instance.new("UICorner", tag)
+        corner.CornerRadius = UDim.new(0, 8)
+
+        return { frame = tag, style = "Box", stroke = stroke }
+    end
+
     local tag = Instance.new("Frame")
     tag.Name = "ESP_" .. part.Name
     tag.Size = UDim2.new(0, 140, 0, 44)
@@ -707,33 +851,73 @@ local function createEspTag(part)
     modeLbl.ZIndex = 22
     modeLbl.Text = "CTRL"
 
-    return { frame = tag, nameLbl = nameLbl, distLbl = distLbl, modeLbl = modeLbl }
+    return { frame = tag, nameLbl = nameLbl, distLbl = distLbl, modeLbl = modeLbl, style = "Label" }
 end
 
 local function addHL(part)
     if highlights[part] then return end
 
     if useESP then
-        local tag = createEspTag(part)
+        local tag = createEspOverlay(part, espStyle)
         espLabels[part] = tag
         highlights[part] = tag.frame
     else
+        if not selectionProxyModel or not selectionProxyModel.Parent then
+            selectionProxyModel = Instance.new("Model")
+            selectionProxyModel.Name = "AtomizerSelectionProxy"
+            selectionProxyModel.Parent = workspace
 
-        local hl = Instance.new("Highlight")
-        hl.Adornee             = part
-        hl.FillColor           = HL.fillColor
-        hl.OutlineColor        = HL.outlineColor
-        hl.FillTransparency    = HL.fillTransparency
-        hl.OutlineTransparency = HL.outlineTransparency
-        hl.DepthMode           = HL.depthMode
-        hl.Parent              = part
-        highlights[part] = hl
+            local hum = Instance.new("Humanoid")
+            hum.Name = "ProxyHumanoid"
+            hum.Parent = selectionProxyModel
+
+            selectionProxyHighlight = Instance.new("Highlight")
+            selectionProxyHighlight.Name = "AtomizerSelectionHighlight"
+            selectionProxyHighlight.Adornee = selectionProxyModel
+            selectionProxyHighlight.Parent = selectionProxyModel
+            refreshAllHighlights()
+        end
+
+        local proxy = selectionProxyParts[part]
+        if not proxy or not proxy.Parent then
+            proxy = Instance.new("Part")
+            proxy.Name = "HLProxy"
+            proxy.Anchored = true
+            proxy.CanCollide = false
+            proxy.CanTouch = false
+            proxy.CanQuery = false
+            proxy.CastShadow = false
+            proxy.Locked = true
+            proxy.Massless = true
+            proxy.Transparency = 0.95
+            proxy.Material = Enum.Material.SmoothPlastic
+            proxy.Size = Vector3.new(1, 1, 1)
+            proxy.Parent = selectionProxyModel
+            selectionProxyParts[part] = proxy
+        end
+
+        proxy.CFrame = part.CFrame
+        proxy.Size = Vector3.new(
+            math.max(part.Size.X, 0.05),
+            math.max(part.Size.Y, 0.05),
+            math.max(part.Size.Z, 0.05)
+        )
+        highlights[part] = true
     end
 end
 
-local function refreshAllHighlights()
+refreshAllHighlights = function()
     for part, hl in pairs(highlights) do
-        if hl:IsA("Highlight") then
+        local tag = espLabels[part]
+        if tag and tag.frame then
+            local stroke = tag.frame:FindFirstChildOfClass("UIStroke")
+            if stroke then
+                stroke.Color = GUI.ESP_ACCENT
+            end
+            if tag.nameLbl then
+                tag.nameLbl.TextColor3 = GUI.ESP_ACCENT
+            end
+        elseif typeof(hl) == "Instance" and hl:IsA("Highlight") then
             hl.FillColor           = HL.fillColor
             hl.OutlineColor        = HL.outlineColor
             hl.FillTransparency    = HL.fillTransparency
@@ -741,13 +925,77 @@ local function refreshAllHighlights()
             hl.DepthMode           = HL.depthMode
         end
     end
+
+    if selectionProxyHighlight and selectionProxyHighlight.Parent then
+        selectionProxyHighlight.FillColor = HL.fillColor
+        selectionProxyHighlight.OutlineColor = HL.outlineColor
+        selectionProxyHighlight.FillTransparency = HL.fillTransparency
+        selectionProxyHighlight.OutlineTransparency = HL.outlineTransparency
+        selectionProxyHighlight.DepthMode = HL.depthMode
+    end
 end
 
 local function removeHL(part)
     if highlights[part] then
-        highlights[part]:Destroy()
+        local hl = highlights[part]
+        if typeof(hl) == "Instance" then
+            hl:Destroy()
+        end
         highlights[part] = nil
         espLabels[part] = nil
+    end
+
+    local proxy = selectionProxyParts[part]
+    if proxy then
+        pcall(function() proxy:Destroy() end)
+        selectionProxyParts[part] = nil
+    end
+
+    if selectionProxyModel and not next(selectionProxyParts) then
+        if selectionProxyHighlight then
+            pcall(function() selectionProxyHighlight:Destroy() end)
+            selectionProxyHighlight = nil
+        end
+        pcall(function() selectionProxyModel:Destroy() end)
+        selectionProxyModel = nil
+    end
+end
+
+local function syncSelectionProxyModel()
+    if useESP then
+        if selectionProxyHighlight then
+            pcall(function() selectionProxyHighlight:Destroy() end)
+            selectionProxyHighlight = nil
+        end
+        if selectionProxyModel then
+            pcall(function() selectionProxyModel:Destroy() end)
+            selectionProxyModel = nil
+        end
+        selectionProxyParts = {}
+        return
+    end
+
+    for part, proxy in pairs(selectionProxyParts) do
+        if not highlights[part] or not part or not part.Parent then
+            pcall(function() proxy:Destroy() end)
+            selectionProxyParts[part] = nil
+        elseif proxy and proxy.Parent then
+            proxy.CFrame = part.CFrame
+            proxy.Size = Vector3.new(
+                math.max(part.Size.X, 0.05),
+                math.max(part.Size.Y, 0.05),
+                math.max(part.Size.Z, 0.05)
+            )
+        end
+    end
+
+    if selectionProxyModel and not next(selectionProxyParts) then
+        if selectionProxyHighlight then
+            pcall(function() selectionProxyHighlight:Destroy() end)
+            selectionProxyHighlight = nil
+        end
+        pcall(function() selectionProxyModel:Destroy() end)
+        selectionProxyModel = nil
     end
 end
 
@@ -786,13 +1034,13 @@ local function updateSpcHighlight(part)
         hl.FillTransparency = 0.6
         hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.Parent = EspScreenGui
+        hl.Parent = part
         spcHighlight = hl
     end
 end
 
 local function updateESP()
-    if not useESP or not next(espLabels) then return end
+    if not next(espLabels) then return end
 
     local char = LP.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -805,17 +1053,31 @@ local function updateESP()
             espLabels[part] = nil
             if frame then pcall(function() frame:Destroy() end) end
         elseif frame then
-            local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
-            if onScreen and screenPos.Z > 0 then
-                frame.Visible = true
-                frame.Position = UDim2.fromOffset(screenPos.X, screenPos.Y - inset.Y)
-                local dist = (part.Position - myPos).Magnitude
-                tag.distLbl.Text = string.format("%.0f studs", dist)
-                local pName = part.Parent and part.Parent:IsA("Model") and part.Parent.Name or part.Name
-                tag.nameLbl.Text = pName:sub(1, 18)
-                tag.modeLbl.Text = activeMode:sub(1, 6)
+            if tag.style == "Box" then
+                local visible, minX, minY, maxX, maxY = getPartScreenRect(part)
+                if visible and minX and minY and maxX and maxY then
+                    frame.Visible = true
+                    frame.Size = UDim2.fromOffset(math.max(10, maxX - minX + 8), math.max(10, maxY - minY + 8))
+
+                    local centerX = (minX + maxX) * 0.5
+                    local centerY = (minY + maxY) * 0.5 - inset.Y
+                    frame.Position = UDim2.fromOffset(centerX, centerY)
+                else
+                    frame.Visible = false
+                end
             else
-                frame.Visible = false
+                local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                if onScreen and screenPos.Z > 0 then
+                    frame.Visible = true
+                    frame.Position = UDim2.fromOffset(screenPos.X, screenPos.Y - inset.Y)
+                    local dist = (part.Position - myPos).Magnitude
+                    tag.distLbl.Text = string.format("%.0f studs", dist)
+                    local pName = part.Parent and part.Parent:IsA("Model") and part.Parent.Name or part.Name
+                    tag.nameLbl.Text = pName:sub(1, 18)
+                    tag.modeLbl.Text = activeMode:sub(1, 6)
+                else
+                    frame.Visible = false
+                end
             end
         end
     end
@@ -867,6 +1129,16 @@ local r=math.random
     )
     table.insert(selectedParts,part)
     addHL(part)
+    if strengthenParts then
+        if not partPhysProperties[part] then
+            partPhysProperties[part] = {
+                CustomPhysicalProperties = part.CustomPhysicalProperties
+            }
+        end
+        pcall(function()
+            part.CustomPhysicalProperties = PhysicalProperties.new(strengthenDensity, 0.3, 0.5)
+        end)
+    end
     pcall(function() disableSelectedCollision(part) end)
 
     partTouchConns[part] = part.Touched:Connect(function()
@@ -947,6 +1219,15 @@ local function cleanupPartState(part, destroyPart)
 
     removeHL(part)
 
+    if partPhysProperties[part] then
+        pcall(function()
+            if part.Parent then
+                part.CustomPhysicalProperties = partPhysProperties[part].CustomPhysicalProperties
+            end
+        end)
+        partPhysProperties[part] = nil
+    end
+
     if partTouchConns[part] then
         pcall(function() partTouchConns[part]:Disconnect() end)
         partTouchConns[part] = nil
@@ -955,6 +1236,11 @@ local function cleanupPartState(part, destroyPart)
     if satTouchConns[part] then
         pcall(function() satTouchConns[part]:Disconnect() end)
         satTouchConns[part] = nil
+    end
+
+    if barrageTouchConns[part] then
+        pcall(function() barrageTouchConns[part]:Disconnect() end)
+        barrageTouchConns[part] = nil
     end
 
     restoreSelectedCollision(part)
@@ -979,6 +1265,8 @@ local function cleanupPartState(part, destroyPart)
             local sr = part:FindFirstChild("ServerResponse")
             if sr then sr:Destroy() end
 
+            pcall(sethiddenproperty, part, "PhysicsRepRootPart", nil)
+
             if destroyPart then
                 part:Destroy()
             end
@@ -992,8 +1280,33 @@ local function cleanupPartState(part, destroyPart)
     satFired[part] = nil
 end
 
+local function updatePhysPropertiesForSelected()
+    for _, part in ipairs(selectedParts) do
+        if part and part.Parent then
+            if strengthenParts then
+                if not partPhysProperties[part] then
+                    partPhysProperties[part] = {
+                        CustomPhysicalProperties = part.CustomPhysicalProperties
+                    }
+                end
+                pcall(function()
+                    part.CustomPhysicalProperties = PhysicalProperties.new(strengthenDensity, 0.3, 0.5)
+                end)
+            else
+                if partPhysProperties[part] then
+                    pcall(function()
+                        part.CustomPhysicalProperties = partPhysProperties[part].CustomPhysicalProperties
+                    end)
+                    partPhysProperties[part] = nil
+                end
+            end
+        end
+    end
+end
+
 local function resetSelectionState()
     selectedParts = {}
+    partPhysProperties = {}
     partOffsets = {}
     frozenTargets = {}
     partTargets = {}
@@ -1190,6 +1503,55 @@ local function getFormationCenterTarget()
     else
         return currentMouseHit
     end
+end
+
+local _wallCache = nil
+local function _wallTarget(index, total, part, t)
+    local char   = LP.Character
+    local root   = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return currentMouseHit end
+
+    local mHit   = getFormationCenterTarget()
+    local rp     = root.Position
+    local scX    = math.max(0, formSizeX) / 10
+    local scZ    = math.max(0, formSizeZ) / 10
+    local scR    = math.max(scX, scZ)
+    local scY    = math.max(0, formSizeY) / 3
+
+    local ck     = total
+    local entry  = _wallCache
+    if not entry or not entry[total] then
+        local rootCF = root.CFrame
+        local totalX = 0
+        local totalY = 0
+        local n      = math.max(total, 1)
+        for i = 1, total do
+            local p = selectedParts[i]
+            if p and p.Parent then
+                totalX += (p.Size.X or 0)
+                totalY += (p.Size.Y or 0)
+            end
+        end
+        local avgX   = totalX / n
+        local avgY   = totalY / n
+        local cols   = math.ceil(math.sqrt(total))
+        local rows   = math.ceil(total / cols)
+        local spacingX = avgX + wallGap
+        local spacingY = avgY + wallGap
+        local ctr    = rp + rootCF.LookVector * wallDist * math.max(scX, scZ)
+        local xs     = { avgX = avgX, avgY = avgY, spacingX = spacingX, spacingY = spacingY, ctr = ctr, rows = rows, cols = cols }
+        _wallCache  = { [total] = xs }
+    end
+
+    local info  = _wallCache[total]
+    local cols  = info.cols
+    local ctr   = info.ctr
+    local spacingX = info.spacingX
+    local spacingY = info.spacingY
+    local col   = ((index - 1) % cols) - (cols - 1) / 2
+    local rows  = info.rows
+    local row   = math.floor((index - 1) / cols) - (rows - 1) / 2
+    return ctr + root.CFrame.RightVector * (col * spacingX) + Vector3.new(0, row * spacingY, 0)
 end
 
 local function getTarget(index, total, part, t)
@@ -1622,6 +1984,81 @@ local function getTarget(index, total, part, t)
             pos = pos:Lerp(currentMouseHit + Vector3.new(0, 2*scY, 0), blend)
         end
         return pos
+
+    elseif activeMode=="Aura" then
+        local layer = (index - 1) % 3
+        local layerIdx = math.floor((index - 1) / 3)
+        local layers = math.max(1, math.ceil(total / 3))
+
+        local baseR = formRadius * scR * (1 + layer * 0.4)
+        local spinSpeed = 1.2 + layer * 0.5
+        local orbitSpeed = 0.8 + layer * 0.3
+        local bobSpeed = 2.5 + layer * 0.8
+
+        local orbitAngle = angle + t * orbitSpeed
+        local spinAngle = angle * 2 + t * spinSpeed + index * 0.5
+        local bobOffset = math.sin(t * bobSpeed + index * 0.7) * (1.5 + layer * 0.5) * scY
+
+        local wobbleX = math.sin(t * 3 + index * 1.2) * 0.8 * scX
+        local wobbleZ = math.cos(t * 2.5 + index * 0.9) * 0.8 * scZ
+
+        local r = baseR * (0.85 + 0.15 * math.sin(spinAngle))
+
+        return Vector3.new(
+            mHit.X + math.cos(orbitAngle) * r * scX + wobbleX,
+            mHit.Y + 3 * scY + bobOffset + layer * 1.5 * scY,
+            mHit.Z + math.sin(orbitAngle) * r * scZ + wobbleZ)
+
+    elseif activeMode=="Homing" then
+        if homingTarget and tick() < homingEndTime then
+            return homingTarget.Position + Vector3.new(
+                math.sin(t * 10 + index * 2) * 0.6,
+                math.cos(t * 8 + index * 1.5) * 0.6,
+                math.sin(t * 11 + index * 2.5) * 0.6)
+        end
+        return mHit + (partOffsets[part] or Vector3.zero) * 0.5
+
+    elseif activeMode=="Railgun" then
+        if railgunFired then
+            if railgunPhase == "firing" then
+                local beamDir = (railgunHitPos - rp).Unit
+                local beamDist = (rp - railgunHitPos).Magnitude
+                local p = math.clamp(ratio * 1.5, 0, 1)
+                local spread = Vector3.new(
+                    math.sin(index * 1.9 + t * 5) * 1.2 * scX,
+                    math.cos(index * 1.7 + t * 4.5) * 1.0 * scY,
+                    math.sin(index * 2.5 + t * 5.3) * 1.0 * scZ)
+                return rp + beamDir * (p * math.min(beamDist, 4000)) + spread
+            elseif railgunPhase == "exploding" then
+                local spread = math.sin(t * 8 + index * 2) * 1.5 * scX
+                return railgunHitPos + Vector3.new(
+                    math.sin(index * 2.3 + t * 6) * spread,
+                    math.cos(index * 1.7 + t * 5) * spread + 2 * scY,
+                    math.cos(index * 1.9 + t * 7) * spread)
+            elseif railgunPhase == "returning" then
+                local returnPos = rp + Vector3.new(0, 8 * scY, 0) + root.CFrame.LookVector * -2
+                local p = math.clamp((tick() - railgunPhaseStart) / 1.5, 0, 1)
+                return railgunHitPos:Lerp(returnPos, p)
+            end
+        end
+        return rp + Vector3.new(0, 3 * scY, 0) + root.CFrame.LookVector * 2
+
+    elseif activeMode=="Barrage" then
+        groundY = getGroundYAt(mHit.X, mHit.Z, mHit.Y, part)
+        targetY = groundY and (groundY + (part and part.Size.Y * 0.5 or 1) + 0.1) or (mHit.Y + (part and part.Size.Y * 0.5 or 1) + 0.1)
+        local launchHeight = math.clamp(35 + math.max(scX, scZ) * 8, 35, 80)
+        local dropTime = 1.0
+        local timeInFlight = (t + index * 0.12) % dropTime
+        local progress = timeInFlight / dropTime
+        local spread = 3 * math.max(scX, scZ)
+        local offsetX = math.sin(angle + t * 0.4 + index * 0.25) * spread
+        local offsetZ = math.cos(angle + t * 0.4 + index * 0.25) * spread
+        local height = launchHeight * (1 - progress)
+        wobble = math.sin(progress * math.pi) * 2
+        return Vector3.new(
+            mHit.X + offsetX,
+            targetY + height + wobble,
+            mHit.Z + offsetZ)
     end
 
     return mHit
@@ -1635,9 +2072,6 @@ local function tickParts()
     
 
     local partsToUse = total
-    if useLimits and total > partLimit then
-        partsToUse = partLimit
-    end
 
     local cRoot=char and char:FindFirstChild("HumanoidRootPart")
     if cRoot then
@@ -1717,6 +2151,122 @@ local function tickParts()
         dv2Label.Text="Inactive"; dv2Target=nil
     end
 
+    if activeMode=="Homing" and total>0 then
+        if tick() >= homingEndTime then
+            homingTarget = nil
+            local myRoot=char and char:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                local best=500+1
+                local mouseRay = Camera:ViewportPointToRay(Mouse.X, Mouse.Y)
+                local mousePos = mouseRay.Origin + mouseRay.Direction * 100
+                for _,plr in ipairs(Players:GetPlayers()) do
+                    if plr~=LP and plr.Character then
+                        local tr=plr.Character:FindFirstChild("HumanoidRootPart")
+                        if tr then
+                            local d=(tr.Position-mousePos).Magnitude
+                            if d<best then best=d; homingTarget=tr end
+                        end
+                    end
+                end
+            end
+            if homingTarget then
+                homingEndTime = tick() + 6
+            end
+        end
+        if homingLabel then
+            homingLabel.Text = homingTarget and tick() < homingEndTime
+                and "Chasing: "..(homingTarget.Parent and homingTarget.Parent.Name or "?")
+                or "Click to target"
+        end
+    elseif homingLabel and activeMode~="Homing" then
+        homingLabel.Text="Inactive"; homingTarget=nil
+    end
+
+    if activeMode=="Railgun" and total>0 then
+        local now = tick()
+        if railgunCharging then
+            if now - railgunChargeStart >= 1 then
+                railgunCharging = false
+                railgunFired = true
+                railgunPhase = "firing"
+                railgunPhaseStart = now
+                local myRoot=char and char:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    local dir = (currentMouseHit - myRoot.Position).Unit
+                    local rayParams = RaycastParams.new()
+                    rayParams.FilterDescendantsInstances = getMouseExcludeList()
+                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                    local hit = workspace:Raycast(myRoot.Position, dir * 4000, rayParams)
+                    if hit then
+                        railgunHitPos = hit.Position
+                    else
+                        railgunHitPos = myRoot.Position + dir * 4000
+                    end
+                end
+            end
+        end
+        if railgunFired then
+            if railgunPhase == "firing" then
+                local allArrived = true
+                for _, part in ipairs(selectedParts) do
+                    if part and part.Parent then
+                        if (part.Position - railgunHitPos).Magnitude > 8 then
+                            allArrived = false
+                            break
+                        end
+                    end
+                end
+                if allArrived or now - railgunPhaseStart > 1.5 then
+                    railgunPhase = "exploding"
+                    railgunPhaseStart = now
+                end
+            elseif railgunPhase == "exploding" and now - railgunPhaseStart >= 2 then
+                railgunPhase = "returning"
+                railgunPhaseStart = now
+            elseif railgunPhase == "returning" then
+                local allBack = true
+                local myRoot=char and char:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    for _, part in ipairs(selectedParts) do
+                        if part and part.Parent then
+                            if (part.Position - (myRoot.Position + Vector3.new(0, 8, 0))).Magnitude > 5 then
+                                allBack = false
+                                break
+                            end
+                        end
+                    end
+                    if allBack then
+                        railgunFired = false
+                        railgunPhase = "idle"
+                        railgunHitPos = Vector3.zero
+                    end
+                end
+            end
+        end
+        if railgunLabel then
+            if railgunCharging then
+                railgunLabel.Text = "Charging: "..math.floor((now - railgunChargeStart) * 100).."%"
+            elseif railgunFired then
+                if railgunPhase == "firing" then railgunLabel.Text = "BEAM FIRING"
+                elseif railgunPhase == "exploding" then railgunLabel.Text = "EXPLODING!"
+                else railgunLabel.Text = "Returning..." end
+            else
+                railgunLabel.Text = "Hold click to charge"
+            end
+        end
+    elseif railgunLabel and activeMode~="Railgun" then
+        railgunLabel.Text="Inactive"; railgunCharging=false; railgunFired=false; railgunPhase="idle"; railgunHitPos=Vector3.zero
+    end
+
+    if activeMode=="Barrage" and total>0 then
+        barrageActive = true
+        if barrageLabel then
+            barrageLabel.Text = "Barraging..."
+        end
+    elseif barrageLabel and activeMode~="Barrage" then
+        barrageLabel.Text="Inactive"; barrageActive=false
+    end
+
 
     if attracting then
         attractTimer+=1/60
@@ -1749,14 +2299,21 @@ local function tickParts()
     if activeMode=="Satellite" then
         local now = tick()
         for p, fireTime in pairs(satFired) do
-            if not p or not p.Parent then
-                satFired[p] = nil
-                if satTouchConns[p] then
-                    pcall(function() satTouchConns[p]:Disconnect() end)
-                    satTouchConns[p] = nil
+            if p and p.Parent then
+                local vel = p.AssemblyLinearVelocity
+                local speed = vel.Magnitude
+                if speed > 1200 then
+                    p.AssemblyLinearVelocity = vel * (1200 / speed)
                 end
-            elseif (now - fireTime) > SAT_TTL
-                or (p.Position - satTarget).Magnitude < 3 then
+                if (now - fireTime) > SAT_TTL
+                    or (p.Position - satTarget).Magnitude < 3 then
+                    satFired[p] = nil
+                    if satTouchConns[p] then
+                        pcall(function() satTouchConns[p]:Disconnect() end)
+                        satTouchConns[p] = nil
+                    end
+                end
+            else
                 satFired[p] = nil
                 if satTouchConns[p] then
                     pcall(function() satTouchConns[p]:Disconnect() end)
@@ -1773,6 +2330,9 @@ local function tickParts()
     local wallRoot = isWall and (char and char:FindFirstChild("HumanoidRootPart"))
     local isDV2    = activeMode=="DroneV2"
     local isAB     = activeMode=="AnchorBomb"
+    local isHoming = activeMode=="Homing"
+    local isRail   = activeMode=="Railgun"
+    local isBarr   = activeMode=="Barrage"
 
     for i=#selectedParts,1,-1 do
         local part=selectedParts[i]
@@ -1780,7 +2340,7 @@ local function tickParts()
             removeHL(part); table.remove(selectedParts,i); frozenTargets[part]=nil; partTargets[part]=nil
         else
 
-            if useLimits and i > partsToUse then
+            if false then
                 pcall(function()
                     part.AssemblyLinearVelocity = Vector3.zero
                     part.AssemblyAngularVelocity = Vector3.zero
@@ -1822,34 +2382,195 @@ local function tickParts()
                     end
                 end
 
-                if isDV2 and dv2Target then
-                    pcall(function()
+if isDV2 then
+                    local AP = getNetAP(part)
+                    if AP then AP.Enabled = true end
+                    local AO = getNetAO(part)
+                    if AO then AO.Enabled = true end
 
+                    if not partTargets[part] then partTargets[part] = {} end
+
+                    if dv2Target and dv2Target.Parent then
+                        local targetVel = dv2Target.AssemblyLinearVelocity
+                        local planarVel = Vector3.new(targetVel.X, 0, targetVel.Z)
+                        local planarLook = Vector3.new(dv2Target.CFrame.LookVector.X, 0, dv2Target.CFrame.LookVector.Z)
+                        local lookBase = planarVel.Magnitude > 10 and planarVel.Unit or planarLook
+                        if lookBase.Magnitude < 0.001 then
+                            local fallbackDir = Vector3.new(part.Position.X - dv2Target.Position.X, 0, part.Position.Z - dv2Target.Position.Z)
+                            lookBase = fallbackDir.Magnitude > 0.001 and fallbackDir.Unit or Vector3.new(0, 0, -1)
+                        else
+                            lookBase = lookBase.Unit
+                        end
+                        local attackClock = t * 34 + i * 1.05
+                        local passSign = math.sin(attackClock) >= 0 and 1 or -1
+                        local passDistance = 4.2 + math.sin(attackClock * 0.7) * 0.9
+                        local passOffset = lookBase * (passDistance * passSign)
+                        local verticalOffset = Vector3.new(0, math.cos(attackClock * 2.1) * 0.45, 0)
+                        local leadOffset = planarVel.Magnitude > 0 and planarVel.Unit * math.min(planarVel.Magnitude * 0.012, 2.5) or Vector3.zero
+                        tgt = dv2Target.Position + passOffset + verticalOffset + leadOffset
+
+                        responsiveness = math.max(responsiveness, 200)
+                        partTargets[part].rotResponsiveness = 200
+
+                        local diff = tgt - part.Position
+                        local dist = diff.Magnitude
+                        local targetGap = (part.Position - dv2Target.Position).Magnitude
+                        if targetGap > 140 then
+                            tgt = dv2Target.Position - lookBase * 3.5
+                            diff = tgt - part.Position
+                            dist = diff.Magnitude
+                        end
+                        if dist > 0.05 then
+                            targetRotation = CFrame.lookAt(part.Position, tgt)
+                            part.AssemblyLinearVelocity = diff.Unit * math.min(1350, math.max(420, dist * 34))
+                        else
+                            part.AssemblyLinearVelocity = Vector3.zero
+                        end
+
+                        if dist < 18 then
+                            local attackDir = dist > 0.001 and diff.Unit or part.CFrame.LookVector
+                            local spinDir = Vector3.new(-attackDir.Z, 0, attackDir.X)
+                            local closeAlpha = 1 - math.clamp(dist / 18, 0, 1)
+                            local flingBoost = flingForce * (8.0 + closeAlpha * 14.0)
+                            local spinBoost = flingForce * (5.0 + closeAlpha * 9.0)
+
+                            pcall(function()
+                                dv2Target.AssemblyLinearVelocity = dv2Target.AssemblyLinearVelocity
+                                    + attackDir * flingBoost
+                                    + spinDir * spinBoost
+                                    + Vector3.new(0, flingForce * (2.0 + closeAlpha * 2.6), 0)
+                                dv2Target.AssemblyAngularVelocity = dv2Target.AssemblyAngularVelocity
+                                    + Vector3.new(
+                                        (math.random() - 0.5) * spinBoost * 3.8,
+                                        flingForce * (11.0 + closeAlpha * 12.0),
+                                        (math.random() - 0.5) * spinBoost * 3.8
+                                    )
+                            end)
+                        end
                         part.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 1500,
-                            (math.random() - 0.5) * 1500,
-                            (math.random() - 0.5) * 1500
+                            math.sin(t * 9.2 + i) * 420,
+                            math.cos(t * 8.4 + i * 1.3) * 520,
+                            math.sin(t * 9.8 + i * 0.7) * 420
                         )
+                    else
+                        pcall(sethiddenproperty, part, "PhysicsRepRootPart", nil)
+                    end
+
+                    partTargets[part].position = tgt
+                    partTargets[part].rotation = targetRotation
+                    partTargets[part].responsiveness = responsiveness
+                    syncAlignTarget(part, partTargets[part])
+                elseif isHoming then
+                    if homingTarget and homingTarget.Parent and tick() < homingEndTime then
+                        local diff = tgt - part.Position
+                        local dist = diff.Magnitude
+                        if dist > 0.05 then
+                            local AP = getNetAP(part)
+                            if AP then AP.Enabled = false end
+                            local AO = getNetAO(part)
+                            if AO then AO.Enabled = false end
+                            part.AssemblyLinearVelocity = diff.Unit * 350
+                            part.AssemblyAngularVelocity = Vector3.new(
+                                math.sin(t * 4 + i) * 50,
+                                math.cos(t * 3 + i * 1.2) * 50,
+                                math.sin(t * 3.7 + i * 0.8) * 50
+                            )
+                        else
+                            local AP = getNetAP(part)
+                            if AP then AP.Enabled = true end
+                            local AO = getNetAO(part)
+                            if AO then AO.Enabled = true end
+                            if not partTargets[part] then partTargets[part] = {} end
+                            partTargets[part].position = tgt
+                            partTargets[part].rotation = targetRotation
+                            partTargets[part].responsiveness = responsiveness
+                            syncAlignTarget(part, partTargets[part])
+                        end
+                    else
+                        local AP = getNetAP(part)
+                        if AP then AP.Enabled = true end
+                        local AO = getNetAO(part)
+                        if AO then AO.Enabled = true end
+                        if not partTargets[part] then partTargets[part] = {} end
+                        partTargets[part].position = tgt
+                        partTargets[part].rotation = targetRotation
+                        partTargets[part].responsiveness = responsiveness
+                        syncAlignTarget(part, partTargets[part])
+                        pcall(sethiddenproperty, part, "PhysicsRepRootPart", nil)
+                    end
+                elseif isRail and railgunFired then
+                    if railgunPhase == "exploding" then
+                        pcall(function()
+                            part.AssemblyAngularVelocity = Vector3.new(
+                                (math.random() - 0.5) * 9e10,
+                                (math.random() - 0.5) * 9e10,
+                                (math.random() - 0.5) * 9e10
+                            )
+                            part.AssemblyLinearVelocity = Vector3.new(9e8, 9e8 * 10, 9e8)
+                        end)
+                    else
+                        pcall(function()
+                            local toTarget = tgt - part.Position
+                            local d = toTarget.Magnitude
+                            if d > 0.1 then
+                                local maxSz = math.max(formSizeX, formSizeZ) / 10
+                                local speed = 80 * math.max(maxSz, 0.5)
+                                part.AssemblyLinearVelocity = toTarget.Unit * math.min(speed, d * 12)
+                            end
+                            part.AssemblyAngularVelocity = Vector3.new(
+                                math.sin(t * 6 + i) * 20,
+                                math.cos(t * 7 + i) * 20,
+                                math.sin(t * 8 + i) * 20
+                            )
+                        end)
+                    end
+                elseif isBarr then
+                    pcall(function()
+                        part.AssemblyAngularVelocity = Vector3.new(
+                            (math.random() - 0.5) * 3000,
+                            (math.random() - 0.5) * 3000,
+                            (math.random() - 0.5) * 3000
+                        )
+                        part.AssemblyLinearVelocity = Vector3.zero
 
                         if not partTargets[part] then partTargets[part]={} end
                         partTargets[part].position = tgt
-                        partTargets[part].rotation = part.CFrame
-                        partTargets[part].responsiveness = getMoveResponsiveness(3.5)
+                        partTargets[part].responsiveness = getMoveResponsiveness(6.0)
                         syncAlignTarget(part, partTargets[part])
 
-
-                        if not satTouchConns[part] then
-                            satTouchConns[part] = part.Touched:Connect(function(hit)
-                                if not hit or not hit.Parent or hit.Anchored then return end
-                                if hit == workspace.Terrain then return end
+                        if not barrageTouchConns[part] then
+                            barrageTouchConns[part] = part.Touched:Connect(function(hit)
+                                if not hit or not hit.Parent then return end
+                                if hit == part then return end
+                                if isSelected(hit) then return end
 
                                 pcall(function()
                                     part.AssemblyAngularVelocity = Vector3.new(
-                                        (math.random() - 0.5) * 1500,
-                                        (math.random() - 0.5) * 1500,
-                                        (math.random() - 0.5) * 1500
+                                        (math.random() - 0.5) * 9e9,
+                                        (math.random() - 0.5) * 9e9,
+                                        (math.random() - 0.5) * 9e9
                                     )
+
+                                    local burstDir = (hit.Position - part.Position)
+                                    if burstDir.Magnitude > 0.001 then
+                                        part.AssemblyLinearVelocity = burstDir.Unit * 88000 + Vector3.new(
+                                            (math.random() - 0.5) * 1500,
+                                            (math.random() - 0.5) * 1500,
+                                            (math.random() - 0.5) * 1500
+                                        )
+                                    else
+                                        part.AssemblyLinearVelocity = Vector3.new(
+                                            (math.random() - 0.5) * 1500,
+                                            (math.random() - 0.5) * 1500,
+                                            (math.random() - 0.5) * 1500
+                                        )
+                                    end
                                 end)
+
+                                if barrageTouchConns[part] then
+                                    pcall(function() barrageTouchConns[part]:Disconnect() end)
+                                    barrageTouchConns[part] = nil
+                                end
                             end)
                         end
                     end)
@@ -2222,7 +2943,7 @@ do
     P.T3      = Color3.fromRGB( 88,  58,  82)
     GUI.PAL = P
 end
-local PAL = GUI.PAL
+PAL = GUI.PAL
 
 
 
@@ -2234,7 +2955,7 @@ ScreenGui.ZIndexBehavior   = Enum.ZIndexBehavior.Global
 ScreenGui.DisplayOrder     = GUI.DISPLAY_ORDER
 ScreenGui.Parent           = getGuiParent()
 
-local function unloadScript()
+do function unloadScript()
 
     pcall(function() if ownerConn then ownerConn:Disconnect() end end)
     pcall(function() if renderOwnerConn then renderOwnerConn:Disconnect() end end)
@@ -2333,8 +3054,8 @@ local function unloadScript()
 
     if ScreenGui and ScreenGui.Parent then pcall(function() ScreenGui:Destroy() end) end
     if EspScreenGui and EspScreenGui.Parent then pcall(function() EspScreenGui:Destroy() end) end
-end
-local function corner(p,r) Instance.new("UICorner",p).CornerRadius=UDim.new(0,r or 5) end
+end end
+function corner(p,r) Instance.new("UICorner",p).CornerRadius=UDim.new(0,r or 5) end
 
 function mkF(props,parent)
     local f=Instance.new("Frame"); f.BorderSizePixel=0
@@ -2584,7 +3305,6 @@ function buildPartsPanel(Cont, mPanels)
         local selInfo=mkL({Size=UDim2.new(1,0,0,16),Text="#0 selected · Tornado",
             TextColor3=PAL.T2,TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},selP)
 
-        local clickSelActive = false
         local clickSelBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Click-Select: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=2},selP)
         clickSelBtn.MouseButton1Click:Connect(function()
@@ -2649,7 +3369,7 @@ function buildPartsPanel(Cont, mPanels)
         end)
         refreshAutoSelectButtons()
 
-        return selInfo, clickSelBtn, clearBtn, refreshAutoSelectButtons, clickSelActive
+        return selInfo, clickSelBtn, clearBtn, refreshAutoSelectButtons
     end
 
 
@@ -2706,7 +3426,7 @@ function buildPartsPanel(Cont, mPanels)
         end)
     end
 
-    local selInfo, clickSelBtn, clearBtn, _refreshAutoSel, clickSelActive = buildSelSubPanel(spCont, sPanels)
+    local selInfo, clickSelBtn, clearBtn, _refreshAutoSel = buildSelSubPanel(spCont, sPanels)
     local selSF = sPanels["Sel"]
     local freezeBtn = buildFormationSection(selSF)
     buildOwnershipSection(selSF)
@@ -2853,8 +3573,20 @@ function buildPartsPanel(Cont, mPanels)
         mkSec("DRONE V2 FLING", parSF, 14)
         dv2Label=mkL({Size=UDim2.new(1,0,0,14),Text="Inactive",TextColor3=PAL.DV2C,
             TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=15},parSF)
-        mkSlider(parSF,"Fling Force",50,2000,flingForce,16,function(v) flingForce=v end)
-        mkSlider(parSF,"Fling Range", 5, 200,flingRange,17,function(v) flingRange=v end)
+        mkSlider(parSF,"Fling Force",50,8000,flingForce,16,function(v) flingForce=v end)
+        mkSlider(parSF,"Fling Range", 5, 500,flingRange,17,function(v) flingRange=v end)
+        mkDiv(parSF,18)
+        mkSec("HOMING", parSF, 19)
+        homingLabel=mkL({Size=UDim2.new(1,0,0,14),Text="Inactive",TextColor3=Color3.fromRGB(255,100,100),
+            TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=20},parSF)
+        mkDiv(parSF,21)
+        mkSec("RAILGUN", parSF, 22)
+        railgunLabel=mkL({Size=UDim2.new(1,0,0,14),Text="Inactive",TextColor3=Color3.fromRGB(100,200,255),
+            TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=23},parSF)
+        mkDiv(parSF,24)
+        mkSec("BARRAGE", parSF, 25)
+        barrageLabel=mkL({Size=UDim2.new(1,0,0,14),Text="Inactive",TextColor3=Color3.fromRGB(255,200,100),
+            TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=26},parSF)
     end
 
     buildParamsSubPanel(spCont, sPanels)
@@ -2937,22 +3669,69 @@ function buildPartsPanel(Cont, mPanels)
             clearSelection(true)
         end)
 
+        mkDiv(toolP,12.1)
+        mkSec("PHYSICS & STRENGTH", toolP, 12.2)
+
+        local physBtn
+        physBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+            Text="Strengthen Parts: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=12.3},toolP)
+        
+        physBtn.BackgroundColor3 = strengthenParts and Color3.fromRGB(18,55,24) or PAL.B_DEF
+        physBtn.TextColor3       = strengthenParts and Color3.fromRGB(110,210,130) or PAL.T1
+        physBtn.Text = "Strengthen Parts: "..(strengthenParts and "ON ✓" or "OFF")
+
+        physBtn.MouseButton1Click:Connect(function()
+            strengthenParts = not strengthenParts
+            physBtn.BackgroundColor3 = strengthenParts and Color3.fromRGB(18,55,24) or PAL.B_DEF
+            physBtn.TextColor3       = strengthenParts and Color3.fromRGB(110,210,130) or PAL.T1
+            physBtn.Text = "Strengthen Parts: "..(strengthenParts and "ON ✓" or "OFF")
+            updatePhysPropertiesForSelected()
+        end)
+
+        mkSlider(toolP,"Custom Density",1,1000,strengthenDensity,12.4,function(v)
+            strengthenDensity = v
+            updatePhysPropertiesForSelected()
+        end)
+
         mkDiv(toolP,13)
         mkSec("HIGHLIGHT", toolP, 14)
 
         local espBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Mode: Highlight (through walls)",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=15},toolP)
+        local espStyleBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+            Text="Style: ESP Labels",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=16},toolP)
+
+
+        espBtn.BackgroundColor3 = useESP and Color3.fromRGB(16,32,56) or PAL.B_DEF
+        espBtn.TextColor3 = useESP and Color3.fromRGB(100,150,255) or PAL.T1
+        espBtn.Text = "Mode: "..(useESP and "ESP UI" or "Highlight (through walls)")
+        espStyleBtn.BackgroundColor3 = useESP and (espStyle == "Label" and PAL.B_DEF or Color3.fromRGB(16,32,56)) or PAL.B_DEF
+        espStyleBtn.TextColor3 = useESP and (espStyle == "Label" and PAL.T1 or Color3.fromRGB(100,150,255)) or PAL.T1
+        espStyleBtn.Text = "Style: "..(espStyle == "Label" and "ESP Labels" or "ESP Box")
+
         espBtn.MouseButton1Click:Connect(function()
-            useESP=not useESP
-            espBtn.BackgroundColor3=useESP and Color3.fromRGB(16,32,56) or PAL.B_DEF
-            espBtn.TextColor3=useESP and Color3.fromRGB(100,150,255) or PAL.T1
-            espBtn.Text="Mode: "..(useESP and "ESP UI Labels" or "Highlight (through walls)")
+            useESP = not useESP
+            espBtn.BackgroundColor3 = useESP and Color3.fromRGB(16,32,56) or PAL.B_DEF
+            espBtn.TextColor3 = useESP and Color3.fromRGB(100,150,255) or PAL.T1
+            espBtn.Text = "Mode: "..(useESP and "ESP UI" or "Highlight (through walls)")
+            espStyleBtn.BackgroundColor3 = useESP and (espStyle == "Label" and PAL.B_DEF or Color3.fromRGB(16,32,56)) or PAL.B_DEF
+            espStyleBtn.TextColor3 = useESP and (espStyle == "Label" and PAL.T1 or Color3.fromRGB(100,150,255)) or PAL.T1
+            espStyleBtn.Text = "Style: "..(espStyle == "Label" and "ESP Labels" or "ESP Box")
             for _,part in ipairs(selectedParts) do removeHL(part); addHL(part) end
         end)
 
-        mkSec("HIGHLIGHT COLOR", toolP, 16)
+        espStyleBtn.MouseButton1Click:Connect(function()
+            if not useESP then return end
+            espStyle = espStyle == "Label" and "Box" or "Label"
+            espStyleBtn.BackgroundColor3 = espStyle == "Label" and PAL.B_DEF or Color3.fromRGB(16,32,56)
+            espStyleBtn.TextColor3 = espStyle == "Label" and PAL.T1 or Color3.fromRGB(100,150,255)
+            espStyleBtn.Text = "Style: "..(espStyle == "Label" and "ESP Labels" or "ESP Box")
+            for _,part in ipairs(selectedParts) do removeHL(part); addHL(part) end
+        end)
+
+        mkSec("HIGHLIGHT COLOR", toolP, 17)
         mkL({Size=UDim2.new(1,0,0,12),Text="Preset colors (fill + outline)",
-            TextColor3=PAL.T3,TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=17},toolP)
+            TextColor3=PAL.T3,TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=18},toolP)
 
         local hlRow1=mkF({Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,LayoutOrder=18},toolP)
         local hlPresets = {
@@ -3023,10 +3802,11 @@ function buildPartsPanel(Cont, mPanels)
 
     local spcBtn = buildToolsSubPanel(makeSubPanel)
     setSTab("Sel")
-    return selInfo, clickSelBtn, clearBtn, freezeBtn, spcBtn, clickSelActive
+    return selInfo, clickSelBtn, clearBtn, freezeBtn, spcBtn
 end
 
 
+buildNpcPanelFull = (function()
 local function buildNpcSearchBox(npcControlPanel)
     local SB = {}  
     SB.box = Instance.new("TextBox")
@@ -3108,50 +3888,22 @@ local function buildNpcSearchBox(npcControlPanel)
     SB.box:GetPropertyChangedSignal("Text"):Connect(function() runSearch(SB.box.Text) end)
 end
 
-local function buildNpcPanelFull()
-    local ctx = getgenv()._atomizerNpcCtx
-    if not ctx then return end
-    local npcControlPanel = ctx.controlPanel
-    local npcSpCont       = ctx.spCont
-    local npcSPanels      = ctx.sPanels
-    local npcSTabs        = ctx.sTabs
-    local npcSBtns        = ctx.sBtns
-    local npcSTabRow      = ctx.sTabRow
-    local npcStat         = ctx.stat
+local function makeNpcSubScrollPanel(npcSpCont, npcSPanels, key)
+    local panel = Instance.new("ScrollingFrame")
+    panel.Size=UDim2.new(1,0,1,0); panel.BackgroundTransparency=1
+    panel.BorderSizePixel=0; panel.ScrollBarThickness=2
+    panel.ScrollBarImageColor3=PAL.ACC2; panel.Visible=false
+    panel.Parent=npcSpCont
+    npcSPanels[key]=panel
+    local ll = Instance.new("UIListLayout", panel)
+    ll.SortOrder = Enum.SortOrder.LayoutOrder; ll.Padding = UDim.new(0,6)
+    ll:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        panel.CanvasSize=UDim2.new(0,0,0,ll.AbsoluteContentSize.Y+8)
+    end)
+    return panel
+end
 
-    buildNpcSearchBox(npcControlPanel)
-
-
-    local npcAurasPanel = Instance.new("ScrollingFrame")
-    do
-        npcAurasPanel.Size=UDim2.new(1,0,1,0); npcAurasPanel.BackgroundTransparency=1
-        npcAurasPanel.BorderSizePixel=0; npcAurasPanel.ScrollBarThickness=2
-        npcAurasPanel.ScrollBarImageColor3=PAL.ACC2; npcAurasPanel.Visible=false
-        npcAurasPanel.Parent=npcSpCont
-        npcSPanels["Auras"]=npcAurasPanel
-        local ll = Instance.new("UIListLayout", npcAurasPanel)
-        ll.SortOrder = Enum.SortOrder.LayoutOrder; ll.Padding = UDim.new(0,6)
-        ll:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            npcAurasPanel.CanvasSize=UDim2.new(0,0,0,ll.AbsoluteContentSize.Y+8)
-        end)
-    end
-
- 
-    local npcToolsPanel = Instance.new("ScrollingFrame")
-    do
-        npcToolsPanel.Size=UDim2.new(1,0,1,0); npcToolsPanel.BackgroundTransparency=1
-        npcToolsPanel.BorderSizePixel=0; npcToolsPanel.ScrollBarThickness=2
-        npcToolsPanel.ScrollBarImageColor3=PAL.ACC2; npcToolsPanel.Visible=false
-        npcToolsPanel.Parent=npcSpCont
-        npcSPanels["Guns"]=npcToolsPanel
-        local ll = Instance.new("UIListLayout", npcToolsPanel)
-        ll.SortOrder = Enum.SortOrder.LayoutOrder; ll.Padding = UDim.new(0,6)
-        ll:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            npcToolsPanel.CanvasSize=UDim2.new(0,0,0,ll.AbsoluteContentSize.Y+8)
-        end)
-    end
-
-
+local function buildNpcControlTab(npcControlPanel, npcStat)
     do
         local _,pb,rb=mkRow2(npcControlPanel,2,
             {BackgroundColor3=PAL.B_DEF,Text=" Pick NPC",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham},
@@ -3272,92 +4024,90 @@ local function buildNpcPanelFull()
             hmBtn.Text="Halt MoveTo: "..(npcControlHaltMoveTo and "ON ✓" or "OFF")
         end)
     end
+end
 
+local function buildNpcAurasTab(npcAurasPanel)
+    local AURA_DEFS = {
+        {"Kill Aura",   function() return killAura end,         function(v) killAura=v end,
+         function() return killAuraRange end,   function(v) killAuraRange=v end,
+         300, Color3.fromRGB(95,12,12), Color3.fromRGB(255,90,90), 1},
+        {"Sit Aura",    function() return sitAura end,          function(v) sitAura=v end,
+         function() return sitAuraRange end,    function(v) sitAuraRange=v end,
+         300, Color3.fromRGB(14,32,88), Color3.fromRGB(100,148,255), 4},
+        {"Jump Aura",   function() return jumpAura end,         function(v) jumpAura=v end,
+         function() return jumpAuraRange end,   function(v) jumpAuraRange=v end,
+         300, Color3.fromRGB(12,52,22), Color3.fromRGB(90,215,115), 7},
+        {"Follow Aura", function() return followAura end,       function(v) followAura=v end,
+         function() return followAuraRange end, function(v) followAuraRange=v end,
+         300, Color3.fromRGB(65,20,90),  Color3.fromRGB(200,120,255), 10},
+        {"Fear Aura",   function() return freezeAura end,       function(v) freezeAura=v end,
+         function() return freezeAuraRange end, function(v) freezeAuraRange=v end,
+         1000,Color3.fromRGB(32,32,95),  Color3.fromRGB(140,140,255), 13},
+        {"Speed Aura",  function() return speedAuraEnabled end, function(v) speedAuraEnabled=v end,
+         function() return speedAuraRange end,  function(v) speedAuraRange=v end,
+         300, Color3.fromRGB(26,80,30),  Color3.fromRGB(120,255,150), 16},
+        {"Spin Aura",   function() return spinAuraEnabled end,  function(v) spinAuraEnabled=v end,
+         function() return spinAuraRange end,   function(v) spinAuraRange=v end,
+         300, Color3.fromRGB(70,30,90),  Color3.fromRGB(210,145,255), 20},
+    }
+    for _,d in ipairs(AURA_DEFS) do
+        local lbl,getF,setF,getR,setR,rMax,onBg,onTc,lo = d[1],d[2],d[3],d[4],d[5],d[6],d[7],d[8],d[9]
+        local btn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+            Text=lbl..": OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=lo},npcAurasPanel)
+        btn.MouseButton1Click:Connect(function()
+            setF(not getF())
+            btn.BackgroundColor3 = getF() and onBg or PAL.B_DEF
+            btn.TextColor3       = getF() and onTc or PAL.T1
+            btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
+        end)
+        mkSlider(npcAurasPanel,lbl:match("^%S+").." Range",3,rMax,getR(),lo+1,setR)
 
-    do
-
-        local AURA_DEFS = {
-            {"Kill Aura",   function() return killAura end,         function(v) killAura=v end,
-             function() return killAuraRange end,   function(v) killAuraRange=v end,
-             300, Color3.fromRGB(95,12,12), Color3.fromRGB(255,90,90), 1},
-            {"Sit Aura",    function() return sitAura end,          function(v) sitAura=v end,
-             function() return sitAuraRange end,    function(v) sitAuraRange=v end,
-             300, Color3.fromRGB(14,32,88), Color3.fromRGB(100,148,255), 4},
-            {"Jump Aura",   function() return jumpAura end,         function(v) jumpAura=v end,
-             function() return jumpAuraRange end,   function(v) jumpAuraRange=v end,
-             300, Color3.fromRGB(12,52,22), Color3.fromRGB(90,215,115), 7},
-            {"Follow Aura", function() return followAura end,       function(v) followAura=v end,
-             function() return followAuraRange end, function(v) followAuraRange=v end,
-             300, Color3.fromRGB(65,20,90),  Color3.fromRGB(200,120,255), 10},
-            {"Fear Aura",   function() return freezeAura end,       function(v) freezeAura=v end,
-             function() return freezeAuraRange end, function(v) freezeAuraRange=v end,
-             1000,Color3.fromRGB(32,32,95),  Color3.fromRGB(140,140,255), 13},
-            {"Speed Aura",  function() return speedAuraEnabled end, function(v) speedAuraEnabled=v end,
-             function() return speedAuraRange end,  function(v) speedAuraRange=v end,
-             300, Color3.fromRGB(26,80,30),  Color3.fromRGB(120,255,150), 16},
-            {"Spin Aura",   function() return spinAuraEnabled end,  function(v) spinAuraEnabled=v end,
-             function() return spinAuraRange end,   function(v) spinAuraRange=v end,
-             300, Color3.fromRGB(70,30,90),  Color3.fromRGB(210,145,255), 20},
-        }
-        for _,d in ipairs(AURA_DEFS) do
-            local lbl,getF,setF,getR,setR,rMax,onBg,onTc,lo = d[1],d[2],d[3],d[4],d[5],d[6],d[7],d[8],d[9]
-            local btn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
-                Text=lbl..": OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=lo},npcAurasPanel)
-            btn.MouseButton1Click:Connect(function()
-                setF(not getF())
-                btn.BackgroundColor3 = getF() and onBg or PAL.B_DEF
-                btn.TextColor3       = getF() and onTc or PAL.T1
-                btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
-            end)
-            mkSlider(npcAurasPanel,lbl:match("^%S+").." Range",3,rMax,getR(),lo+1,setR)
-
-            if lbl=="Speed Aura" then
-                mkSlider(npcAurasPanel,"Speed Amount",1,200,speedAuraSpeed,lo+2,function(v) speedAuraSpeed=v end)
-            elseif lbl=="Spin Aura" then
-                mkSlider(npcAurasPanel,"Spin Speed",1,40,spinAuraSpeed,lo+2,function(v) spinAuraSpeed=v end)
-            end
+        if lbl=="Speed Aura" then
+            mkSlider(npcAurasPanel,"Speed Amount",1,200,speedAuraSpeed,lo+2,function(v) speedAuraSpeed=v end)
+        elseif lbl=="Spin Aura" then
+            mkSlider(npcAurasPanel,"Spin Speed",1,40,spinAuraSpeed,lo+2,function(v) spinAuraSpeed=v end)
         end
     end
+end
 
-
-    do
-        local GUN_DEFS = {
-            {"Finger Gun", function() return fingerGunEnabled end, function(v) fingerGunEnabled=v end,
-             Color3.fromRGB(60,60,140),  Color3.fromRGB(170,190,255), 1},
-            {"Grab Gun",   function() return grabGunEnabled end,   function(v) grabGunEnabled=v end,
-             Color3.fromRGB(110,70,20),  Color3.fromRGB(255,210,120), 2},
-            {"Sit Gun",    function() return sitGunEnabled end,    function(v) sitGunEnabled=v end,
-             Color3.fromRGB(20,90,110),  Color3.fromRGB(120,240,255), 3},
-        }
-        for _,d in ipairs(GUN_DEFS) do
-            local lbl,getF,setF,onBg,onTc,lo = d[1],d[2],d[3],d[4],d[5],d[6]
-            local btn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
-                Text=lbl..": OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=lo},npcToolsPanel)
-            btn.MouseButton1Click:Connect(function()
-                setF(not getF())
-                btn.BackgroundColor3 = getF() and onBg or PAL.B_DEF
-                btn.TextColor3       = getF() and onTc or PAL.T1
-                btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
-            end)
-        end
-
-        local tkBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
-            Text="Telekinesis Gun: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=4},npcToolsPanel)
-        local fzBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
-            Text="Freeze Gun: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=5},npcToolsPanel)
-        local function refreshTKFZ()
-            tkBtn.BackgroundColor3=NX.tkGun and Color3.fromRGB(90,40,120) or PAL.B_DEF
-            tkBtn.TextColor3=NX.tkGun and Color3.fromRGB(220,170,255) or PAL.T1
-            tkBtn.Text="Telekinesis Gun: "..(NX.tkGun and "ON ✓" or "OFF")
-            fzBtn.BackgroundColor3=NX.freezeGun and Color3.fromRGB(20,70,120) or PAL.B_DEF
-            fzBtn.TextColor3=NX.freezeGun and Color3.fromRGB(150,210,255) or PAL.T1
-            fzBtn.Text="Freeze Gun: "..(NX.freezeGun and "ON ✓" or "OFF")
-        end
-        tkBtn.MouseButton1Click:Connect(function() NX.tkGun=not NX.tkGun; if NX.tkGun then NX.freezeGun=false end; refreshTKFZ() end)
-        fzBtn.MouseButton1Click:Connect(function() NX.freezeGun=not NX.freezeGun; if NX.freezeGun then NX.tkGun=false end; refreshTKFZ() end)
+local function buildNpcGunsTab(npcToolsPanel)
+    local GUN_DEFS = {
+        {"Finger Gun", function() return fingerGunEnabled end, function(v) fingerGunEnabled=v end,
+         Color3.fromRGB(60,60,140),  Color3.fromRGB(170,190,255), 1},
+        {"Grab Gun",   function() return grabGunEnabled end,   function(v) grabGunEnabled=v end,
+         Color3.fromRGB(110,70,20),  Color3.fromRGB(255,210,120), 2},
+        {"Sit Gun",    function() return sitGunEnabled end,    function(v) sitGunEnabled=v end,
+         Color3.fromRGB(20,90,110),  Color3.fromRGB(120,240,255), 3},
+    }
+    for _,d in ipairs(GUN_DEFS) do
+        local lbl,getF,setF,onBg,onTc,lo = d[1],d[2],d[3],d[4],d[5],d[6]
+        local btn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+            Text=lbl..": OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=lo},npcToolsPanel)
+        btn.MouseButton1Click:Connect(function()
+            setF(not getF())
+            btn.BackgroundColor3 = getF() and onBg or PAL.B_DEF
+            btn.TextColor3       = getF() and onTc or PAL.T1
+            btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
+        end)
     end
 
+    local tkBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+        Text="Telekinesis Gun: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=4},npcToolsPanel)
+    local fzBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+        Text="Freeze Gun: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=5},npcToolsPanel)
+    local function refreshTKFZ()
+        tkBtn.BackgroundColor3=NX.tkGun and Color3.fromRGB(90,40,120) or PAL.B_DEF
+        tkBtn.TextColor3=NX.tkGun and Color3.fromRGB(220,170,255) or PAL.T1
+        tkBtn.Text="Telekinesis Gun: "..(NX.tkGun and "ON ✓" or "OFF")
+        fzBtn.BackgroundColor3=NX.freezeGun and Color3.fromRGB(20,70,120) or PAL.B_DEF
+        fzBtn.TextColor3=NX.freezeGun and Color3.fromRGB(150,210,255) or PAL.T1
+        fzBtn.Text="Freeze Gun: "..(NX.freezeGun and "ON ✓" or "OFF")
+    end
+    tkBtn.MouseButton1Click:Connect(function() NX.tkGun=not NX.tkGun; if NX.tkGun then NX.freezeGun=false end; refreshTKFZ() end)
+    fzBtn.MouseButton1Click:Connect(function() NX.freezeGun=not NX.freezeGun; if NX.freezeGun then NX.tkGun=false end; refreshTKFZ() end)
+end
 
+local function buildNpcSubTabs(npcSTabRow, npcSTabs, npcSBtns, npcSPanels)
     local npcActiveSTab = "Control"
     local function setNpcSTab(name)
         npcActiveSTab = name
@@ -3374,9 +4124,18 @@ local function buildNpcPanelFull()
         b.MouseButton1Click:Connect(function() setNpcSTab(tname) end)
     end
     setNpcSTab("Control")
-
-    getgenv()._atomizerNpcCtx = nil  
 end
+
+return function()
+    local ctx = getgenv()._atomizerNpcCtx
+    if not ctx then return end
+    buildNpcSearchBox(ctx.controlPanel)
+    buildNpcControlTab(ctx.controlPanel, ctx.stat)
+    buildNpcAurasTab(makeNpcSubScrollPanel(ctx.spCont, ctx.sPanels, "Auras"))
+    buildNpcGunsTab(makeNpcSubScrollPanel(ctx.spCont, ctx.sPanels, "Guns"))
+    buildNpcSubTabs(ctx.sTabRow, ctx.sTabs, ctx.sBtns, ctx.sPanels)
+    getgenv()._atomizerNpcCtx = nil
+end end)()
 
 
 function buildNpcPanel(Cont, mPanels)
@@ -3425,10 +4184,10 @@ function buildNpcPanel(Cont, mPanels)
     return npcStat
 end
 
-local function buildInterface()
+UI = (function()
     local Main, Body = buildMainFrame()
     local Cont, mPanels, setMTab = buildMainTabs(Body)
-    local selInfo, clickSelBtn, clearBtn, freezeBtn, spcBtn, clickSelActive = buildPartsPanel(Cont, mPanels)
+    local selInfo, clickSelBtn, clearBtn, freezeBtn, spcBtn = buildPartsPanel(Cont, mPanels)
     local npcStat = buildNpcPanel(Cont, mPanels)
 
 
@@ -3439,11 +4198,9 @@ local function buildInterface()
     return {
         ScreenGui=ScreenGui, selInfo=selInfo, clickSelBtn=clickSelBtn,
         clearBtn=clearBtn, freezeBtn=freezeBtn, spcBtn=spcBtn, npcStat=npcStat,
-        getClickSelActive=function() return clickSelActive end,
         unload=unloadScript,
     }
-end
-UI = buildInterface()
+end)()
 
 
 if hasFileSystem then saveConfig(true) end
@@ -3507,6 +4264,35 @@ reg(Mouse.Button1Down:Connect(function()
     local clickTarget = Mouse.Target
     if activeMode=="Draw" then isDrawing=true end
 
+    if activeMode=="Homing" then
+        if tick() >= homingEndTime then
+            local myRoot=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                local best=500+1
+                local mouseRay = Camera:ViewportPointToRay(Mouse.X, Mouse.Y)
+                local mousePos = mouseRay.Origin + mouseRay.Direction * 100
+                for _,plr in ipairs(Players:GetPlayers()) do
+                    if plr~=LP and plr.Character then
+                        local tr=plr.Character:FindFirstChild("HumanoidRootPart")
+                        if tr then
+                            local d=(tr.Position-mousePos).Magnitude
+                            if d<best then best=d; homingTarget=tr end
+                        end
+                    end
+                end
+            end
+            if homingTarget then
+                homingEndTime = tick() + 6
+            end
+        end
+    end
+
+    if activeMode=="Railgun" then
+        if not railgunCharging and not railgunFired then
+            railgunCharging = true
+            railgunChargeStart = tick()
+        end
+    end
 
     if fingerGunEnabled or sitGunEnabled or grabGunEnabled then
         local function raycastNpc()
@@ -3647,16 +4433,16 @@ reg(Mouse.Button1Down:Connect(function()
  
                 pcall(function()
                     part.AssemblyAngularVelocity = Vector3.new(
-                        (math.random() - 0.5) * 2000,
-                        (math.random() - 0.5) * 2000,
-                        (math.random() - 0.5) * 2000
+                        (math.random() - 0.5) * 5000,
+                        (math.random() - 0.5) * 5000,
+                        (math.random() - 0.5) * 5000
                     )
 
                     local toTarget = (satTarget - part.Position).Unit
-                    part.AssemblyLinearVelocity = toTarget * 500 + Vector3.new(
-                        (math.random() - 0.5) * 100,
-                        (math.random() - 0.5) * 100 + 50,
-                        (math.random() - 0.5) * 100
+                    part.AssemblyLinearVelocity = toTarget * 1000 + Vector3.new(
+                        (math.random() - 0.5) * 200,
+                        (math.random() - 0.5) * 200 + 100,
+                        (math.random() - 0.5) * 200
                     )
                 end)
 
@@ -3670,10 +4456,20 @@ reg(Mouse.Button1Down:Connect(function()
 
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 2000,
-                            (math.random() - 0.5) * 2000,
-                            (math.random() - 0.5) * 2000
+                            (math.random() - 0.5) * 9e10,
+                            (math.random() - 0.5) * 9e10,
+                            (math.random() - 0.5) * 9e10
                         )
+                        local hitVel = hit.AssemblyLinearVelocity
+                        local burstDir = (hit.Position - part.Position).Unit
+                        part.AssemblyLinearVelocity = burstDir * 8000 + Vector3.new(
+                            (math.random() - 0.5) * 500,
+                            (math.random() - 0.5) * 500,
+                            (math.random() - 0.5) * 500
+                        )
+                        if hitVel then
+                            hit.AssemblyLinearVelocity = hitVel + burstDir * 4000
+                        end
                     end)
                 end)
             end
@@ -3691,7 +4487,7 @@ reg(Mouse.Button1Down:Connect(function()
         return
     end
 
-    if UI.getClickSelActive() and clickTarget then
+    if clickSelActive and clickTarget then
         if isSelected(clickTarget) then deselectPart(clickTarget) else selectPart(clickTarget) end
     end
 
@@ -3779,7 +4575,12 @@ reg(RunService.Heartbeat:Connect(function()
 end))
 
 reg(RunService.RenderStepped:Connect(function()
-    if useESP then updateESP() end
+    if next(espLabels) then updateESP() end
+    syncSelectionProxyModel()
 end))
 
 
+penis = true
+if penis == true then
+print("atomizer loadeeed")
+end
