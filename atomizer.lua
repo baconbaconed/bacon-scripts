@@ -1552,45 +1552,37 @@ end
 
 
 local function sampleDrawTrailPoint(index, total)
+    if #drawTrails == 0 then return nil end
+    
 
-    local allPoints = {}
-    for _, trail in ipairs(drawTrails) do
-        for _, point in ipairs(trail) do
-            table.insert(allPoints, point)
+    local numTrails = #drawTrails
+    local trailIndex = ((index - 1) % numTrails) + 1
+    local trail = drawTrails[trailIndex]
+    
+    if not trail or #trail < 2 then return nil end
+    
+
+    local partsInThisTrail = 0
+    for i = 1, total do
+        if ((i - 1) % numTrails) + 1 == trailIndex then
+            partsInThisTrail = partsInThisTrail + 1
         end
     end
     
-    local trailLen = #allPoints
-    if trailLen < 2 then
-        return nil
-    end
 
-    local segLens = table.create(trailLen - 1)
-    local totalDist = 0
-
-    for i = 1, trailLen - 1 do
-        local segLen = (allPoints[i + 1] - allPoints[i]).Magnitude
-        segLens[i] = segLen
-        totalDist += segLen
-    end
-
-    if totalDist < 0.001 then
-        return allPoints[trailLen]
-    end
-
-    local targetDist = ((index - 1) / math.max(total - 1, 1)) * totalDist
-    local accum = 0
-
-    for i = 1, trailLen - 1 do
-        local segLen = segLens[i]
-        if accum + segLen >= targetDist then
-            local alpha = (targetDist - accum) / math.max(segLen, 0.001)
-            return allPoints[i]:Lerp(allPoints[i + 1], alpha)
+    local positionInGroup = 0
+    for i = 1, index do
+        if ((i - 1) % numTrails) + 1 == trailIndex then
+            positionInGroup = positionInGroup + 1
         end
-        accum += segLen
     end
+    
 
-    return allPoints[trailLen]
+    local ratio = partsInThisTrail > 1 and (positionInGroup - 1) / (partsInThisTrail - 1) or 0
+    local pointIndex = math.floor(ratio * (#trail - 1)) + 1
+    pointIndex = math.clamp(pointIndex, 1, #trail)
+    
+    return trail[pointIndex]
 end
 
 local function getFormationCenterTarget()
