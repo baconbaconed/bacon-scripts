@@ -4698,3 +4698,4 @@ penis = true
 if penis == true then
 print("atomizer loadeeed")
 end
+--obama have dih
