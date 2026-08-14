@@ -1275,7 +1275,7 @@ pcall(function()
         AP.Position = part.Position
         AP.MaxForce = math.huge
         AP.MaxVelocity = math.huge
-        AP.Responsiveness = 120
+        AP.Responsiveness = 200
         AP.RigidityEnabled = false
         AP.Attachment0 = attach
 
@@ -1288,7 +1288,7 @@ pcall(function()
         AO.RigidityEnabled = true
         AO.MaxTorque = math.huge
         AO.MaxAngularVelocity = math.huge
-        AO.Responsiveness = 80
+        AO.Responsiveness = 150
         AO.CFrame = part.CFrame
         AO.Attachment0 = attach
 
@@ -1297,9 +1297,22 @@ pcall(function()
             if part.Parent and part:FindFirstChild("NetAttach") and not part:FindFirstChild("ServerResponse") then
                 local SR = Instance.new("BodyForce", part)
                 SR.Name = "ServerResponse"
-                SR.Force = Vector3.new(0, 0, part.AssemblyMass * 100000)
+                SR.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
+                
+
+                local SR2 = Instance.new("BodyForce", part)
+                SR2.Name = "ServerResponse2"
+                SR2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
             elseif part.Parent and part:FindFirstChild("ServerResponse") then
-                part.ServerResponse.Force = Vector3.new(0, 0, part.AssemblyMass * 100000)
+                part.ServerResponse.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
+                
+                if not part:FindFirstChild("ServerResponse2") then
+                    local SR2 = Instance.new("BodyForce", part)
+                    SR2.Name = "ServerResponse2"
+                    SR2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
+                else
+                    part.ServerResponse2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
+                end
             end
         end)
 
@@ -1364,6 +1377,8 @@ local function cleanupPartState(part, destroyPart)
             if netAttach then netAttach:Destroy() end
             local sr = part:FindFirstChild("ServerResponse")
             if sr then sr:Destroy() end
+            local sr2 = part:FindFirstChild("ServerResponse2")
+            if sr2 then sr2:Destroy() end
 
             pcall(sethiddenproperty, part, "PhysicsRepRootPart", nil)
 
@@ -1456,6 +1471,17 @@ local function selectInRange(r)
            and obj ~= workspace.Terrain
            and not isPlayerPart(obj)
            and (obj.Position - myPos).Magnitude <= r then
+            selectPart(obj)
+        end
+    end
+end
+
+local function selectFakeAnchored()
+    for _,obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj.Anchored
+           and obj ~= workspace.Terrain
+           and not isPlayerPart(obj)
+           and obj.AssemblyMass ~= math.huge then
             selectPart(obj)
         end
     end
@@ -3426,10 +3452,14 @@ function buildPartsPanel(Cont, mPanels)
             return row,b1,b2
         end)()
 
+        local selectUnweldedBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+            Text="select NDS unanchored",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=4},selP)
+        selectUnweldedBtn.MouseButton1Click:Connect(function() selectFakeAnchored() end)
+
         local autoAllBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
-            Text="Auto Select: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=4},selP)
+            Text="Auto Select: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=5},selP)
         local autoNearBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
-            Text="Auto Near Select: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=5},selP)
+            Text="Auto Near Select: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=6},selP)
 
         local function refreshAutoSelectButtons()
             autoAllBtn.BackgroundColor3 = autoSelectAll and Color3.fromRGB(18,55,24) or PAL.B_DEF
@@ -3459,10 +3489,10 @@ function buildPartsPanel(Cont, mPanels)
             refreshAutoSelectButtons()
         end)
 
-        mkSlider(selP,"Sel Range",5,300,autoSelRange,6,function(v) autoSelRange=v end)
+        mkSlider(selP,"Sel Range",5,300,autoSelRange,7,function(v) autoSelRange=v end)
 
         local clearBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_RED,
-            Text="Clear Selection",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=7},selP)
+            Text="Clear Selection",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=8},selP)
         clearBtn.MouseButton1Click:Connect(function()
             autoSelectAll = false
             autoSelectNear = false
@@ -4689,6 +4719,38 @@ reg(RunService.Heartbeat:Connect(function()
 end))
 
 reg(RunService.RenderStepped:Connect(function()
+    for _, part in ipairs(selectedParts) do
+        if part and part.Parent then
+            pcall(function()
+                part.AssemblyLinearVelocity = Vector3.new(0.001, 0.001, 0.001)
+                part.AssemblyAngularVelocity = Vector3.new(0.001, 0.001, 0.001)
+                local SR = part:FindFirstChild("ServerResponse")
+                if SR then
+                    SR.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
+                end
+                local SR2 = part:FindFirstChild("ServerResponse2")
+                if SR2 then
+                    SR2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
+                end
+            end)
+        end
+    end
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Anchored then
+            pcall(function()
+                if obj.AssemblyLinearVelocity ~= Vector3.zero then
+                    obj.AssemblyLinearVelocity = Vector3.zero
+                end
+                if obj.AssemblyAngularVelocity ~= Vector3.zero then
+                    obj.AssemblyAngularVelocity = Vector3.zero
+                end
+            end)
+        end
+    end
+end))
+
+reg(RunService.RenderStepped:Connect(function()
     if next(espLabels) then updateESP() end
     syncSelectionProxyModel()
 end))
@@ -4698,4 +4760,3 @@ penis = true
 if penis == true then
 print("atomizer loadeeed")
 end
---obama have dih
