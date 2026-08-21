@@ -23,22 +23,17 @@ local Mouse  = LP:GetMouse()
 local function fixCanQueryForRaycast()
     local function processPart(part)
         if not part:IsA("BasePart") then return end
-        pcall(function() part.CanQuery = true end)
-        if part.Transparency >= 0.90 then
-            pcall(function() part.CanQuery = false end)
-        end
         local char = part:FindFirstAncestorOfClass("Model")
         if char then
             local player = Players:GetPlayerFromCharacter(char)
             if player then
-                if player ~= LP then
-                    if part.Name ~= "HumanoidRootPart" then
-                        pcall(function() part.CanQuery = false end)
-                    end
-                else
-                    pcall(function() part.CanQuery = false end)
-                end
+                return
             end
+        end
+        
+        pcall(function() part.CanQuery = true end)
+        if part.Transparency >= 0.90 then
+            pcall(function() part.CanQuery = false end)
         end
     end
     for _, part in ipairs(workspace:GetDescendants()) do
@@ -62,8 +57,8 @@ end)
 pcall(function() CoreGui.RobloxGui["CoreScripts/NetworkPause"]:Destroy() end)
 
 local GUI = {
-    DISPLAY_ORDER = 100000,
-    ESP_ORDER     = 99999,
+    DISPLAY_ORDER = 50,
+    ESP_ORDER     = 49,
     ESP_ACCENT    = Color3.fromRGB(80, 255, 210),
     Z             = 64,
 }
@@ -116,7 +111,8 @@ local function reg(c) table.insert(connections,c); return c end
 
 
 activeMode   = "Tornado"
-partSpeed    = 25
+allowedTouchModes = { ["DroneV2"] = true, ["Drone"] = true }
+partSpeed    = 50
 maxVelocity  = math.huge
 formRadius   = 7
 formSizeX    = 10
@@ -128,7 +124,7 @@ wallDist     = 7
 wallGap      = 0.1
 flingForce   = 1500
 flingRange   = 300
-tornadoSpeed = 4
+tornadoSpeed = 8
 spiralHeight = 14
 waveAmp      = 3
 orbitRadius  = 9
@@ -146,6 +142,7 @@ strengthenDensity    = 100
 
 frozen          = false
 frozenTargets   = {}
+individuallyFrozen = {}
 globalOwnership = false
 clickSelActive  = false
 attracting      = false
@@ -270,7 +267,7 @@ CONFIG_KEYS = {
     "autoSelRange", "ownerRadius", "killAuraRange", "sitAuraRange", "jumpAuraRange",
     "followAuraRange", "freezeAuraRange", "useLimits", "partLimit",
     "formationType", "useESP", "espStyle", "activeMode",
-    "espColor", "espFillTransparency", "espOutlineTransparency", "globalOwnership", "fakeCollisions",
+    "espColor", "highlightFillColor", "highlightOutlineColor", "espFillTransparency", "espOutlineTransparency", "globalOwnership", "fakeCollisions",
     "strengthenParts", "strengthenDensity",
 }
 
@@ -328,8 +325,10 @@ local function saveConfig(force)
     local now = tick()
     if not force and (now - _lastConfigSave) < CONFIG_SAVE_INTERVAL then return end
     _lastConfigSave = now
-    local c = GUI.ESP_ACCENT
-    local colorStr = math.floor(c.R * 255) .. ", " .. math.floor(c.G * 255) .. ", " .. math.floor(c.B * 255)
+    local function colorString(c)
+        return math.floor(c.R * 255) .. ", " .. math.floor(c.G * 255) .. ", " .. math.floor(c.B * 255)
+    end
+    local colorStr = colorString(GUI.ESP_ACCENT)
     local cfg = {
         partSpeed=partSpeed, maxVelocity=maxVelocity, formRadius=formRadius,
         formScale=formScale, formSizeX=formSizeX, formSizeY=formSizeY, formSizeZ=formSizeZ, formOffsetY=formOffsetY,
@@ -342,7 +341,8 @@ local function saveConfig(force)
         freezeAuraRange=freezeAuraRange,
         useLimits=useLimits, partLimit=partLimit,
         formationType=formationType, useESP=useESP, espStyle=espStyle, activeMode=activeMode,
-        espColor=colorStr, espFillTransparency=HL.fillTransparency, espOutlineTransparency=HL.outlineTransparency,
+        espColor=colorStr, highlightFillColor=colorString(HL.fillColor), highlightOutlineColor=colorString(HL.outlineColor),
+        espFillTransparency=HL.fillTransparency, espOutlineTransparency=HL.outlineTransparency,
         globalOwnership=globalOwnership, fakeCollisions=fakeCollisions,
         strengthenParts=strengthenParts, strengthenDensity=strengthenDensity,
     }
@@ -384,14 +384,24 @@ local function loadConfig()
     if cfg.useESP ~= nil then useESP = cfg.useESP end
     if cfg.espStyle ~= nil then espStyle = cfg.espStyle end
     if cfg.activeMode ~= nil then activeMode = cfg.activeMode end
-    if cfg.espColor ~= nil then
-        local r, g, b = cfg.espColor:match("([%d.]+),%s*([%d.]+),%s*([%d.]+)")
+    local function parseColor(value)
+        if type(value) ~= "string" then return nil end
+        local r, g, b = value:match("([%d.]+),%s*([%d.]+),%s*([%d.]+)")
         if r and g and b then
-            GUI.ESP_ACCENT = Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b))
-            HL.fillColor = GUI.ESP_ACCENT
-            HL.outlineColor = GUI.ESP_ACCENT
+            return Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b))
         end
     end
+    local legacyColor = parseColor(cfg.espColor)
+    if legacyColor then
+        GUI.ESP_ACCENT = legacyColor
+        HL.fillColor = legacyColor
+        HL.outlineColor = legacyColor
+    end
+    local savedFill = parseColor(cfg.highlightFillColor)
+    local savedOutline = parseColor(cfg.highlightOutlineColor)
+    if savedFill then HL.fillColor = savedFill end
+    if savedOutline then HL.outlineColor = savedOutline end
+    if savedFill or savedOutline then GUI.ESP_ACCENT = savedFill or savedOutline end
     if cfg.espFillTransparency ~= nil then
         HL.fillTransparency = tonumber(cfg.espFillTransparency) or HL.fillTransparency
     end
@@ -428,95 +438,98 @@ local MODES = {
     "Bounce",  "Ripple",     "Juggle",    "Constellation",
     "Rose",    "OrbitSin",   "Liss",      "Swing",
     "Aura",    "Homing",     "Railgun",   "Barrage",
+    "Sinewave", "Heart", "Wings", "Crystal",
 }
 
 
 
 
 local _OWN = { preSim=1, hb=1, render=1 }
+local reinforceOwnershipDrive, reinforceOwnershipConstraints, reinforceOwnershipHeartbeat, reinforceOwnershipRender
+pcall(function() LP.ReplicationFocus = workspace end)
+
 local preSimConn = RunService.PreSimulation and
-    RunService.PreSimulation:Connect(function()
+    RunService.PreSimulation:Connect(function(deltaTime)
         pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
-        _OWN.preSim = -_OWN.preSim
-        local jolt = _OWN.preSim * 0.006
-        local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
         for _, part in ipairs(selectedParts) do
             if part and part.Parent and not part.Anchored then
-                pcall(function()
-
-                    local AP = getNetAP(part)
-                    if AP then
-                        AP.MaxForce    = math.huge
-                        AP.MaxVelocity = math.huge
-
-                        local tgt = partTargets[part]
-                        if not isVelMode then
-                            AP.Position = (tgt and tgt.position) or part.Position
-                        end
-                    end
-    
-                    part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
-                        + Vector3.new(0, jolt, 0)
-                end)
+                pcall(reinforceOwnershipConstraints, part, partTargets[part])
+                pcall(reinforceOwnershipDrive, part, partTargets[part], deltaTime)
+                local origVel = part.AssemblyLinearVelocity
+                part.AssemblyLinearVelocity = Vector3.new(50000, 50000, 50000)
+                part.AssemblyLinearVelocity = origVel
+                part.AssemblyLinearVelocity = Vector3.new(-50000, -50000, -50000)
+                part.AssemblyLinearVelocity = origVel
+                part.AssemblyLinearVelocity = Vector3.new(50000, -50000, 50000)
+                part.AssemblyLinearVelocity = origVel
             end
         end
     end) or nil
 
 local ownerConn = RunService.Heartbeat:Connect(function()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
-    _OWN.hb = -_OWN.hb
-    local jolt = _OWN.hb * 0.007
-    local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
-            pcall(function()
-                local AP = getNetAP(part)
-                if AP then
-                    AP.MaxForce    = math.huge
-                    AP.MaxVelocity = math.huge
-                    local tgt = partTargets[part]
-                    if not isVelMode then
-                        AP.Position = (tgt and tgt.position) or part.Position
-                    end
-                end
-
-                part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
-                    + Vector3.new(0, jolt, 0)
-
-                local sr = part:FindFirstChild("ServerResponse")
-                if sr and sr:IsA("BodyForce") then
-                    sr.Force = Vector3.new(
-                        (math.random() - 0.5) * 0.002,
-                        part.AssemblyMass * 100000,
-                        (math.random() - 0.5) * 0.002)
-                end
-            end)
+            pcall(reinforceOwnershipConstraints, part, partTargets[part])
+            pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+            pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+            local origVel = part.AssemblyLinearVelocity
+            part.AssemblyLinearVelocity = Vector3.new(75000, 75000, 75000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-75000, -75000, -75000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(75000, -75000, 75000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-75000, 75000, -75000)
+            part.AssemblyLinearVelocity = origVel
         end
     end
 end)
 
 
 local renderOwnerConn = RunService.RenderStepped:Connect(function()
-    pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
-    _OWN.render = -_OWN.render
-    local bump = _OWN.render * 0.005
-    local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
-            pcall(function()
-
-                local AP = getNetAP(part)
-                if AP then
-                    AP.MaxForce    = math.huge
-                    AP.MaxVelocity = math.huge
-                    local tgt = partTargets[part]
-                    if not isVelMode then
-                        AP.Position = (tgt and tgt.position) or part.Position
-                    end
-                end
-                part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
-                    + Vector3.new(0, bump, 0)
-            end)
+            pcall(reinforceOwnershipConstraints, part, partTargets[part])
+            pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+            pcall(reinforceOwnershipRender, part, partTargets[part])
+            pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+            pcall(reinforceOwnershipRender, part, partTargets[part])
+            local origVel = part.AssemblyLinearVelocity
+            part.AssemblyLinearVelocity = Vector3.new(100000, 100000, 100000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-100000, -100000, -100000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(100000, -100000, 100000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-100000, 100000, -100000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(100000, 100000, -100000)
+            part.AssemblyLinearVelocity = origVel
+        end
+    end
+end)
+local aggressiveOwnerConn = RunService.Heartbeat:Connect(function()
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    for _, part in ipairs(selectedParts) do
+        if part and part.Parent and not part.Anchored then
+            pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+            pcall(reinforceOwnershipRender, part, partTargets[part])
+            local origVel = part.AssemblyLinearVelocity
+            part.AssemblyLinearVelocity = Vector3.new(150000, 150000, 150000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-150000, -150000, -150000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(150000, -150000, 150000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-150000, 150000, -150000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(150000, 150000, -150000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-150000, -150000, 150000)
+            part.AssemblyLinearVelocity = origVel
         end
     end
 end)
@@ -536,61 +549,80 @@ local function getNetAO(part)
     return att and att:FindFirstChild("NetAO")
 end
 
-local ownershipKickUntil = {}
-local ownershipSpinPhase = {}
-
-local function markOwnershipKick(part, duration)
-    if not part then return end
-    ownershipKickUntil[part] = math.max(ownershipKickUntil[part] or 0, tick() + (duration or 0.5))
-end
-
-local function getOwnershipSpinPhase(part)
-    local phase = ownershipSpinPhase[part]
-    if phase == nil then
-        phase = math.random() * math.pi * 2
-        ownershipSpinPhase[part] = phase
-    end
-    return phase
-end
-
-local function reinforceOwnershipDrive(part, target)
+reinforceOwnershipConstraints = function(part, target)
     if not (part and part.Parent and target) then return end
     if activeMode == "DroneV2" or activeMode == "Homing" then return end
 
-    local targetPos = target.position
-    if not targetPos then return end
-
-    local diff = targetPos - part.Position
-    local dist = diff.Magnitude
-    local kickActive = (ownershipKickUntil[part] or 0) > tick()
-
-    if dist > 1.25 or kickActive then
-        local desiredSpeed = math.min(1350, math.max(kickActive and 420 or 260, dist * 26))
-        if dist > 0.05 then
-            local desiredVelocity = diff.Unit * desiredSpeed
-            local currentVelocity = part.AssemblyLinearVelocity
-            local sameDir = currentVelocity.Magnitude > 0 and currentVelocity:Dot(desiredVelocity.Unit) or 0
-
-            if currentVelocity.Magnitude < desiredSpeed * 0.8 or sameDir < desiredSpeed * 0.15 or kickActive then
-                part.AssemblyLinearVelocity = currentVelocity * 0.35 + desiredVelocity * 0.65
-            end
-        end
-
-        local phase = getOwnershipSpinPhase(part)
-        local spinPower = kickActive and 340 or 170
-        part.AssemblyAngularVelocity = Vector3.new(
-            math.sin(tick() * 9.2 + phase) * spinPower,
-            math.cos(tick() * 8.4 + phase * 1.3) * (spinPower * 1.25),
-            math.sin(tick() * 9.8 + phase * 0.7) * spinPower
-        )
+    local AP = getNetAP(part)
+    if AP then
+        AP.Enabled = true
+        AP.MaxForce = math.huge
+        AP.MaxVelocity = math.huge
     end
+
+    local AO = getNetAO(part)
+    if AO then
+        AO.Enabled = true
+        AO.MaxTorque = math.huge
+        AO.MaxAngularVelocity = math.huge
+    end
+    local supportForce = Vector3.new(0, part.AssemblyMass * workspace.Gravity * 0.08, 0)
+    for _, name in ipairs({"ServerResponse", "ServerResponse2"}) do
+        local response = part:FindFirstChild(name)
+        if response and response:IsA("BodyForce") then
+            response.Force = supportForce
+        end
+    end
+end
+
+reinforceOwnershipHeartbeat = function(part, target)
+    if not (part and part.Parent and target and target.position) then return end
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+
+    local originalVelocity = part.AssemblyLinearVelocity
+    local diff = target.position - part.Position
+    local dist = diff.Magnitude
+
+    local desiredVelocity = diff.Unit * 20000
+    part.AssemblyLinearVelocity = originalVelocity:Lerp(desiredVelocity, 0.99)
+    part.AssemblyLinearVelocity = originalVelocity
+    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
+end
+
+reinforceOwnershipRender = function(part, target)
+    if not (part and part.Parent and target and target.position) then return end
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+
+    local originalVelocity = part.AssemblyLinearVelocity
+    local diff = target.position - part.Position
+    local dist = diff.Magnitude
+
+    local desiredVelocity = diff.Unit * 30000
+    part.AssemblyLinearVelocity = originalVelocity:Lerp(desiredVelocity, 0.995)
+    part.AssemblyLinearVelocity = originalVelocity
+    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
+end
+
+reinforceOwnershipDrive = function(part, target, deltaTime)
+    if not (part and part.Parent and target and target.position) then return end
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+
+    local originalVelocity = part.AssemblyLinearVelocity
+    local diff = target.position - part.Position
+    local dist = diff.Magnitude
+
+    local desiredVelocity = diff.Unit * 40000
+    part.AssemblyLinearVelocity = originalVelocity:Lerp(desiredVelocity, 0.998)
+    part.AssemblyLinearVelocity = originalVelocity
+    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
 end
 
 function syncAlignTarget(part, target)
     if not (part and part.Parent and target) then return end
+    if frozenTargets[part] then return end
 
-    local posResponsiveness = target.responsiveness or 120
-    local rotResponsiveness = target.rotResponsiveness or math.max(80, posResponsiveness * 0.7)
+    local posResponsiveness = target.responsiveness or 50000
+    local rotResponsiveness = target.rotResponsiveness or math.max(40000, posResponsiveness * 0.7)
 
     local AP = getNetAP(part)
     if AP then
@@ -600,6 +632,7 @@ function syncAlignTarget(part, target)
         AP.Responsiveness     = posResponsiveness
         AP.RigidityEnabled    = false
         AP.ApplyAtCenterOfMass = true
+        AP.Enabled            = true
         AP.Position           = target.position or part.Position
     end
 
@@ -610,18 +643,15 @@ function syncAlignTarget(part, target)
         AO.MaxAngularVelocity = math.huge
         AO.Responsiveness     = rotResponsiveness
         AO.RigidityEnabled    = true
+        AO.Enabled            = true
         AO.CFrame             = target.rotation or part.CFrame
     end
-
-
-    pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
-    reinforceOwnershipDrive(part, target)
 end
 
 local smoothMovementConn = RunService.RenderStepped:Connect(function()
     if activeMode == "DroneV2" or activeMode == "Homing" then return end
     for _, part in ipairs(selectedParts) do
-        if part and part.Parent and not part.Anchored then
+        if part and part.Parent and not part.Anchored and not frozenTargets[part] then
             pcall(function()
                 syncAlignTarget(part, partTargets[part])
             end)
@@ -631,7 +661,7 @@ end)
 
 local function getMoveResponsiveness(multiplier)
     local base = 20 + partSpeed * 4
-    return math.clamp(base * (multiplier or 1), 30, 200)
+    return math.clamp(base * (multiplier or 1), 50, 500)
 end
 
 local useRotationTargets = false
@@ -680,7 +710,6 @@ local function reclaimOnTouch(part)
 
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     local target = partTargets[part]
-    markOwnershipKick(part, 0.75)
     pcall(function()
 
         local AP = getNetAP(part)
@@ -698,19 +727,8 @@ local function reclaimOnTouch(part)
             AO.CFrame             = (target and target.rotation) or part.CFrame
         end
 
-        local sign = (tick() % 0.2 < 0.1) and 1 or -1
-        part.AssemblyLinearVelocity = part.AssemblyLinearVelocity
-            + Vector3.new(0, sign * 0.01, 0)
-
         if isVelMode then
             part.AssemblyAngularVelocity = Vector3.zero
-        else
-            reinforceOwnershipDrive(part, target)
-        end
-
-        local sr = part:FindFirstChild("ServerResponse")
-        if sr and sr:IsA("BodyForce") then
-            sr.Force = Vector3.new(0, part.AssemblyMass * 100000, 0)
         end
     end)
 end
@@ -763,9 +781,6 @@ local function clearModeState(prevMode, nextMode)
                 if AO then AO.Enabled = true end
             end
         end
-    end
-    if prevMode ~= nextMode then
-        ownershipKickUntil = {}
     end
     if prevMode == "Homing" or nextMode ~= "Homing" then
         homingTarget = nil
@@ -1189,6 +1204,13 @@ local function isPlayerPart(part)
             return true
         end
     end
+    if part.Name == "Head" then
+        return true
+    end
+    local parentModel = part:FindFirstAncestorOfClass("Model")
+    if parentModel and parentModel:FindFirstChildOfClass("Humanoid") then
+        return true
+    end
     return false
 end
 
@@ -1215,7 +1237,7 @@ local function selectPart(part)
     if not part or not part:IsA("BasePart") then return end
     if part.Anchored then return end
     if part==workspace.Terrain then return end
-    if isPlayerPart(part) then return end  
+    if isPlayerPart(part) then return end
     if isSelected(part) then return end
 local r=math.random
 
@@ -1229,19 +1251,32 @@ local r=math.random
     )
     table.insert(selectedParts,part)
     addHL(part)
+    if not partPhysProperties[part] then
+        partPhysProperties[part] = {
+            CustomPhysicalProperties = part.CustomPhysicalProperties
+        }
+    end
+    pcall(function()
+        part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
+        part.CanQuery = true
+    end)
+    
     if strengthenParts then
-        if not partPhysProperties[part] then
-            partPhysProperties[part] = {
-                CustomPhysicalProperties = part.CustomPhysicalProperties
-            }
-        end
         pcall(function()
             part.CustomPhysicalProperties = PhysicalProperties.new(strengthenDensity, 0.3, 0.5)
         end)
     end
     pcall(function() disableSelectedCollision(part) end)
+    local seat = part:FindFirstChildOfClass("Seat")
+    if seat then
+        seat.Disabled = true
+    end
+    if part:IsA("Seat") then
+        part.Disabled = true
+    end
 
     partTouchConns[part] = part.Touched:Connect(function()
+        if not allowedTouchModes[activeMode] then return end
         reclaimOnTouch(part)
     end)
     
@@ -1291,30 +1326,17 @@ pcall(function()
         AO.Responsiveness = 150
         AO.CFrame = part.CFrame
         AO.Attachment0 = attach
-
-        task.spawn(function()
-            RunService.RenderStepped:Wait()
-            if part.Parent and part:FindFirstChild("NetAttach") and not part:FindFirstChild("ServerResponse") then
-                local SR = Instance.new("BodyForce", part)
-                SR.Name = "ServerResponse"
-                SR.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
-                
-
-                local SR2 = Instance.new("BodyForce", part)
-                SR2.Name = "ServerResponse2"
-                SR2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
-            elseif part.Parent and part:FindFirstChild("ServerResponse") then
-                part.ServerResponse.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
-                
-                if not part:FindFirstChild("ServerResponse2") then
-                    local SR2 = Instance.new("BodyForce", part)
-                    SR2.Name = "ServerResponse2"
-                    SR2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
-                else
-                    part.ServerResponse2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
-                end
+        for _, name in ipairs({"ServerResponse", "ServerResponse2"}) do
+            local response = part:FindFirstChild(name)
+            if not response then
+                response = Instance.new("BodyForce")
+                response.Name = name
+                response.Parent = part
             end
-        end)
+            if response:IsA("BodyForce") then
+                response.Force = Vector3.new(0, part.AssemblyMass * workspace.Gravity * 0.08, 0)
+            end
+        end
 
         if not partTargets[part] then
             partTargets[part] = {
@@ -1329,6 +1351,41 @@ end
 
 local function cleanupPartState(part, destroyPart)
     if not part then return end
+    partTargets[part] = nil
+    partOffsets[part] = nil
+    frozenTargets[part] = nil
+    anchorBombAnchored[part] = nil
+    satFired[part] = nil
+    pcall(function()
+        if part.Parent then
+            local currentVel = part.AssemblyLinearVelocity
+            part.AssemblyLinearVelocity = -currentVel
+            part.AssemblyAngularVelocity = Vector3.zero
+            part.CFrame = part.CFrame
+
+            local ap = part:FindFirstChild("NetAP")
+            if ap then ap.Enabled = false end
+            local ao = part:FindFirstChild("NetAO")
+            if ao then ao.Enabled = false end
+
+            local attach = part:FindFirstChild("NetAttach")
+            if attach then
+                local childAP = attach:FindFirstChild("NetAP")
+                if childAP then childAP.Enabled = false end
+                local childAO = attach:FindFirstChild("NetAO")
+                if childAO then childAO.Enabled = false end
+            end
+            task.spawn(function()
+                task.wait(0.03)
+                if part and part.Parent then
+                    pcall(function()
+                        part.AssemblyLinearVelocity = Vector3.zero
+                        part.AssemblyAngularVelocity = Vector3.zero
+                    end)
+                end
+            end)
+        end
+    end)
 
     removeHL(part)
 
@@ -1360,9 +1417,6 @@ local function cleanupPartState(part, destroyPart)
 
     pcall(function()
         if part.Parent then
-            part.AssemblyLinearVelocity = Vector3.zero
-            part.AssemblyAngularVelocity = Vector3.zero
-
             local bp = part:FindFirstChild("NetBP")
             if bp then bp:Destroy() end
             local netBg = part:FindFirstChild("NetBG")
@@ -1379,6 +1433,17 @@ local function cleanupPartState(part, destroyPart)
             if sr then sr:Destroy() end
             local sr2 = part:FindFirstChild("ServerResponse2")
             if sr2 then sr2:Destroy() end
+            local bv = part:FindFirstChild("OwnershipBV")
+            if bv then bv:Destroy() end
+            local bav = part:FindFirstChild("OwnershipBAV")
+            if bav then bav:Destroy() end
+            local seat = part:FindFirstChildOfClass("Seat")
+            if seat then
+                seat.Disabled = false
+            end
+            if part:IsA("Seat") then
+                part.Disabled = false
+            end
 
             pcall(sethiddenproperty, part, "PhysicsRepRootPart", nil)
 
@@ -1387,12 +1452,6 @@ local function cleanupPartState(part, destroyPart)
             end
         end
     end)
-
-    partOffsets[part] = nil
-    frozenTargets[part] = nil
-    partTargets[part] = nil
-    anchorBombAnchored[part] = nil
-    satFired[part] = nil
 end
 
 local function updatePhysPropertiesForSelected()
@@ -1684,10 +1743,11 @@ local function _wallTarget(index, total, part, t)
 end
 
 local function getTarget(index, total, part, t)
-    local mHit   = getFormationCenterTarget()
+    local formYOffset = Vector3.new(0, formOffsetY, 0)
+    local mHit   = getFormationCenterTarget() + formYOffset
     local char   = LP.Character
-    local rp = (char and char:FindFirstChild("HumanoidRootPart"))
-               and char.HumanoidRootPart.Position or Vector3.zero
+    local rp = ((char and char:FindFirstChild("HumanoidRootPart"))
+               and char.HumanoidRootPart.Position or Vector3.zero) + formYOffset
     local ratio  = total>1 and (index-1)/(total-1) or 0
     local angle  = (index-1)/math.max(total,1)*math.pi*2
     
@@ -1714,41 +1774,41 @@ local function getTarget(index, total, part, t)
 
     elseif activeMode=="Ring" then
         local rMax = math.max(scX, scZ)
-        local r=math.max(total*0.45,formRadius)*rMax; local a=angle+t*0.5
+        local r=math.max(total*0.45,formRadius)*rMax; local a=angle+t*1.0
         return Vector3.new(mHit.X+math.cos(a)*r*scX,mHit.Y+1.5*scY+math.sin(t*1.2)*0.4,mHit.Z+math.sin(a)*r*scZ)
 
     elseif activeMode=="Orbit" then
-        local a=angle+t*1.6; local vOff=math.sin(a*2+index)*4*scY
+        local a=angle+t*3.2; local vOff=math.sin(a*2+index)*4*scY
         return Vector3.new(mHit.X+math.cos(a)*orbitRadius*scX,mHit.Y+4*scY+vOff,mHit.Z+math.sin(a)*orbitRadius*scZ)
 
     elseif activeMode=="Spiral" then
-        local a=ratio*2.5*math.pi*2+t*0.6; local r=ratio*8*math.max(scX,scZ)
+        local a=ratio*2.5*math.pi*2+t*1.2; local r=ratio*8*math.max(scX,scZ)
         return Vector3.new(mHit.X+math.cos(a)*r*scX,mHit.Y+ratio*spiralHeight*scY,mHit.Z+math.sin(a)*r*scZ)
 
     elseif activeMode=="Wave" then
         local x=(ratio-.5)*math.max(total,1)*1.3*scX
-        local wY=math.sin(ratio*math.pi*5+t*2.5)*waveAmp*scY
-        local wZ=math.cos(ratio*math.pi*3+t*1.5)*1.2*scZ
+        local wY=math.sin(ratio*math.pi*5+t*5.0)*waveAmp*scY
+        local wZ=math.cos(ratio*math.pi*3+t*3.0)*1.2*scZ
         return Vector3.new(mHit.X+x,mHit.Y+wY+2*scY,mHit.Z+wZ)
 
     elseif activeMode=="Halo" then
         local rMax = math.max(scX, scZ)
-        local r=math.max(total*0.4,formRadius)*rMax; local a=angle+t*0.35
+        local r=math.max(total*0.4,formRadius)*rMax; local a=angle+t*0.7
         return Vector3.new(rp.X+math.cos(a)*r*scX,rp.Y+7*scY+math.sin(t*2.2)*0.3,rp.Z+math.sin(a)*r*scZ)
 
     elseif activeMode=="Drone" then
         local off=partOffsets[part] or Vector3.zero
-        local driftX=math.sin(t*0.8+index*1.1)*2*scX
-        local driftY=math.sin(t*1.3+index*0.9)*1*scY
-        local driftZ=math.cos(t*0.65+index*1.4)*2*scZ
+        local driftX=math.sin(t*1.6+index*1.1)*2*scX
+        local driftY=math.sin(t*2.6+index*0.9)*1*scY
+        local driftZ=math.cos(t*1.3+index*1.4)*2*scZ
         return mHit+Vector3.new(off.X*1.8*scX,off.Y*1.8,off.Z*1.8*scZ)+Vector3.new(driftX,driftY,driftZ)+Vector3.new(0,4*scY,0)
 
     elseif activeMode=="DroneV2" then
         if dv2Target then
             return dv2Target.Position+Vector3.new(
-                math.sin(t*8+index*1.7)*0.6,math.sin(t*6+index*0.9)*0.6,math.cos(t*8+index*1.3)*0.6)
+                math.sin(t*16+index*1.7)*0.6,math.sin(t*12+index*0.9)*0.6,math.cos(t*16+index*1.3)*0.6)
         end
-        local rX=formRadius*scX; local rZ=formRadius*scZ; local a=angle+t*0.45
+        local rX=formRadius*scX; local rZ=formRadius*scZ; local a=angle+t*0.9
         return Vector3.new(rp.X+math.cos(a)*rX,rp.Y+5.5*scY+math.sin(t*2+index*0.65)*0.35,rp.Z+math.sin(a)*rZ)
 
     elseif activeMode=="Shield" then
@@ -1797,13 +1857,13 @@ local function getTarget(index, total, part, t)
 
         local yLatScale = 0.28
         return Vector3.new(
-            mHit.X + sinY*math.cos(theta+t*0.2)*rx,
+            mHit.X + sinY*math.cos(theta+t*0.4)*rx,
             mHit.Y + cosY*ry*yLatScale,
-            mHit.Z + sinY*math.sin(theta+t*0.2)*rz)
+            mHit.Z + sinY*math.sin(theta+t*0.4)*rz)
 
     elseif activeMode=="Vortex" then
         local band=(index-1)%6; local h=math.floor((index-1)/6)*2.2*scY
-        local spin=band/6*math.pi*2-t*tornadoSpeed
+        local spin=band/6*math.pi*2-t*tornadoSpeed*2
         local maxR = math.max(scX, scZ)
         local r=(1+(h/maxR)*0.35)*maxR
         return Vector3.new(mHit.X+math.cos(spin)*r*scX,mHit.Y+14*scY-h,mHit.Z+math.sin(spin)*r*scZ)
@@ -1811,16 +1871,16 @@ local function getTarget(index, total, part, t)
     elseif activeMode=="DNA" then
         local strand=(index-1)%2; local pos=math.floor((index-1)/2)
         local pr=total>2 and pos/math.floor(total/2) or 0
-        local a=pr*3*math.pi*2+t*0.8+strand*math.pi
+        local a=pr*3*math.pi*2+t*1.6+strand*math.pi
         local r=3*scR; local h=pr*12*scY
         return Vector3.new(mHit.X+math.cos(a)*r*scX,mHit.Y+h,mHit.Z+math.sin(a)*r*scZ)
 
     elseif activeMode=="Pulse" then
-        local pulseR=formRadius*(1+math.sin(t*3)*0.45)*math.max(scX,scZ)
+        local pulseR=formRadius*(1+math.sin(t*6)*0.45)*math.max(scX,scZ)
         local a=angle
         return Vector3.new(
             mHit.X+math.cos(a)*pulseR*scX,
-            mHit.Y+2*scY+math.sin(t*3)*0.5,
+            mHit.Y+2*scY+math.sin(t*6)*0.5,
             mHit.Z+math.sin(a)*pulseR*scZ)
 
     elseif activeMode=="Grid" then
@@ -1838,13 +1898,13 @@ local function getTarget(index, total, part, t)
         }
         local vi=((index-1)%8)+1; local v=verts[vi]
         local szX=formRadius*scX; local szZ=formRadius*scZ; local szY=formRadius*scY
-        local rot=CFrame.Angles(t*0.5,t*0.7,t*0.3)
+        local rot=CFrame.Angles(t*1.0,t*1.4,t*0.6)
         local sv=Vector3.new(v.X*szX, v.Y*szY, v.Z*szZ)
         local rv=rot:VectorToWorldSpace(sv)
         return mHit+rv+Vector3.new(0,3*scY,0)
 
     elseif activeMode=="Scatter" then
-        local scatter=(math.sin(t*0.75)+1)/2
+        local scatter=(math.sin(t*1.5)+1)/2
         local off=(partOffsets[part] or Vector3.zero)
         local far=mHit+Vector3.new(off.X*14*scX,off.Y*14,off.Z*14*scZ)+Vector3.new(0,math.abs(off.Y)*4*scY,0)
         return mHit:Lerp(far,scatter)+Vector3.new(0,1*scY,0)
@@ -1852,13 +1912,13 @@ local function getTarget(index, total, part, t)
     elseif activeMode=="Star" then
         local isPoint=(index-1)%2==0
         local spoke=math.floor((index-1)/2)
-        local sAngle=spoke/math.ceil(total/2)*math.pi*2+t*0.3
+        local sAngle=spoke/math.ceil(total/2)*math.pi*2+t*0.6
         local r=isPoint and formRadius*2*scR or formRadius*0.75*scR
         return Vector3.new(mHit.X+math.cos(sAngle)*r*scX,mHit.Y+2*scY,mHit.Z+math.sin(sAngle)*r*scZ)
 
     elseif activeMode=="Pendulum" then
-        local swing=math.sin(t*2+index*0.55)*formRadius*scX
-        local dip=-(1-math.cos(t*2+index*0.55))*formRadius*scY*0.5
+        local swing=math.sin(t*4+index*0.55)*formRadius*scX
+        local dip=-(1-math.cos(t*4+index*0.55))*formRadius*scY*0.5
         return Vector3.new(mHit.X+swing,mHit.Y+6*scY+dip,mHit.Z+(ratio-0.5)*4*scZ)
 
     elseif activeMode=="Rain" then
@@ -1870,7 +1930,7 @@ local function getTarget(index, total, part, t)
         local groundY = getGroundYAt(x, z, topY, part)
         local floorY = groundY and (groundY + part.Size.Y * 0.5 + 0.15) or (mHit.Y + 2 * scY)
         local dropHeight = math.max(topY - floorY, 2)
-        local fall = (t * 19 + phase / (math.pi * 2) * dropHeight) % dropHeight
+        local fall = (t * 38 + phase / (math.pi * 2) * dropHeight) % dropHeight
         return Vector3.new(x, topY - fall, z)
 
     elseif activeMode=="Galaxy" then
@@ -1881,28 +1941,28 @@ local function getTarget(index, total, part, t)
         local tpa    = math.ceil(total / arms)
         local ar     = tpa>1 and posInArm/(tpa-1) or 0
         local base   = arm/arms * math.pi*2
-        local spiral = base + ar*math.pi*2.5 + t*0.4
+        local spiral = base + ar*math.pi*2.5 + t*0.8
         local r      = ar * formRadius*2*scR
-        local tilt   = math.sin(t*1.5 + index)*0.35*scY
+        local tilt   = math.sin(t*3.0 + index)*0.35*scY
         return Vector3.new(mHit.X+math.cos(spiral)*r*scX, mHit.Y+tilt+1*scY, mHit.Z+math.sin(spiral)*r*scZ)
 
     elseif activeMode=="Blackhole" then
 
-        local cycle  = (t*0.75) % 1
+        local cycle  = (t*1.5) % 1
         local pull   = math.max(0, 1 - cycle*2.2)          
         local r      = formRadius * pull
-        local spin   = angle - t*5*(1.2 - pull*0.9)        
+        local spin   = angle - t*10*(1.2 - pull*0.9)        
         local h      = pull * 4
         return Vector3.new(mHit.X+math.cos(spin)*r, mHit.Y+h, mHit.Z+math.sin(spin)*r)
 
     elseif activeMode=="Lemniscate" then
 
-        local phase  = ratio * math.pi*2 + t*0.65
+        local phase  = ratio * math.pi*2 + t*1.3
         local denom  = 1 + math.sin(phase)^2 + 0.001
         local a      = formRadius * scR * 1.6
         local x      = a * math.cos(phase) / denom * scX
         local z      = a * math.sin(phase)*math.cos(phase) / denom * scZ
-        local y      = math.sin(t*1.6 + index*0.45) * 0.55 * scY
+        local y      = math.sin(t*3.2 + index*0.45) * 0.55 * scY
         return Vector3.new(mHit.X+x, mHit.Y+2*scY+y, mHit.Z+z)
 
     elseif activeMode=="Blender" then
@@ -1917,7 +1977,7 @@ local function getTarget(index, total, part, t)
         local up     = math.abs(axis.Y) < 0.9 and Vector3.new(0,1,0) or Vector3.new(1,0,0)
         local p1     = (axis:Cross(up)).Unit
         local p2     = (axis:Cross(p1)).Unit
-        local spd    = 2.8 + (index%7)*0.25
+        local spd    = 5.6 + (index%7)*0.25
         local ph     = t*spd + index*1.37
         local maxR = math.max(scX, scZ)
         local r      = formRadius * maxR
@@ -1928,10 +1988,10 @@ local function getTarget(index, total, part, t)
         local isSpike = (index-1)%2 == 0
         local spokes  = math.ceil(total/2)
         local si      = math.floor((index-1)/2)
-        local a       = si/math.max(spokes,1)*math.pi*2 + t*0.12
+        local a       = si/math.max(spokes,1)*math.pi*2 + t*0.24
         local r       = formRadius * scR
         if isSpike then
-            local sway = math.sin(t*2 + si*0.9) * 0.15
+            local sway = math.sin(t*4 + si*0.9) * 0.15
             return Vector3.new(rp.X+math.cos(a)*r*scX, rp.Y+10*scY+sway, rp.Z+math.sin(a)*r*scZ)
         else
             return Vector3.new(rp.X+math.cos(a)*r*0.65*scX, rp.Y+7*scY, rp.Z+math.sin(a)*r*0.65*scZ)
@@ -1940,13 +2000,13 @@ local function getTarget(index, total, part, t)
     elseif activeMode=="Swarm" then
 
         local off    = partOffsets[part] or Vector3.zero
-        local wanderX = math.sin(t*1.1 + index*2.3 + off.X) * formRadius*scX
-        local wanderY = math.sin(t*0.9 + index*1.7 + off.Y) * formRadius*0.55*scY
-        local wanderZ = math.cos(t*1.3 + index*2.1 + off.Z) * formRadius*scZ
+        local wanderX = math.sin(t*2.2 + index*2.3 + off.X) * formRadius*scX
+        local wanderY = math.sin(t*1.8 + index*1.7 + off.Y) * formRadius*0.55*scY
+        local wanderZ = math.cos(t*2.6 + index*2.1 + off.Z) * formRadius*scZ
         local jitter = Vector3.new(
-            math.sin(t*9  + index*3.1) * 0.7,
-            math.sin(t*7  + index*2.7) * 0.35,
-            math.cos(t*8  + index*3.5) * 0.7)
+            math.sin(t*18  + index*3.1) * 0.7,
+            math.sin(t*14  + index*2.7) * 0.35,
+            math.cos(t*16  + index*3.5) * 0.7)
         return mHit + Vector3.new(wanderX,wanderY,wanderZ) + jitter + Vector3.new(0,2*scY,0)
 
     elseif activeMode=="Satellite" then
@@ -1962,7 +2022,7 @@ local function getTarget(index, total, part, t)
             local ringSlots = 8
             local layer = math.floor((index - 1) / ringSlots)
             local slot  = (index - 1) % ringSlots
-            local a     = (slot / ringSlots) * math.pi * 2 + t * 0.2
+            local a     = (slot / ringSlots) * math.pi * 2 + t * 0.4
             local r     = math.max(3.5 * scX, 3.5 * scZ)
             local y     = rp.Y + high + layer * (2.1 * scY)
             return Vector3.new(
@@ -1973,7 +2033,7 @@ local function getTarget(index, total, part, t)
       
             local hi = index - clusterN
             local hn = math.max(total - clusterN, 1)
-            local a  = (hi - 1) / hn * math.pi * 2 + t * 0.28
+            local a  = (hi - 1) / hn * math.pi * 2 + t * 0.56
             local r  = formRadius * math.max(scX, scZ)
             return Vector3.new(
                 rp.X + math.cos(a) * r * scX,
@@ -2021,7 +2081,7 @@ local function getTarget(index, total, part, t)
 
     elseif activeMode=="Fountain" then
 
-        local jet = (t * 2.2 + ratio * 1.8) % 1
+        local jet = (t * 4.4 + ratio * 1.8) % 1
         local h   = math.sin(jet * math.pi) * formRadius * 2.8 * scY
         local off = partOffsets[part] or Vector3.zero
         local offScaled = Vector3.new(off.X*formRadius*0.35*scX, 0, off.Z*formRadius*0.35*scZ)
@@ -2029,7 +2089,7 @@ local function getTarget(index, total, part, t)
 
     elseif activeMode=="Bounce" then
 
-        local phase = (t * 1.4 + index * 0.12) % 2
+        local phase = (t * 2.8 + index * 0.12) % 2
         local alpha = phase < 1 and phase or (2 - phase)
         local off   = partOffsets[part] or Vector3.zero
         local offScaled = Vector3.new(off.X*0.5*scX, 0, off.Z*0.5*scZ)
@@ -2038,13 +2098,13 @@ local function getTarget(index, total, part, t)
     elseif activeMode=="Ripple" then
 
         local maxR = math.max(scX, scZ)
-        local waveR = ((t * 2.4 - index * 0.18) % (formRadius * 2.2 * maxR + 1)) + 1
-        local a     = angle + t * 0.25
+        local waveR = ((t * 4.8 - index * 0.18) % (formRadius * 2.2 * maxR + 1)) + 1
+        local a     = angle + t * 0.5
         return Vector3.new(mHit.X + math.cos(a) * waveR * scX, mHit.Y + 2 * scY, mHit.Z + math.sin(a) * waveR * scZ)
 
     elseif activeMode=="Juggle" then
 
-        local toss = math.sin(t * 2.4 + index * 0.75)
+        local toss = math.sin(t * 4.8 + index * 0.75)
         local h    = (toss + 1) * 0.5 * formRadius * scY * 2.2 + 2 * scY
         local spreadX = formRadius * 0.35 * scX
         local spreadZ = formRadius * 0.35 * scZ
@@ -2055,36 +2115,36 @@ local function getTarget(index, total, part, t)
 
     elseif activeMode=="Constellation" then
 
-        local a   = angle + t * 0.45
-        local r   = formRadius * scR * (0.85 + 0.15 * math.sin(index * 1.9 + t))
-        local bob = math.sin(t * 1.8 + index * 0.6) * 0.4 * scY
+        local a   = angle + t * 0.9
+        local r   = formRadius * scR * (0.85 + 0.15 * math.sin(index * 1.9 + t * 2))
+        local bob = math.sin(t * 3.6 + index * 0.6) * 0.4 * scY
         return Vector3.new(mHit.X + math.cos(a) * r * scX, mHit.Y + 2.5 * scY + bob, mHit.Z + math.sin(a) * r * scZ)
 
 
     elseif activeMode=="Rose" then
 
         local k = 3 + ((total % 4) - 1)  
-        local theta = angle + t * 0.6
-        local a = formRadius * scR * (0.75 + 0.25*math.sin(t*1.3 + ratio*6))
+        local theta = angle + t * 1.2
+        local a = formRadius * scR * (0.75 + 0.25*math.sin(t*2.6 + ratio*6))
         local r = a * math.cos(k * theta)
 
-        local y = 2*scY + (math.sin(theta*0.5 + t*1.7 + index*0.12) * 0.8 + ratio*0.3) * (6*scY)
+        local y = 2*scY + (math.sin(theta*0.5 + t*3.4 + index*0.12) * 0.8 + ratio*0.3) * (6*scY)
         return Vector3.new(mHit.X + math.cos(theta) * r * scX, mHit.Y + y, mHit.Z + math.sin(theta) * r * scZ)
 
     elseif activeMode=="OrbitSin" then
 
-        local a = angle + t*0.9
+        local a = angle + t*1.8
         local baseR = math.max(0.001, formRadius * scR)
-        local r = baseR * (0.75 + 0.25*math.sin(t*2.1 + ratio*6 + index*0.08))
-        local y = 2*scY + scY*2.5*math.sin(t*1.4 + ratio*math.pi*2) + (partOffsets[part] and partOffsets[part].Y or 0)*0.6
+        local r = baseR * (0.75 + 0.25*math.sin(t*4.2 + ratio*6 + index*0.08))
+        local y = 2*scY + scY*2.5*math.sin(t*2.8 + ratio*math.pi*2) + (partOffsets[part] and partOffsets[part].Y or 0)*0.6
         return Vector3.new(mHit.X + math.cos(a)*r*scX, mHit.Y + y, mHit.Z + math.sin(a)*r*scZ)
 
     elseif activeMode=="Liss" then
 
-        local u = ratio*math.pi*2 + t*0.55
-        local x = math.sin(3*u + t*0.3 + index*0.02)
-        local y = math.cos(2*u - t*0.22 + index*0.03)
-        local z = math.sin(4*u + t*0.18 - index*0.01)
+        local u = ratio*math.pi*2 + t*1.1
+        local x = math.sin(3*u + t*0.6 + index*0.02)
+        local y = math.cos(2*u - t*0.44 + index*0.03)
+        local z = math.sin(4*u + t*0.36 - index*0.01)
         local ampX = (formRadius * scR) * 1.0
         local ampY = (formRadius * scY) * 1.0
         local ampZ = (formRadius * scR) * 1.0
@@ -2094,11 +2154,11 @@ local function getTarget(index, total, part, t)
 
     elseif activeMode=="Swing" then
 
-        local swingA = angle + math.sin(t*1.2)*0.35 + t*0.25
-        local swingLen = (formRadius*scR) * (0.7 + 0.3*math.sin(t*2.0 + ratio*5))
+        local swingA = angle + math.sin(t*2.4)*0.35 + t*0.5
+        local swingLen = (formRadius*scR) * (0.7 + 0.3*math.sin(t*4.0 + ratio*5))
         local pos = Vector3.new(
             mHit.X + math.cos(swingA)*swingLen*scX,
-            mHit.Y + (2.5*scY + math.sin(t*1.6 + index*0.08)*scY*3),
+            mHit.Y + (2.5*scY + math.sin(t*3.2 + index*0.08)*scY*3),
             mHit.Z + math.sin(swingA)*swingLen*scZ)
 
         local toCursor = currentMouseHit - pos
@@ -2120,16 +2180,16 @@ local function getTarget(index, total, part, t)
         local layers = math.max(1, math.ceil(total / 3))
 
         local baseR = formRadius * scR * (1 + layer * 0.4)
-        local spinSpeed = 1.2 + layer * 0.5
-        local orbitSpeed = 0.8 + layer * 0.3
-        local bobSpeed = 2.5 + layer * 0.8
+        local spinSpeed = 2.4 + layer * 0.5
+        local orbitSpeed = 1.6 + layer * 0.3
+        local bobSpeed = 5.0 + layer * 0.8
 
         local orbitAngle = angle + t * orbitSpeed
         local spinAngle = angle * 2 + t * spinSpeed + index * 0.5
         local bobOffset = math.sin(t * bobSpeed + index * 0.7) * (1.5 + layer * 0.5) * scY
 
-        local wobbleX = math.sin(t * 3 + index * 1.2) * 0.8 * scX
-        local wobbleZ = math.cos(t * 2.5 + index * 0.9) * 0.8 * scZ
+        local wobbleX = math.sin(t * 6 + index * 1.2) * 0.8 * scX
+        local wobbleZ = math.cos(t * 5.0 + index * 0.9) * 0.8 * scZ
 
         local r = baseR * (0.85 + 0.15 * math.sin(spinAngle))
 
@@ -2141,9 +2201,9 @@ local function getTarget(index, total, part, t)
     elseif activeMode=="Homing" then
         if homingTarget and tick() < homingEndTime then
             return homingTarget.Position + Vector3.new(
-                math.sin(t * 10 + index * 2) * 0.6,
-                math.cos(t * 8 + index * 1.5) * 0.6,
-                math.sin(t * 11 + index * 2.5) * 0.6)
+                math.sin(t * 20 + index * 2) * 0.6,
+                math.cos(t * 16 + index * 1.5) * 0.6,
+                math.sin(t * 22 + index * 2.5) * 0.6)
         end
         return mHit + (partOffsets[part] or Vector3.zero) * 0.5
 
@@ -2154,16 +2214,16 @@ local function getTarget(index, total, part, t)
                 local beamDist = (rp - railgunHitPos).Magnitude
                 local p = math.clamp(ratio * 1.5, 0, 1)
                 local spread = Vector3.new(
-                    math.sin(index * 1.9 + t * 5) * 1.2 * scX,
-                    math.cos(index * 1.7 + t * 4.5) * 1.0 * scY,
-                    math.sin(index * 2.5 + t * 5.3) * 1.0 * scZ)
+                    math.sin(index * 1.9 + t * 10) * 1.2 * scX,
+                    math.cos(index * 1.7 + t * 9) * 1.0 * scY,
+                    math.sin(index * 2.5 + t * 10.6) * 1.0 * scZ)
                 return rp + beamDir * (p * math.min(beamDist, 4000)) + spread
             elseif railgunPhase == "exploding" then
-                local spread = math.sin(t * 8 + index * 2) * 1.5 * scX
+                local spread = math.sin(t * 16 + index * 2) * 1.5 * scX
                 return railgunHitPos + Vector3.new(
-                    math.sin(index * 2.3 + t * 6) * spread,
-                    math.cos(index * 1.7 + t * 5) * spread + 2 * scY,
-                    math.cos(index * 1.9 + t * 7) * spread)
+                    math.sin(index * 2.3 + t * 12) * spread,
+                    math.cos(index * 1.7 + t * 10) * spread + 2 * scY,
+                    math.cos(index * 1.9 + t * 14) * spread)
             elseif railgunPhase == "returning" then
                 local returnPos = rp + Vector3.new(0, 8 * scY, 0) + root.CFrame.LookVector * -2
                 local p = math.clamp((tick() - railgunPhaseStart) / 1.5, 0, 1)
@@ -2176,18 +2236,102 @@ local function getTarget(index, total, part, t)
         groundY = getGroundYAt(mHit.X, mHit.Z, mHit.Y, part)
         targetY = groundY and (groundY + (part and part.Size.Y * 0.5 or 1) + 0.1) or (mHit.Y + (part and part.Size.Y * 0.5 or 1) + 0.1)
         local launchHeight = math.clamp(35 + math.max(scX, scZ) * 8, 35, 80)
-        local dropTime = 1.0
+        local dropTime = 0.5
         local timeInFlight = (t + index * 0.12) % dropTime
         local progress = timeInFlight / dropTime
         local spread = 3 * math.max(scX, scZ)
-        local offsetX = math.sin(angle + t * 0.4 + index * 0.25) * spread
-        local offsetZ = math.cos(angle + t * 0.4 + index * 0.25) * spread
+        local offsetX = math.sin(angle + t * 0.8 + index * 0.25) * spread
+        local offsetZ = math.cos(angle + t * 0.8 + index * 0.25) * spread
         local height = launchHeight * (1 - progress)
         wobble = math.sin(progress * math.pi) * 2
         return Vector3.new(
             mHit.X + offsetX,
             targetY + height + wobble,
             mHit.Z + offsetZ)
+
+    elseif activeMode=="Sinewave" then
+        local x = (ratio - 0.5) * formRadius * 4 * scX
+        local z = (ratio - 0.5) * formRadius * 4 * scZ
+        local wave1 = math.sin(x * 0.5 + t * 4) * math.cos(z * 0.5 + t * 3)
+        local wave2 = math.cos(x * 0.3 - t * 3.6) * math.sin(z * 0.4 + t * 4.4)
+        local wave3 = math.sin((x + z) * 0.2 + t * 5)
+        local y = (wave1 + wave2 + wave3) * formRadius * 0.8 * scY
+        return Vector3.new(mHit.X + x, mHit.Y + y + 3 * scY, mHit.Z + z)
+
+    elseif activeMode=="Heart" then
+        local char = LP.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local origin = root and root.Position or mHit
+        local lookDir = root and root.CFrame.LookVector or Vector3.new(0, 0, -1)
+        local rightDir = root and root.CFrame.RightVector or Vector3.new(1, 0, 0)
+        local upDir = root and root.CFrame.UpVector or Vector3.new(0, 1, 0)
+        
+        local theta = ratio * math.pi * 2 + t * 1.0
+        local heartScale = formRadius * scR * 0.8
+        local x = 16 * math.sin(theta)^3
+        local y = 13 * math.cos(theta) - 5 * math.cos(2*theta) - 2 * math.cos(3*theta) - math.cos(4*theta)
+        local z = math.sin(theta * 2 + t * 2) * heartScale * 0.3
+        local pulse = 1 + 0.1 * math.sin(t * 6)
+        
+        local localPos = Vector3.new(x * heartScale * 0.05, y * heartScale * 0.05 + 5, z * 0.3)
+        local worldPos = origin + rightDir * localPos.X * scX * pulse + upDir * localPos.Y * scY * pulse + lookDir * localPos.Z * scZ
+        
+        return worldPos
+
+    elseif activeMode=="Wings" then
+        local char = LP.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local origin = root and root.Position or mHit
+        local lookDir = root and root.CFrame.LookVector or Vector3.new(0, 0, -1)
+        local rightDir = root and root.CFrame.RightVector or Vector3.new(1, 0, 0)
+        local upDir = root and root.CFrame.UpVector or Vector3.new(0, 1, 0)
+        
+        local wingSide = index % 2 == 0 and 1 or -1
+        local wingIndex = math.floor((index - 1) / 2)
+        local wingTotal = math.ceil(total / 2)
+        local wingRatio = wingIndex / math.max(wingTotal - 1, 1)
+        
+        local wingSpan = formRadius * 2.5 * scR
+        local wingCurve = math.sin(wingRatio * math.pi * 0.5) * wingSpan
+        local wingY = wingRatio * formRadius * 1.5 * scY
+        local wingZ = math.sin(wingRatio * math.pi) * formRadius * 0.5 * scZ
+        
+        local flap = math.sin(t * 4 + wingRatio * 3) * 0.3
+        local flapY = math.sin(t * 8 + wingRatio * 2) * 0.5 * scY
+        local spread = wingSide * (wingCurve + flap * wingSpan * 0.2)
+        local featherLayer = wingIndex % 3
+        local featherOffset = featherLayer * 0.3 * scR
+        local featherAngle = wingRatio * math.pi * 0.8 + featherLayer * 0.2
+        
+        local localPos = Vector3.new(spread + featherOffset, wingY + flapY, wingZ + math.sin(featherAngle) * featherOffset)
+        local worldPos = origin + rightDir * localPos.X * scX + upDir * localPos.Y + lookDir * localPos.Z * scZ
+        
+        return worldPos
+
+    elseif activeMode=="Crystal" then
+        local crystalLayers = 5
+        local layer = (index - 1) % crystalLayers
+        local layerIdx = math.floor((index - 1) / crystalLayers)
+        local layerTotal = math.ceil(total / crystalLayers)
+        
+        local layerScale = 1 - layer * 0.15
+        local layerRadius = formRadius * layerScale * scR
+        local layerY = layer * formRadius * 0.8 * scY
+        
+        local phi = (1 + math.sqrt(5)) / 2
+        local theta = 2 * math.pi * layerIdx / phi + t * 0.6 * (layer + 1)
+        local yLat = 1 - 2 * (layerIdx / math.max(layerTotal - 1, 1))
+        local yLatSin = math.sqrt(math.max(0, 1 - yLat * yLat))
+        
+        local x = yLatSin * math.cos(theta) * layerRadius
+        local y = yLat * layerRadius + layerY
+        local z = yLatSin * math.sin(theta) * layerRadius
+        
+        local sparkle = math.sin(t * 5 + index * 0.7) * 0.1
+        return Vector3.new(
+            mHit.X + x * scX * (1 + sparkle),
+            mHit.Y + y + 3 * scY,
+            mHit.Z + z * scZ * (1 + sparkle))
     end
 
     return mHit
@@ -2222,6 +2366,8 @@ local function tickParts()
             if count >= 400 then return end
             if obj:IsA("BasePart") and not obj.Anchored and obj ~= workspace.Terrain
                and not (char and obj:IsDescendantOf(char))
+               and not isPlayerPart(obj)
+               and not frozenTargets[obj]
                and (obj.Position - myPos).Magnitude <= ownerRadius then
                 count += 1
                 pcall(function() obj.AssemblyLinearVelocity = obj.AssemblyLinearVelocity + bump end)
@@ -2467,6 +2613,7 @@ local function tickParts()
         local part=selectedParts[i]
         if not part or not part.Parent then
             removeHL(part); table.remove(selectedParts,i); frozenTargets[part]=nil; partTargets[part]=nil
+        elseif frozenTargets[part] then
         else
 
             if false then
@@ -3234,11 +3381,17 @@ function mkRow2(parent,order,p1,p2)
 end
 
 
-function mkSlider(parent,ltext,lo,hi,def,order,onChange)
+function mkSlider(parent,ltext,lo,hi,def,order,onChange,step)
+    local function formatValue(value)
+        if step and step < 1 then
+            return string.format("%.1f", value)
+        end
+        return tostring(value)
+    end
     local wrap=mkF({Size=UDim2.new(1,0,0,42),BackgroundColor3=PAL.SURFACE,LayoutOrder=order},parent)
     corner(wrap,5)
     local lbl=mkL({Size=UDim2.new(1,-8,0,16),Position=UDim2.new(0,8,0,3),
-        Text=ltext.."  "..def,TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,
+        Text=ltext.."  "..formatValue(def),TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,
         TextXAlignment=Enum.TextXAlignment.Left},wrap)
     local track=mkF({Size=UDim2.new(1,-16,0,4),Position=UDim2.new(0,8,0,28),
         BackgroundColor3=PAL.BORDER},wrap)
@@ -3249,16 +3402,43 @@ function mkSlider(parent,ltext,lo,hi,def,order,onChange)
         BackgroundColor3=Color3.fromRGB(195,195,210),Text="",ZIndex=GUI.Z+8},track)
     Instance.new("UICorner",thumb).CornerRadius=UDim.new(1,0)
     local sl=false
-    thumb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sl=true end end)
-    reg(UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sl=false end end))
+    local lastValue=def
+    local lastMouseX=nil
+    thumb.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then
+            sl=true
+            lastMouseX=i.Position.X
+        end
+    end)
+    reg(UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then
+            sl=false
+            lastMouseX=nil
+        end
+    end))
     reg(UserInputService.InputChanged:Connect(function(i)
         if not sl or i.UserInputType~=Enum.UserInputType.MouseMovement then return end
         local ap=track.AbsolutePosition; local as=track.AbsoluteSize
         local r=math.clamp((i.Position.X-ap.X)/as.X,0,1)
+        local raw=lo+(hi-lo)*r
         local isF=(hi-lo)<=5
-        local val=isF and (math.floor((lo+(hi-lo)*r)*10)/10) or math.floor(lo+(hi-lo)*r)
-        fill.Size=UDim2.new(r,0,1,0); thumb.Position=UDim2.new(r,-5,0.5,-5)
-        lbl.Text=ltext.."  "..val; if onChange then onChange(val) end
+        local val
+        if step and (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+            or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)) then
+            local deltaX=i.Position.X-(lastMouseX or i.Position.X)
+            val=math.clamp(lastValue+deltaX*step,lo,hi)
+            val=lo+math.floor((val-lo)/step+0.5)*step
+        elseif step then
+            val=lo+math.floor((raw-lo)/step+0.5)*step
+            val=math.clamp(val,lo,hi)
+        else
+            val=isF and (math.floor(raw*10)/10) or math.floor(raw)
+        end
+        local valueRatio=(val-lo)/(hi-lo)
+        fill.Size=UDim2.new(valueRatio,0,1,0); thumb.Position=UDim2.new(valueRatio,-5,0.5,-5)
+        lbl.Text=ltext.."  "..formatValue(val); if onChange then onChange(val) end
+        lastValue=val
+        lastMouseX=i.Position.X
     end))
     return wrap
 end
@@ -3324,14 +3504,17 @@ function setupDrag(Main, TBar)
 end
 
 
-function buildBody(Main, MinBtn, W, H, MINI)
+function buildBody(Main, MinBtn, W, H, MINI, ResizeHandle)
     local Body=mkF({Size=UDim2.new(1,0,1,-MINI),Position=UDim2.new(0,0,0,MINI),BackgroundTransparency=1},Main)
     local minimized=false
     MinBtn.MouseButton1Click:Connect(function()
         minimized=not minimized; Body.Visible=not minimized
         Main.Size=UDim2.new(0,W,0,minimized and MINI or H); MinBtn.Text=minimized and "+" or "-"
+        if ResizeHandle then
+            ResizeHandle.Visible = Body.Visible
+        end
     end)
-    return Body
+    return Body, minimized
 end
 
 
@@ -3348,7 +3531,63 @@ function buildMainFrame()
 
     local TBar, MinBtn = buildTitleBar(Main, MINI)
     setupDrag(Main, TBar)
-    local Body = buildBody(Main, MinBtn, W, H, MINI)
+    local ResizeHandle = Instance.new("TextButton")
+    ResizeHandle.Name = "ResizeHandle"
+    ResizeHandle.Size = UDim2.new(0, 20, 0, 20)
+    ResizeHandle.Position = UDim2.new(1, -20, 1, -20)
+    ResizeHandle.BackgroundColor3 = Color3.fromRGB(180, 100, 255)
+    ResizeHandle.BackgroundTransparency = 0
+    ResizeHandle.BorderSizePixel = 0
+    ResizeHandle.Text = "◢"
+    ResizeHandle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ResizeHandle.TextSize = 14
+    ResizeHandle.Font = Enum.Font.GothamBold
+    ResizeHandle.TextXAlignment = Enum.TextXAlignment.Center
+    ResizeHandle.TextYAlignment = Enum.TextYAlignment.Center
+    ResizeHandle.ZIndex = GUI.Z + 10
+    ResizeHandle.AutoButtonColor = false
+    ResizeHandle.Parent = Main
+
+    local resizeCorner = Instance.new("UICorner", ResizeHandle)
+    resizeCorner.CornerRadius = UDim.new(0, 3)
+
+    local Body, minimized = buildBody(Main, MinBtn, W, H, MINI, ResizeHandle)
+    
+
+    ResizeHandle.Visible = Body.Visible
+
+    local resizing = false
+    local resizeStart = Vector2.new()
+    local startSize = Vector2.new(W, H)
+
+    ResizeHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = true
+            resizeStart = Vector2.new(input.Position.X, input.Position.Y)
+            startSize = Vector2.new(Main.AbsoluteSize.X, Main.AbsoluteSize.Y)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local currentPos = Vector2.new(input.Position.X, input.Position.Y)
+            local delta = currentPos - resizeStart
+            local newSize = startSize + delta
+            local clampedWidth = math.clamp(newSize.X, 300, 1200)
+            local clampedHeight = math.clamp(newSize.Y, 400, 900)
+            Main.Size = UDim2.new(0, clampedWidth, 0, clampedHeight)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = false
+        end
+    end)
+
+    MinBtn.MouseButton1Click:Connect(function()
+        ResizeHandle.Visible = Body.Visible
+    end)
 
     return Main, Body
 end
@@ -3369,7 +3608,7 @@ function buildMainTabs(Body)
         end
     end
     for i,name in ipairs({"Parts","NPC"}) do
-        local b=mkTab({Size=UDim2.new(0,102,1,0),BackgroundColor3=PAL.B_DEF,Text=name,
+        local b=mkTab({Size=UDim2.new(0.5,-2,1,0),BackgroundColor3=PAL.B_DEF,Text=name,
             TextColor3=PAL.T2,TextSize=12,Font=Enum.Font.GothamBold,LayoutOrder=i},mTabRow)
         mTabBtns[name]=b; b.MouseButton1Click:Connect(function() setMTab(name) end)
     end
@@ -3405,7 +3644,7 @@ function buildPartsPanel(Cont, mPanels)
         end
     end
     for i,name in ipairs(SUB_TABS) do
-        local b=mkTab({Size=UDim2.new(0,98,0,22),BackgroundColor3=PAL.B_DEF,
+        local b=mkTab({Size=UDim2.new(0.25,-2,0,22),BackgroundColor3=PAL.B_DEF,
             BackgroundTransparency=0,Text=name,TextColor3=PAL.T2,
             TextSize=11,Font=Enum.Font.GothamBold,LayoutOrder=i},sTabRow)
         sTabBtns[name]=b; b.MouseButton1Click:Connect(function() setSTab(name) end)
@@ -3663,9 +3902,9 @@ function buildPartsPanel(Cont, mPanels)
 
         mkSec("SCALE & DRAW", modSF, 6)
 
-        mkSlider(modSF,"Form Size X",0,100,formSizeX,7,function(v) formSizeX=v end)
-        mkSlider(modSF,"Form Size Y",0,100,formSizeY,8,function(v) formSizeY=v end)
-        mkSlider(modSF,"Form Size Z",0,100,formSizeZ,9,function(v) formSizeZ=v end)
+        mkSlider(modSF,"Form Size X",0,100,formSizeX,7,function(v) formSizeX=v end,0.1)
+        mkSlider(modSF,"Form Size Y",0,100,formSizeY,8,function(v) formSizeY=v end,0.1)
+        mkSlider(modSF,"Form Size Z",0,100,formSizeZ,9,function(v) formSizeZ=v end,0.1)
 
 
         mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v end)
@@ -3891,6 +4130,7 @@ function buildPartsPanel(Cont, mPanels)
             b.MouseButton1Click:Connect(function()
                 HL.fillColor    = preset.fill
                 HL.outlineColor = preset.outline
+                GUI.ESP_ACCENT  = preset.fill
                 refreshAllHighlights()
             end)
             return b
@@ -4397,6 +4637,25 @@ reg(RunService.Heartbeat:Connect(function()
             end) end
         end
     end
+
+    for part, storedPos in pairs(frozenTargets) do
+        if not part or not part.Parent then
+            frozenTargets[part] = nil
+        else
+            pcall(function()
+                local currentPos = part.Position
+                local diff = storedPos - currentPos
+                local dist = diff.Magnitude
+
+                if dist > 0.01 then
+                    part.AssemblyLinearVelocity = diff.Unit * math.min(dist * 60, 500)
+                else
+                    part.AssemblyLinearVelocity = Vector3.zero
+                end
+                part.AssemblyAngularVelocity = Vector3.zero
+            end)
+        end
+    end
 end))
 
 reg(Mouse.Button1Down:Connect(function()
@@ -4671,6 +4930,29 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
     end
 end))
 
+reg(UserInputService.InputBegan:Connect(function(inp,gpe)
+    if inp.KeyCode==Enum.KeyCode.F then
+        local mousePos = UserInputService:GetMouseLocation()
+        local inset = GuiService:GetGuiInset()
+        local x = mousePos.X
+        local y = mousePos.Y - inset.Y
+
+        local ray = Camera:ScreenPointToRay(x, y)
+        local hit = workspace:Raycast(ray.Origin, ray.Direction * 5000)
+
+        if hit and hit.Instance and hit.Instance:IsA("BasePart") then
+            local target = hit.Instance
+            if frozenTargets[target] then
+                frozenTargets[target] = nil
+                pcall(function() target.CanTouch = true end)
+            else
+                frozenTargets[target] = target.Position
+                pcall(function() target.CanTouch = false end)
+            end
+        end
+    end
+end))
+
 
 reg(RunService.Heartbeat:Connect(function()
     updateMouseHit()
@@ -4719,25 +5001,8 @@ reg(RunService.Heartbeat:Connect(function()
 end))
 
 reg(RunService.RenderStepped:Connect(function()
-    for _, part in ipairs(selectedParts) do
-        if part and part.Parent then
-            pcall(function()
-                part.AssemblyLinearVelocity = Vector3.new(0.001, 0.001, 0.001)
-                part.AssemblyAngularVelocity = Vector3.new(0.001, 0.001, 0.001)
-                local SR = part:FindFirstChild("ServerResponse")
-                if SR then
-                    SR.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
-                end
-                local SR2 = part:FindFirstChild("ServerResponse2")
-                if SR2 then
-                    SR2.Force = Vector3.new(0, 0, part.AssemblyMass * 500000)
-                end
-            end)
-        end
-    end
-
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and obj.Anchored then
+        if obj:IsA("BasePart") and obj.Anchored then -- THIS PISSES ME OFFFFFF, ROBLOXX FIX THIS, ANCHORED PARTS SHOULDNT GET FUCKING VELOCITY, THEY CANT EVEN FUCKING MOVE WHYYY WHYYY WHYY, if i dont do this then every anchored part that gets velocity will fling you or any part under your ownership if you touch it, I CAUGHT ONE AT 16K X, 29K Y, 924K Z VELOCITY BTW, THIS IS NOT USELESS
             pcall(function()
                 if obj.AssemblyLinearVelocity ~= Vector3.zero then
                     obj.AssemblyLinearVelocity = Vector3.zero
