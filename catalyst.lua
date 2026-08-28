@@ -5353,7 +5353,7 @@ function buildPartsPanel(Cont, mPanels)
         local MODE_CAT = {
             Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="blue",
             Drone="red", DroneV2="red", Shield="green", Comet="blue", Wall="green",
-            Draw="blue", Beam="blue", Sphere="blue", Vortex="red", DNA="yellow", Pulse="blue", Grid="blue", Cube="green",
+            Draw="blue", Beam="blue", Sphere="blue", Vortex="red", DNA="yellow", Pulse="blue", Grid="blue", Cube="blue",
             Scatter="blue", Star="yellow", Pendulum="yellow", Rain="blue", Galaxy="yellow", Blackhole="red", Lemniscate="yellow", Blender="red",
             Crown="green", Swarm="blue", Minigun="red", Satellite="red",
             Seek="blue", Stickman="black", Slinky="blue", Fountain="blue", Bounce="blue", Ripple="blue", Juggle="blue", Constellation="yellow",
@@ -7009,7 +7009,10 @@ end))
 
 
 
---i love penis sorry
+
+
+
+-- i love penis
 penis = true
 if penis == true then
 print("catalyst loadeeed")
