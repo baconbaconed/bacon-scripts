@@ -31,15 +31,28 @@ local function fixCanQueryForRaycast()
             end
         end
         if part.AssemblyMass == math.huge then
-            if part.Transparency < 0.90 then
+            if part.Transparency <= 0.80 then
                 pcall(function() part.CanQuery = true end)
+            else
+                pcall(function() part.CanQuery = false end)
             end
             return
         end
 
         pcall(function() part.CanQuery = true end)
-        if part.Transparency >= 0.90 then
+        if part.Transparency > 0.80 then
             pcall(function() part.CanQuery = false end)
+        end
+
+        if not part:GetAttribute("_cat_canquery_hooked") then
+            part:SetAttribute("_cat_canquery_hooked", true)
+            part:GetPropertyChangedSignal("Transparency"):Connect(function()
+                if part.Transparency > 0.80 then
+                    pcall(function() part.CanQuery = false end)
+                else
+                    pcall(function() part.CanQuery = true end)
+                end
+            end)
         end
     end
     for _, part in ipairs(workspace:GetDescendants()) do
@@ -387,11 +400,11 @@ end
 
 local function readConfigFile()
     local data
-    if pcall(function() data = readfile(CONFIG_FILE) end) and data and data ~= "" then
-        return data
-    end
     if pcall(function() data = readfile("atomizer_saves.txt") end) and data and data ~= "" then
         pcall(function() writefile(CONFIG_FILE, data) end)
+        return data
+    end
+    if pcall(function() data = readfile(CONFIG_FILE) end) and data and data ~= "" then
         return data
     end
     return nil
@@ -531,94 +544,41 @@ local _OWN = { preSim=1, hb=1, render=1 }
 local reinforceOwnershipDrive, reinforceOwnershipConstraints, reinforceOwnershipHeartbeat, reinforceOwnershipRender
 pcall(function() LP.ReplicationFocus = workspace end)
 
-local preSimConn
-if RunService.PreSimulation then
-    preSimConn = RunService.PreSimulation:Connect(function(deltaTime)
+local preSimConn = RunService.PreSimulation and
+    RunService.PreSimulation:Connect(function(deltaTime)
         pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
-        _OWN.preSim = -_OWN.preSim
-        local jolt = _OWN.preSim * 0.006
-        local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
         for _, part in ipairs(selectedParts) do
             if part and part.Parent and not part.Anchored then
-                pcall(function()
-                    local AP = getNetAP(part)
-                    if AP then
-                        AP.MaxForce    = math.huge
-                        AP.MaxVelocity = math.huge
-                        local tgt = partTargets[part]
-                        if not isVelMode then
-                            AP.Position = (tgt and tgt.position) or part.Position
-                        end
-                    end
-                    part.AssemblyLinearVelocity = part.AssemblyLinearVelocity + Vector3.new(0, jolt, 0)
-                end)
+                pcall(reinforceOwnershipConstraints, part, partTargets[part])
+                pcall(reinforceOwnershipDrive, part, partTargets[part], deltaTime)
+                local origVel = part.AssemblyLinearVelocity
+                part.AssemblyLinearVelocity = Vector3.new(50000, 50000, 50000)
+                part.AssemblyLinearVelocity = origVel
+                part.AssemblyLinearVelocity = Vector3.new(-50000, -50000, -50000)
+                part.AssemblyLinearVelocity = origVel
+                part.AssemblyLinearVelocity = Vector3.new(50000, -50000, 50000)
+                part.AssemblyLinearVelocity = origVel
             end
         end
-        if npcTarget and npcTarget.Parent then
-            for _, part in ipairs(npcTarget:GetDescendants()) do
-                if part:IsA("BasePart") and not part.Anchored then
-                    pcall(reinforceOwnershipConstraints, part, nil)
-                    pcall(reinforceOwnershipDrive, part, nil, deltaTime)
-                     local origVel = part.AssemblyLinearVelocity
-                     part.AssemblyLinearVelocity = Vector3.new(50000,50000,50000)
-                     part.AssemblyLinearVelocity = origVel
-                     part.AssemblyLinearVelocity = Vector3.new(-50000,-50000,-50000)
-                     part.AssemblyLinearVelocity = origVel
-                     part.AssemblyLinearVelocity = Vector3.new(50000,-50000,50000)
-                     part.AssemblyLinearVelocity = origVel
-                end
-            end
-        end
-        if activeMode == "Stickman" and stickGrabActive then
-            local total = #selectedParts
-            for idx, p in ipairs(selectedParts) do
-                local u = total > 1 and (idx - 1) / (total - 1) or 0
-                local isArm = u >= 0.37 and u < 0.73
-                local armMatch = stickArmIsLeft and u < 0.55 or (not stickArmIsLeft and u >= 0.55)
-                if isArm and armMatch and p and p.Parent and not p.Anchored then
-                    pcall(reinforceOwnershipConstraints, p, partTargets[p])
-                    pcall(reinforceOwnershipDrive, p, partTargets[p], deltaTime)
-                   local origVel = p.AssemblyLinearVelocity
-                   p.AssemblyLinearVelocity = Vector3.new(50000,50000,50000)
-                   p.AssemblyLinearVelocity = origVel
-                   p.AssemblyLinearVelocity = Vector3.new(-50000,-50000,-50000)
-                   p.AssemblyLinearVelocity = origVel
-                   p.AssemblyLinearVelocity = Vector3.new(50000,-50000,50000)
-                   p.AssemblyLinearVelocity = origVel
-                end
-            end
-        end
-    end)
-else
-    preSimConn = nil
-end
+    end) or nil
 
 local ownerConn = RunService.Heartbeat:Connect(function()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
-    _OWN.hb = -_OWN.hb
-    local jolt = _OWN.hb * 0.007
-    local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
+    if activeMode == "DroneV2" or activeMode == "Homing" then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
-            pcall(function()
-                local AP = getNetAP(part)
-                if AP then
-                    AP.MaxForce    = math.huge
-                    AP.MaxVelocity = math.huge
-                    local tgt = partTargets[part]
-                    if not isVelMode then
-                        AP.Position = (tgt and tgt.position) or part.Position
-                    end
-                end
-                part.AssemblyLinearVelocity = part.AssemblyLinearVelocity + Vector3.new(0, jolt, 0)
-                local sr = part:FindFirstChild("ServerResponse")
-                if sr and sr:IsA("BodyForce") then
-                    sr.Force = Vector3.new(
-                        (math.random() - 0.5) * 0.002,
-                        part.AssemblyMass * 100000,
-                        (math.random() - 0.5) * 0.002)
-                end
-            end)
+            pcall(reinforceOwnershipConstraints, part, partTargets[part])
+            pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+            pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+            local origVel = part.AssemblyLinearVelocity
+            part.AssemblyLinearVelocity = Vector3.new(75000, 75000, 75000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-75000, -75000, -75000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(75000, -75000, 75000)
+            part.AssemblyLinearVelocity = origVel
+            part.AssemblyLinearVelocity = Vector3.new(-75000, 75000, -75000)
+            part.AssemblyLinearVelocity = origVel
         end
     end
 end)
@@ -634,56 +594,19 @@ local renderOwnerConn = RunService.RenderStepped:Connect(function()
             pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
             pcall(reinforceOwnershipRender, part, partTargets[part])
             local origVel = part.AssemblyLinearVelocity
-            part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
+            part.AssemblyLinearVelocity = Vector3.new(100000, 100000, 100000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(-15, -15, -15)
+            part.AssemblyLinearVelocity = Vector3.new(-100000, -100000, -100000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(15, -15, 15)
+            part.AssemblyLinearVelocity = Vector3.new(100000, -100000, 100000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(-15, 15, -15)
+            part.AssemblyLinearVelocity = Vector3.new(-100000, 100000, -100000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(15, 15, -15)
+            part.AssemblyLinearVelocity = Vector3.new(100000, 100000, -100000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(-15, -15, 15)
-            part.AssemblyLinearVelocity = origVel
-        end
-    end
-    if npcTarget and npcTarget.Parent then
-        for _, part in ipairs(npcTarget:GetDescendants()) do
-            if part:IsA("BasePart") and not part.Anchored then
-                pcall(reinforceOwnershipConstraints, part, nil)
-                pcall(reinforceOwnershipRender, part, nil)
-                local origVel = part.AssemblyLinearVelocity
-                part.AssemblyLinearVelocity = Vector3.new(100000,100000,100000)
-                part.AssemblyLinearVelocity = origVel
-                part.AssemblyLinearVelocity = Vector3.new(-100000,-100000,-100000)
-                part.AssemblyLinearVelocity = origVel
-                part.AssemblyLinearVelocity = Vector3.new(100000,-100000,100000)
-                part.AssemblyLinearVelocity = origVel
-            end
-        end
-    end
-    if activeMode == "Stickman" and stickGrabActive then
-        local total = #selectedParts
-        for idx, p in ipairs(selectedParts) do
-            local u = total > 1 and (idx - 1) / (total - 1) or 0
-            local isArm = u >= 0.37 and u < 0.73
-            local armMatch = stickArmIsLeft and u < 0.55 or (not stickArmIsLeft and u >= 0.55)
-            if isArm and armMatch and p and p.Parent and not p.Anchored then
-                pcall(reinforceOwnershipConstraints, p, partTargets[p])
-                pcall(reinforceOwnershipRender, p, partTargets[p])
-                local origVel = p.AssemblyLinearVelocity
-                p.AssemblyLinearVelocity = Vector3.new(100000,100000,100000)
-                p.AssemblyLinearVelocity = origVel
-                p.AssemblyLinearVelocity = Vector3.new(-100000,-100000,-100000)
-                p.AssemblyLinearVelocity = origVel
-                p.AssemblyLinearVelocity = Vector3.new(100000,-100000,100000)
-                p.AssemblyLinearVelocity = origVel
-            end
         end
     end
 end)
-
 local aggressiveOwnerConn = RunService.Heartbeat:Connect(function()
     if activeMode == "DroneV2" or activeMode == "Homing" then return end
     for _, part in ipairs(selectedParts) do
@@ -691,52 +614,18 @@ local aggressiveOwnerConn = RunService.Heartbeat:Connect(function()
             pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
             pcall(reinforceOwnershipRender, part, partTargets[part])
             local origVel = part.AssemblyLinearVelocity
-            part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
+            part.AssemblyLinearVelocity = Vector3.new(150000, 150000, 150000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(-15, -15, -15)
+            part.AssemblyLinearVelocity = Vector3.new(-150000, -150000, -150000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(15, -15, 15)
+            part.AssemblyLinearVelocity = Vector3.new(150000, -150000, 150000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(-15, 15, -15)
+            part.AssemblyLinearVelocity = Vector3.new(-150000, 150000, -150000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(15, 15, -15)
+            part.AssemblyLinearVelocity = Vector3.new(150000, 150000, -150000)
             part.AssemblyLinearVelocity = origVel
-            part.AssemblyLinearVelocity = Vector3.new(-15, -15, 15)
+            part.AssemblyLinearVelocity = Vector3.new(-150000, -150000, 150000)
             part.AssemblyLinearVelocity = origVel
-        end
-    end
-    if npcTarget and npcTarget.Parent then
-        for _, part in ipairs(npcTarget:GetDescendants()) do
-            if part:IsA("BasePart") and not part.Anchored then
-                pcall(reinforceOwnershipHeartbeat, part, nil)
-                pcall(reinforceOwnershipRender, part, nil)
-                local origVel = part.AssemblyLinearVelocity
-                part.AssemblyLinearVelocity = Vector3.new(150000,150000,150000)
-                part.AssemblyLinearVelocity = origVel
-                part.AssemblyLinearVelocity = Vector3.new(-150000,-150000,-150000)
-                part.AssemblyLinearVelocity = origVel
-                part.AssemblyLinearVelocity = Vector3.new(150000,-150000,150000)
-                part.AssemblyLinearVelocity = origVel
-            end
-        end
-    end
-    if activeMode == "Stickman" and stickGrabActive then
-        local total = #selectedParts
-        for idx, p in ipairs(selectedParts) do
-            local u = total > 1 and (idx - 1) / (total - 1) or 0
-            local isArm = u >= 0.37 and u < 0.73
-            local armMatch = stickArmIsLeft and u < 0.55 or (not stickArmIsLeft and u >= 0.55)
-            if isArm and armMatch and p and p.Parent and not p.Anchored then
-                pcall(reinforceOwnershipHeartbeat, p, partTargets[p])
-                pcall(reinforceOwnershipRender, p, partTargets[p])
-                local origVel = p.AssemblyLinearVelocity
-                p.AssemblyLinearVelocity = Vector3.new(150000,150000,150000)
-                p.AssemblyLinearVelocity = origVel
-                p.AssemblyLinearVelocity = Vector3.new(-150000,-150000,-150000)
-                p.AssemblyLinearVelocity = origVel
-                p.AssemblyLinearVelocity = Vector3.new(150000,-150000,150000)
-                p.AssemblyLinearVelocity = origVel
-            end
         end
     end
 end)
@@ -765,6 +654,7 @@ reinforceOwnershipConstraints = function(part, target)
         AP.Enabled = true
         AP.MaxForce = math.huge
         AP.MaxVelocity = math.huge
+        AP.RigidityEnabled = false
     end
 
     local AO = getNetAO(part)
@@ -826,15 +716,48 @@ local function reassertOwnershipAll()
     pcall(function() LP.ReplicationFocus = workspace end)
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
-pcall(reinforceOwnershipConstraints, part, partTargets[part])
+            pcall(reinforceOwnershipConstraints, part, partTargets[part])
             pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
         end
     end
 end
 
+local function reassertOwnershipAggressive(duration)
+    local startTime = tick()
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if tick() - startTime > duration then
+            conn:Disconnect()
+            return
+        end
+        pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
+        pcall(function() LP.ReplicationFocus = workspace end)
+        for _, part in ipairs(selectedParts) do
+            if part and part.Parent and not part.Anchored then
+                pcall(reinforceOwnershipConstraints, part, partTargets[part])
+                pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
+                local AP = getNetAP(part)
+                if AP then
+                    AP.Enabled = true
+                    AP.MaxForce = math.huge
+                    AP.MaxVelocity = math.huge
+                    AP.Position = partTargets[part] and partTargets[part].position or part.Position
+                end
+                local AO = getNetAO(part)
+                if AO then
+                    AO.Enabled = true
+                    AO.MaxTorque = math.huge
+                    AO.MaxAngularVelocity = math.huge
+                    AO.CFrame = partTargets[part] and partTargets[part].rotation or part.CFrame
+                end
+            end
+        end
+    end)
+end
+
 reg(LP.CharacterAdded:Connect(function()
-    task.delay(0.1, reassertOwnershipAll)
-    task.delay(0.5, reassertOwnershipAll)
+    task.delay(0.1, function() reassertOwnershipAggressive(5) end)
+    task.delay(0.5, function() reassertOwnershipAggressive(5) end)
 end))
 
 do
@@ -843,9 +766,9 @@ do
         if h then
             h.Died:Connect(function()
                 task.spawn(function()
-                    for _ = 1, 12 do
+                    for _ = 1, 20 do
                         task.wait(0.25)
-                        reassertOwnershipAll()
+                        reassertOwnershipAggressive(2)
                     end
                 end)
             end)
@@ -857,8 +780,9 @@ end
 
 function syncAlignTarget(part, target)
     if not (part and part.Parent and target) then return end
+    if frozenTargets[part] then return end
 
-    local posResponsiveness = target.responsiveness or 50000
+    local posResponsiveness = target.responsiveness or 100000
     local rotResponsiveness = target.rotResponsiveness or math.max(40000, posResponsiveness * 0.7)
 
     local AP = getNetAP(part)
@@ -884,25 +808,16 @@ function syncAlignTarget(part, target)
         AO.CFrame             = target.rotation or part.CFrame
     end
 end
-local smoothMovementConn = (RunService.PreSimulation and RunService.PreSimulation:Connect(function()
+local smoothMovementConn = RunService.RenderStepped:Connect(function()
     if activeMode == "DroneV2" or activeMode == "Homing" then return end
     for _, part in ipairs(selectedParts) do
-        if part and part.Parent and not part.Anchored then
+        if part and part.Parent and not part.Anchored and not frozenTargets[part] then
             pcall(function()
                 syncAlignTarget(part, partTargets[part])
             end)
         end
     end
-end) or RunService.RenderStepped:Connect(function()
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
-    for _, part in ipairs(selectedParts) do
-        if part and part.Parent and not part.Anchored then
-            pcall(function()
-                syncAlignTarget(part, partTargets[part])
-            end)
-        end
-    end
-end))
+end)
 
 local function getMoveResponsiveness(multiplier)
     local base = 20 + partSpeed * 4
@@ -1671,7 +1586,7 @@ pcall(function()
         AP.Position = part.Position
         AP.MaxForce = math.huge
         AP.MaxVelocity = math.huge
-        AP.Responsiveness = 200
+        AP.Responsiveness = math.huge
         AP.RigidityEnabled = false
         AP.Attachment0 = attach
 
@@ -1681,7 +1596,7 @@ pcall(function()
             AO.Name = "NetAO"
         end
         AO.Mode = Enum.OrientationAlignmentMode.OneAttachment
-        AO.RigidityEnabled = false
+        AO.RigidityEnabled = true
         AO.MaxTorque = math.huge
         AO.MaxAngularVelocity = math.huge
         AO.Responsiveness = 150
@@ -2054,7 +1969,7 @@ local function stickmanBlocker(origin, target)
     local hit = workspace:Raycast(origin, dir, _blockerRayParams)
     if hit then
         local inst = hit.Instance
-        if inst.Anchored or inst.AssemblyMass == math.huge or inst.Transparency >= 0.90 then
+        if inst.Anchored or inst.AssemblyMass == math.huge then
             return hit.Position
         end
     end
@@ -2392,7 +2307,9 @@ local function getTarget(index, total, part, t)
         local spin=band/6*math.pi*2-t*tornadoSpeed*2
         local maxR = math.max(scX, scZ)
         local r=(1+(h/maxR)*0.35)*maxR
-        return Vector3.new(mHit.X+math.cos(spin)*r*scX,mHit.Y+14*scY-h,mHit.Z+math.sin(spin)*r*scZ)
+        local yPos = mHit.Y+14*scY-h
+        if yPos < mHit.Y then yPos = mHit.Y end
+        return Vector3.new(mHit.X+math.cos(spin)*r*scX,yPos,mHit.Z+math.sin(spin)*r*scZ)
 
     elseif activeMode=="DNA" then
         local strand=(index-1)%2; local pos=math.floor((index-1)/2)
@@ -2526,9 +2443,19 @@ local function getTarget(index, total, part, t)
         local r       = formRadius * scR
         if isSpike then
             local sway = 0
-            return Vector3.new(rp.X+math.cos(a)*r*scX, rp.Y+10*scY+sway, rp.Z+math.sin(a)*r*scZ)
+            local pos = Vector3.new(rp.X+math.cos(a)*r*scX, rp.Y+10*scY+sway, rp.Z+math.sin(a)*r*scZ)
+            if partTargets[part] then
+                partTargets[part].position = pos
+                partTargets[part].rotation = part.CFrame
+            end
+            return pos
         else
-            return Vector3.new(rp.X+math.cos(a)*r*0.65*scX, rp.Y+7*scY, rp.Z+math.sin(a)*r*0.65*scZ)
+            local pos = Vector3.new(rp.X+math.cos(a)*r*0.65*scX, rp.Y+7*scY, rp.Z+math.sin(a)*r*0.65*scZ)
+            if partTargets[part] then
+                partTargets[part].position = pos
+                partTargets[part].rotation = part.CFrame
+            end
+            return pos
         end
 
     elseif activeMode=="Swarm" then
@@ -3573,7 +3500,6 @@ local function impactBurst(pos, radius, power)
         if obj:IsA("BasePart") and not obj.Anchored and obj ~= workspace.Terrain
            and not isSelected(obj)
            and (obj.Position - pos).Magnitude <= radius then
-            if isVelImmune(obj) then return end
             seen += 1
             pcall(function()
                 local dir = obj.Position - pos
@@ -3640,35 +3566,40 @@ local function tickParts()
                     local sgn = (fv:Dot(lf) >= 0) and 1 or -1
                     stickWalkPhase += dt * spd * 0.35 * sgn
                 end
-                if stickMagnetActive then
-                    stickMagnetTick += 1
-                    if stickMagnetTick % 3 == 0 then
-                        local scY_m = math.clamp(math.max(0, formSizeY) / 3, 0.5, 4)
-                        local H_m = 9 * scY_m
-                        local shY_m = H_m * 0.76
-                        local handSide = stickArmIsLeft and -1 or 1
-                        local handW = rs.Position
-                            + rs.CFrame.RightVector * (handSide * H_m * 1.15)
-                            + rs.CFrame.UpVector * (shY_m + 2.5 * scY_m)
-                            + rs.CFrame.LookVector * H_m * 0.9
-                        local mParams = OverlapParams.new()
-                        mParams.FilterType = Enum.RaycastFilterType.Exclude
-                        mParams.FilterDescendantsInstances = {char, workspace.Terrain}
-                        local parts = workspace:GetPartBoundsInRadius(handW, 28, mParams)
-                        for _, obj in ipairs(parts) do
-                            if obj:IsA("BasePart") and not obj.Anchored
-                               and obj.AssemblyMass ~= math.huge and not isSelected(obj) then
-                                local dist = (obj.Position - handW).Magnitude
-                                if dist > 0.5 then
-                                    pcall(function()
-                                        local pull = (handW - obj.Position).Unit * math.clamp(55 / math.max(dist, 1), 0, 26)
-                                        obj.AssemblyLinearVelocity = obj.AssemblyLinearVelocity:Lerp(pull, 0.13)
-                                    end)
+if stickMagnetActive then
+                        stickMagnetTick += 1
+                        if stickMagnetTick % 2 == 0 then
+                            local scY_m = math.clamp(math.max(0, formSizeY) / 3, 0.5, 4)
+                            local H_m = 9 * scY_m
+                            local shY_m = H_m * 0.76
+                            local handSide = stickArmIsLeft and -1 or 1
+                            local handW = rs.Position
+                                + rs.CFrame.RightVector * (handSide * H_m * 1.15)
+                                + rs.CFrame.UpVector * (shY_m + 2.5 * scY_m)
+                                + rs.CFrame.LookVector * H_m * 0.9
+                            local mParams = OverlapParams.new()
+                            mParams.FilterType = Enum.RaycastFilterType.Exclude
+                            mParams.FilterDescendantsInstances = {char, workspace.Terrain}
+                            local parts = workspace:GetPartBoundsInRadius(handW, 35, mParams)
+                            for _, obj in ipairs(parts) do
+                                if obj:IsA("BasePart") and not obj.Anchored
+                                    and obj.AssemblyMass ~= math.huge and not isSelected(obj) then
+                                    local dist = (obj.Position - handW).Magnitude
+                                    if dist > 0.5 then
+                                        pcall(function()
+                                            local pullDir = (handW - obj.Position).Unit
+                                            local pullStrength = 120000 / math.max(dist^1.2, 1)
+                                            local pullVel = pullDir * pullStrength
+                                            obj.AssemblyLinearVelocity = obj.AssemblyLinearVelocity + pullVel * 0.3
+                                            if obj.Position.Y < handW.Y + 5 then
+                                                obj.AssemblyLinearVelocity = obj.AssemblyLinearVelocity + Vector3.new(0, 30000, 0) * 0.2
+                                            end
+                                        end)
+                                    end
                                 end
                             end
                         end
                     end
-                end
             end
         end
     end
@@ -3702,9 +3633,8 @@ local function tickParts()
             if obj:IsA("BasePart") and not obj.Anchored and obj ~= workspace.Terrain
                and not (char and obj:IsDescendantOf(char))
                and not isPlayerPart(obj)
-               and not frozenTargets[obj]
-               and (obj.Position - myPos).Magnitude <= ownerRadius then
-                if isVelImmune(obj) then return end
+            and not frozenTargets[obj]
+                and (obj.Position - myPos).Magnitude <= ownerRadius then
                 count += 1
                 pcall(function() obj.AssemblyLinearVelocity = obj.AssemblyLinearVelocity + bump end)
             end
@@ -3792,7 +3722,6 @@ local function tickParts()
                         if not hit or not hit.Parent or hit.Anchored then return end
                         if hit == workspace.Terrain or hit == part then return end
                         if isSelected(hit) then return end
-                        if isVelImmune(hit) then return end
                         pcall(function()
                             local burstDir = hit.Position - part.Position
                             burstDir = burstDir.Magnitude > 0.001 and burstDir.Unit or Vector3.new(0, 1, 0)
@@ -4096,7 +4025,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
 
                 local dist=(tgt-part.Position).Magnitude
                 local targetRotation = part.CFrame
-                local responsiveness = activeMode=="Crown" and 80 or getMoveResponsiveness(1)
+                local responsiveness = getMoveResponsiveness(1)
 
 
                 if isMG and i==minigunIdx then
@@ -4174,7 +4103,7 @@ if isDV2 then
                             part.AssemblyLinearVelocity = Vector3.zero
                         end
 
-                        if dist < 18 and not isVelImmune(dv2Target) then
+                        if dist < 18 then
                             local attackDir = dist > 0.001 and diff.Unit or part.CFrame.LookVector
                             local spinDir = Vector3.new(-attackDir.Z, 0, attackDir.X)
                             local closeAlpha = 1 - math.clamp(dist / 18, 0, 1)
@@ -4544,11 +4473,11 @@ local function tickAuras()
                     pcall(reinforceOwnershipConstraints, part, nil)
                     pcall(reinforceOwnershipHeartbeat, part, nil)
                     local origVel = part.AssemblyLinearVelocity
-                    part.AssemblyLinearVelocity = Vector3.new(50000,50000,50000)
+                    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
                     part.AssemblyLinearVelocity = origVel
-                    part.AssemblyLinearVelocity = Vector3.new(-50000,-50000,-50000)
+                    part.AssemblyLinearVelocity = Vector3.new(-15, -15, -15)
                     part.AssemblyLinearVelocity = origVel
-                    part.AssemblyLinearVelocity = Vector3.new(50000,-50000,50000)
+                    part.AssemblyLinearVelocity = Vector3.new(15, -15, 15)
                     part.AssemblyLinearVelocity = origVel
             end
         end
@@ -4579,7 +4508,7 @@ local function tickAuras()
                         local target = rootPart.Position + dir * retreatDist
                         pcall(function() h:MoveTo(target) end)
 
-                        if d < freezeAuraRange * 0.7 and not isVelImmune(rootPart) then
+                        if d < freezeAuraRange * 0.7 then
                             local backImpulse = dir * math.clamp((freezeAuraRange * 0.7 - d), 0, freezeAuraRange) * 1.5
                             if rootPart.AssemblyLinearVelocity then
                                 rootPart.AssemblyLinearVelocity = rootPart.AssemblyLinearVelocity + backImpulse
@@ -4598,7 +4527,7 @@ local function tickAuras()
                 addNpcHighlight(obj, Color3.fromRGB(120, 255, 150))
             end)
 
-            if d <= speedAuraRange * 0.35 and not isVelImmune(tr) then
+            if d <= speedAuraRange * 0.35 then
                 local dir = (myPos - tr.Position)
                 if dir.Magnitude > 0.01 then
                     pcall(function()
@@ -4609,7 +4538,7 @@ local function tickAuras()
         end
 
 
-        if spinAuraEnabled and d <= spinAuraRange and not isVelImmune(tr) then
+        if spinAuraEnabled and d <= spinAuraRange then
 
             local toMe = (myPos - tr.Position)
             if toMe.Magnitude > 0.001 then
@@ -4645,7 +4574,7 @@ local function tickAuras()
                 end
             end
 
-            if fingerGunEnabled and toolHit and toolHit.Position and not isVelImmune(tr) then
+            if fingerGunEnabled and toolHit and toolHit.Position then
                 local lookDir = (toolHit.Position - tr.Position)
                 if lookDir.Magnitude > 0.2 then
                     pcall(function()
@@ -5353,7 +5282,7 @@ function buildPartsPanel(Cont, mPanels)
         local MODE_CAT = {
             Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="blue",
             Drone="red", DroneV2="red", Shield="green", Comet="blue", Wall="green",
-            Draw="blue", Beam="blue", Sphere="blue", Vortex="red", DNA="yellow", Pulse="blue", Grid="blue", Cube="blue",
+            Draw="blue", Beam="blue", Sphere="blue", Vortex="red", DNA="yellow", Pulse="blue", Grid="blue", Cube="green",
             Scatter="blue", Star="yellow", Pendulum="yellow", Rain="blue", Galaxy="yellow", Blackhole="red", Lemniscate="yellow", Blender="red",
             Crown="green", Swarm="blue", Minigun="red", Satellite="red",
             Seek="blue", Stickman="black", Slinky="blue", Fountain="blue", Bounce="blue", Ripple="blue", Juggle="blue", Constellation="yellow",
@@ -5484,7 +5413,7 @@ function buildPartsPanel(Cont, mPanels)
         end)
 
         mkSec("VELOCITY", parSF, 1)
-        mkSlider(parSF,"Part Speed",   1,120,partSpeed,   2,function(v) partSpeed=v end)                                                --haha penis
+        mkSlider(parSF,"Part Speed",   1,120,partSpeed,   2,function(v) partSpeed=v end) 
 
         mkDiv(parSF,4)
         mkSec("MODE PARAMETERS", parSF, 5)
@@ -6444,7 +6373,6 @@ reg(Mouse.Button1Down:Connect(function()
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if hit == workspace.Terrain or isSelected(hit) then return end
                     if myChar and hit:IsDescendantOf(myChar) then return end
-                    if isVelImmune(hit) then return end
                     pcall(function()
                         local d2 = hit.Position - p.Position
                         d2 = d2.Magnitude > 0.001 and d2.Unit or Vector3.new(0, 1, 0)
@@ -6469,7 +6397,6 @@ reg(Mouse.Button1Down:Connect(function()
                 boomerangConns[p] = p.Touched:Connect(function(hit)
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if hit == workspace.Terrain or isSelected(hit) then return end
-                    if isVelImmune(hit) then return end
                     pcall(function()
                         local d3 = hit.Position - p.Position
                         d3 = d3.Magnitude > 0.001 and d3.Unit or Vector3.new(0, 1, 0)
@@ -6521,7 +6448,6 @@ reg(Mouse.Button1Down:Connect(function()
                     syncAlignTarget(p, partTargets[p])
                     bridgeSlots[p] = pos
                 end
-                frozen = true
                 if UI and UI.freezeBtn then
                     UI.freezeBtn.BackgroundColor3 = Color3.fromRGB(22,38,75)
                     UI.freezeBtn.TextColor3 = Color3.fromRGB(130,175,255)
@@ -6575,7 +6501,6 @@ reg(Mouse.Button1Down:Connect(function()
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if hit == workspace.Terrain or hit == part then return end
                     if isSelected(hit) then return end
-                    if isVelImmune(hit) then return end
                     pcall(function()
                         local burstDir = hit.Position - part.Position
                         burstDir = burstDir.Magnitude > 0.001 and burstDir.Unit or Vector3.new(0, 1, 0)
@@ -6624,8 +6549,6 @@ reg(Mouse.Button1Down:Connect(function()
                 satTouchConns[part] = part.Touched:Connect(function(hit)
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if hit == workspace.Terrain then return end
-                    if isVelImmune(hit) then return end
-
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.new(
                             (math.random() - 0.5) * 9e10,
@@ -6758,15 +6681,22 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                         if not hit or not hit.Parent or hit.Anchored then return end
                         if hit == workspace.Terrain or hit == p then return end
                         if isSelected(hit) then return end
-                        if isVelImmune(hit) then return end
                         pcall(function()
                             p.AssemblyAngularVelocity = Vector3.new(
-                                (math.random() - 0.5) * 9e10,
-                                (math.random() - 0.5) * 9e10,
-                                (math.random() - 0.5) * 9e10
+                                (math.random() - 0.5) * 9e12,
+                                (math.random() - 0.5) * 9e12,
+                                (math.random() - 0.5) * 9e12
                             )
                             local dir = (hit.Position - p.Position).Unit
-                            hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir * 9000
+                            local flingPower = 500000
+                            hit.AssemblyLinearVelocity = dir * flingPower + Vector3.new(0, 150000, 0)
+                            for i = 1, 5 do
+                                task.delay(i * 0.02, function()
+                                    if hit and hit.Parent then
+                                        hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir * (flingPower * 0.5) + Vector3.new(0, 50000, 0)
+                                    end
+                                end)
+                            end
                         end)
                     end)
                 end
@@ -7012,7 +6942,10 @@ end))
 
 
 
--- i love penis
+
+
+
+-- if youre looking at this, you love obama dih and aristo dih
 penis = true
 if penis == true then
 print("catalyst loadeeed")
