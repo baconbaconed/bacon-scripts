@@ -5389,13 +5389,13 @@ function buildPartsPanel(Cont, mPanels)
             mGrid.Size=UDim2.new(1,0,0,mgL.AbsoluteContentSize.Y)
         end)
 
-        local MODE_CAT = {
-            Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="blue",
-            Drone="red", DroneV2="red", Shield="green", Comet="blue", Wall="green",
+        local MODE_CAT = { -- this is coloring stuff its kinda simple, i like it
+            Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="green",
+            Drone="blue", DroneV2="red", Shield="green", Comet="blue", Wall="green",
             Draw="blue", Beam="blue", Sphere="blue", Vortex="red", DNA="yellow", Pulse="blue", Grid="blue", Cube="green",
             Scatter="blue", Star="yellow", Pendulum="yellow", Rain="blue", Galaxy="yellow", Blackhole="red", Lemniscate="yellow", Blender="red",
             Crown="green", Swarm="blue", Minigun="red", Satellite="red",
-            Seek="blue", Stickman="black", Slinky="blue", Fountain="blue", Bounce="blue", Ripple="blue", Juggle="blue", Constellation="yellow",
+            Seek="blue", Stickman="black", Slinky="blue", Fountain="blue", Bounce="blue", Ripple="blue", Juggle="blue", Constellation="yellow", --STICKMAN is the code name for billy, he used to be named stickman but billy is a better name
             Rose="yellow", OrbitSin="yellow", Liss="yellow", Swing="blue", Aura="blue", Homing="red", Railgun="red", Barrage="red",
             Sinewave="yellow", Heart="green", Wings="green", Crystal="yellow", TwinStars="yellow", Tesseract="yellow", Atom="yellow", Lightning="red",
             Sniper="red", Bridge="green", Strike="red", Boomerang="red",
