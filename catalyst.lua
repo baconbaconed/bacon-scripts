@@ -1,3 +1,4 @@
+-- noooo my catalysytysitistic
 do
     local ok = false
     if type(sethiddenproperty) == "function" then
