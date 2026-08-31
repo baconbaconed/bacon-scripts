@@ -20,6 +20,96 @@ local LP     = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse  = LP:GetMouse()
 
+-- keybinds were a pain, dont touch pls
+local keybindSettingButton = nil
+local buttonKeybinds = setmetatable({}, {__mode = "k"})
+local buttonOriginalAppearance = setmetatable({}, {__mode = "k"}) 
+local savedKeybinds = {}
+local KEYBIND_SETTING_COLOR = Color3.fromRGB(255, 255, 0)
+local function resetButtonAppearance(button)
+    if buttonKeybinds[button] then
+        buttonKeybinds[button].conn:Disconnect()
+        buttonKeybinds[button] = nil
+    end
+    local orig = buttonOriginalAppearance[button]
+    if orig then
+        button.BackgroundColor3 = orig.bg
+        button.TextColor3 = orig.textColor
+        button.Text = orig.text
+        buttonOriginalAppearance[button] = nil
+    else
+        local currentText = button.Text
+        local clean = string.gsub(currentText, "%s*%[.-%]", "")
+        clean = clean:match("^%s*(.-)%s*$")
+        button.Text = clean
+    end
+end
+local function resetButtonAppearanceKeepKeybind(button)
+    local orig = buttonOriginalAppearance[button]
+    if orig then
+        button.BackgroundColor3 = orig.bg
+        button.TextColor3 = orig.textColor
+        buttonOriginalAppearance[button] = nil
+    end
+end
+
+local function updateAllButtonKeybindTexts()
+    if _G.modeButtons then
+        for name, mb in pairs(_G.modeButtons) do
+            if buttonKeybinds[mb] and buttonKeybinds[mb].originalText then
+                local keyName = buttonKeybinds[mb].key.Name
+                local originalText = buttonKeybinds[mb].originalText
+                mb.Text = originalText .. " [" .. keyName .. "]"
+            end
+        end
+    end
+    local guiParents = {}
+    if UI and UI.ScreenGui then table.insert(guiParents, UI.ScreenGui) end
+    if ScreenGui then table.insert(guiParents, ScreenGui) end
+    if gethui then
+        local ok, hui = pcall(gethui)
+        if ok and hui then table.insert(guiParents, hui) end
+    end
+    
+    for _, guiParent in ipairs(guiParents) do
+        for _, btn in ipairs(guiParent:GetDescendants()) do
+            if btn:IsA("TextButton") and buttonKeybinds[btn] and buttonKeybinds[btn].originalText then
+                local keyName = buttonKeybinds[btn].key.Name
+                local originalText = buttonKeybinds[btn].originalText
+                btn.Text = originalText .. " [" .. keyName .. "]"
+            end
+        end
+    end
+end
+local function startKeybindSetting(button)
+    if keybindSettingButton == button then
+        keybindSettingButton = nil
+        if buttonKeybinds[button] then
+            buttonKeybinds[button].conn:Disconnect()
+            buttonKeybinds[button] = nil
+        end
+        resetButtonAppearance(button)
+        return
+    end
+    if keybindSettingButton then
+        resetButtonAppearance(keybindSettingButton)
+    end
+    keybindSettingButton = button
+    if not buttonOriginalAppearance[button] then
+        local cleanText = button.Text
+        cleanText = string.gsub(cleanText, "%s*%[.-%]", "")
+        cleanText = cleanText:match("^%s*(.-)%s*$")
+        buttonOriginalAppearance[button] = {
+            bg = button.BackgroundColor3,
+            textColor = button.TextColor3,
+            text = cleanText
+        }
+    end
+    button.BackgroundColor3 = KEYBIND_SETTING_COLOR
+    button.TextColor3 = Color3.fromRGB(0,0,0)
+    button.Text = "Press a key..."
+end
+
 local function fixCanQueryForRaycast()
     local function processPart(part)
         if not part:IsA("BasePart") then return end
@@ -128,7 +218,7 @@ EspScreenGui.Parent           = getGuiParent()
 
 local function reg(c) table.insert(connections,c); return c end
 
-
+-- i ate a huge garlic bread
 activeMode   = "Tornado"
 allowedTouchModes = { ["DroneV2"] = true, ["Drone"] = true }
 partSpeed    = 50
@@ -141,7 +231,7 @@ formOffsetY  = 0
 formScale    = 1.0
 wallDist     = 7
 wallGap      = 0.1
-flingForce   = 1500
+flingForce   = 1500 -- flingforce = 1 binillion * inf
 flingRange   = 300
 tornadoSpeed = 8
 spiralHeight = 14
@@ -149,16 +239,12 @@ waveAmp      = 3
 orbitRadius  = 9
 autoSelRange = 60
 ownerRadius  = 100
-
 autoSelectAll        = false
 autoSelectNear       = false
 autoSelectLastScan   = 0
 AUTO_SELECT_INTERVAL = 5
-
 strengthenParts      = false
 strengthenDensity    = 100
-
-
 frozen          = false
 frozenTargets   = {}
 individuallyFrozen = {}
@@ -172,12 +258,10 @@ fakeCollisions  = false
 
 partTargets = {}
 _bumpSign   = 1
-
 minigunIdx       = 1
 minigunShotStart = 0
 minigunLastIdx   = 0
 MINIGUN_STUCK    = 12
-
 satFired           = {}
 satTarget          = Vector3.zero
 SAT_TTL            = 2.0
@@ -186,7 +270,6 @@ barrageTouchConns  = {}
 railgunTouchConns  = railgunTouchConns or {}
 railgunHitRegistered = railgunHitRegistered or false
 railgunHitTarget   = railgunHitTarget or nil
-
 lightningFired      = {}
 lightningTarget     = Vector3.zero
 lightningFireTime   = 0
@@ -196,7 +279,6 @@ LIGHTNING_TRAVEL    = 0.35
 LIGHTNING_HOLD      = 1.1
 lightningTouchConns = {}
 railgunBoomed       = false
-
 strikeState      = "idle"
 strikeTarget     = Vector3.zero
 strikeStart      = 0
@@ -352,7 +434,7 @@ _lastConfigSave = 0
 CONFIG_SAVE_INTERVAL = 2.5
 
 CONFIG_KEYS = {
-    "partSpeed", "maxVelocity", "formRadius", "formScale", "formSizeX", "formSizeY", "formSizeZ", "formOffsetY",
+    "keybinds", "partSpeed", "maxVelocity", "formRadius", "formScale", "formSizeX", "formSizeY", "formSizeZ", "formOffsetY",
     "wallDist", "wallGap", "flingForce", "flingRange", "tornadoSpeed", "spiralHeight", "waveAmp", "orbitRadius",
     "autoSelRange", "ownerRadius", "killAuraRange", "sitAuraRange", "jumpAuraRange",
     "followAuraRange", "freezeAuraRange", "useLimits", "partLimit",
@@ -404,7 +486,7 @@ local function readConfigFile()
         pcall(function() writefile(CONFIG_FILE, data) end)
         return data
     end
-    if pcall(function() data = readfile(CONFIG_FILE) end) and data and data ~= "" then
+    if pcall(function() data = readfile(CONFIG_FILE) end) and data and data ~= "" then -- i put shi in pcall because theres no ppcall to call with my pp twin
         return data
     end
     return nil
@@ -423,7 +505,7 @@ local function saveConfig(force)
         return math.floor(c.R * 255) .. ", " .. math.floor(c.G * 255) .. ", " .. math.floor(c.B * 255)
     end
     local colorStr = colorString(GUI.ESP_ACCENT)
-    local cfg = {
+    local cfg = { -- the fucking configs that i hate
         partSpeed=partSpeed, maxVelocity=maxVelocity, formRadius=formRadius,
         formScale=formScale, formSizeX=formSizeX, formSizeY=formSizeY, formSizeZ=formSizeZ, formOffsetY=formOffsetY,
         wallDist=wallDist, wallGap=wallGap,
@@ -440,6 +522,22 @@ local function saveConfig(force)
         globalOwnership=globalOwnership, fakeCollisions=fakeCollisions,
         strengthenParts=strengthenParts, strengthenDensity=strengthenDensity,
     }
+    if buttonKeybinds and next(buttonKeybinds) then
+        local kbList = {}
+        for btn, data in pairs(buttonKeybinds) do
+            local btnText = data.originalText or buttonOriginalAppearance[btn] and buttonOriginalAppearance[btn].text or btn.Text
+            btnText = string.gsub(btnText, "%s*%[.-%]", "")
+            btnText = btnText:match("^%s*(.-)%s*$")
+            if btnText and data.key then
+                table.insert(kbList, btnText .. "||" .. data.key.Name)
+            end
+        end
+        if #kbList > 0 then
+            cfg.keybinds = table.concat(kbList, ";")
+        else
+            cfg.keybinds = "" --local keybind = penis
+        end
+    end
     writeConfigFile(encodeConfig(cfg))
 end
 
@@ -514,12 +612,36 @@ local function loadConfig()
     if cfg.strengthenDensity ~= nil then
         strengthenDensity = cfg.strengthenDensity
     end
+    if cfg.keybinds and type(cfg.keybinds) == "string" and cfg.keybinds ~= "" then
+        savedKeybinds = {}
+        local delim = string.find(cfg.keybinds, ";") and "[^;]+" or "[^|]+"
+        if string.find(cfg.keybinds, ";") then
+            for entry in string.gmatch(cfg.keybinds, "[^;]+") do
+                local btnText, keyName = entry:match("^(.+)||(.+)$")
+                if btnText and keyName then
+                    savedKeybinds[btnText] = keyName
+                end
+            end
+        else
+            local parts = {}
+            for part in string.gmatch(cfg.keybinds, "[^|]+") do
+                if part ~= "" then table.insert(parts, part) end
+            end
+            for i=1, #parts, 2 do
+                local btnText = parts[i]
+                local keyName = parts[i+1]
+                if btnText and keyName then
+                    savedKeybinds[btnText] = keyName
+                end
+            end
+        end
+    end
 end
 
 loadConfig()
 
 
-local MODES = {
+local MODES = { --why are there so many aaa [currently 60]
     "Mouse",   "Tornado",    "Ring",      "Orbit",
     "Spiral",  "Wave",       "Halo",      "Drone",
     "DroneV2", "Shield",     "Comet",     "Wall",
@@ -540,7 +662,7 @@ local MODES = {
 
 
 
-local _OWN = { preSim=1, hb=1, render=1 }
+local _OWN = { preSim=1, hb=1, render=1 } -- i own robuk
 local reinforceOwnershipDrive, reinforceOwnershipConstraints, reinforceOwnershipHeartbeat, reinforceOwnershipRender
 pcall(function() LP.ReplicationFocus = workspace end)
 
@@ -557,7 +679,7 @@ local preSimConn = RunService.PreSimulation and
                 part.AssemblyLinearVelocity = Vector3.new(-50000, -50000, -50000)
                 part.AssemblyLinearVelocity = origVel
                 part.AssemblyLinearVelocity = Vector3.new(50000, -50000, 50000)
-                part.AssemblyLinearVelocity = origVel
+                part.AssemblyLinearVelocity = origVel -- this is improtant pls no touchy touch touch
             end
         end
     end) or nil
@@ -695,7 +817,7 @@ reinforceOwnershipRender = function(part, target)
     local desiredVelocity = diff.Unit * 30000
     part.AssemblyLinearVelocity = originalVelocity:Lerp(desiredVelocity, 0.995)
     part.AssemblyLinearVelocity = originalVelocity
-    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
+    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15) -- this is my trick, if you set speed to 15 or above 14.46262424 it stays still, pls no touchy touch touch
 end
 
 reinforceOwnershipDrive = function(part, target, deltaTime)
@@ -708,21 +830,21 @@ reinforceOwnershipDrive = function(part, target, deltaTime)
     local desiredVelocity = diff.Unit * 40000
     part.AssemblyLinearVelocity = originalVelocity:Lerp(desiredVelocity, 0.998)
     part.AssemblyLinearVelocity = originalVelocity
-    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15)
+    part.AssemblyLinearVelocity = Vector3.new(15, 15, 15) -- again no touchy touch touch, needs to be above 14.46262424 at all times!!!!
 end
 
 local function reassertOwnershipAll()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     pcall(function() LP.ReplicationFocus = workspace end)
     for _, part in ipairs(selectedParts) do
-        if part and part.Parent and not part.Anchored then
+        if part and part.Parent and not part.Anchored then -- no ancored part pls thx
             pcall(reinforceOwnershipConstraints, part, partTargets[part])
             pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
         end
     end
 end
 
-local function reassertOwnershipAggressive(duration)
+local function reassertOwnershipAggressive(duration) -- aggression is the key
     local startTime = tick()
     local conn
     conn = RunService.Heartbeat:Connect(function()
@@ -762,20 +884,20 @@ end))
 
 do
     local function hookHum(ch)
-        local h = ch:WaitForChild("Humanoid", 8)
+        local h = ch:WaitForChild("Humanoid", 8) -- human is oid
         if h then
             h.Died:Connect(function()
                 task.spawn(function()
                     for _ = 1, 20 do
                         task.wait(0.25)
-                        reassertOwnershipAggressive(2)
+                        reassertOwnershipAggressive(2) -- MORE AGGRESSION
                     end
                 end)
             end)
         end
     end
     if LP.Character then task.spawn(hookHum, LP.Character) end
-    reg(LP.CharacterAdded:Connect(hookHum))
+    reg(LP.CharacterAdded:Connect(hookHum)) -- hooks human oid on crack
 end
 
 function syncAlignTarget(part, target)
@@ -2531,10 +2653,12 @@ local function getTarget(index, total, part, t)
     elseif activeMode=="Stickman" then
         local charS   = LP.Character
         local rootS   = charS and charS:FindFirstChild("HumanoidRootPart")
-        local originS = rootS and rootS.Position or mHit
-        local lookD   = rootS and rootS.CFrame.LookVector or Vector3.new(0, 0, -1)
-        local rightD  = rootS and rootS.CFrame.RightVector or Vector3.new(1, 0, 0)
+        local originS, lookD, rightD
         local H       = 9 * scY
+        local isSitting = false
+        originS = rootS and rootS.Position or mHit
+        lookD   = rootS and rootS.CFrame.LookVector or Vector3.new(0, 0, -1)
+        rightD  = rootS and rootS.CFrame.RightVector or Vector3.new(1, 0, 0)
         local W       = 2.6 * scR
         local u       = ratio
         if stickBeamActive then
@@ -2554,15 +2678,16 @@ local function getTarget(index, total, part, t)
                 return beamTarget + jitter
             end
         end
-        local groundY = -2.8 * scY
+        local groundY = isSitting and (0.2 * scY) or (-2.8 * scY)
 
         local flatV  = Vector3.new(stickVelSmooth.X, 0, stickVelSmooth.Z)
-        local walkF  = math.clamp(flatV.Magnitude / 12, 0, 1)
-        local ph     = stickWalkPhase
+        local walkF  = isSitting and 0 or math.clamp(flatV.Magnitude / 12, 0, 1)
+        local ph     = isSitting and 0 or stickWalkPhase
+        local hipY   = isSitting and (H * 0.18) or (H * 0.42)
         local amp    = 0.55 * walkF
-        local hipY   = H * 0.42
+        local hipY   = isSitting and (H * 0.18) or (H * 0.42)
         local legLen = hipY - groundY
-        local shY    = H * 0.76
+        local shY    = isSitting and (H * 0.32) or (H * 0.76)
         local headRW = 1.25 * scY
         local headRH = 1.85 * scY
         local headC  = H * 0.82 + headRH
@@ -3497,7 +3622,7 @@ local function impactBurst(pos, radius, power)
     local seen = 0
     local function fling(obj)
         if seen >= 120 then return end
-        if obj:IsA("BasePart") and not obj.Anchored and obj ~= workspace.Terrain
+        if obj:IsA("BasePart") and not obj.Anchored and not isVelImmune(obj) and obj ~= workspace.Terrain
            and not isSelected(obj)
            and (obj.Position - pos).Magnitude <= radius then
             seen += 1
@@ -3564,41 +3689,16 @@ local function tickParts()
                     local lf = Vector3.new(lv.X, 0, lv.Z)
                     lf = lf.Magnitude > 0.01 and lf.Unit or Vector3.new(0, 0, -1)
                     local sgn = (fv:Dot(lf) >= 0) and 1 or -1
-                    stickWalkPhase += dt * spd * 0.35 * sgn
+                    if not stickMagnetActive then
+                        stickWalkPhase += dt * spd * 0.35 * sgn
+                    end
                 end
-if stickMagnetActive then
-                        stickMagnetTick += 1
-                        if stickMagnetTick % 2 == 0 then
-                            local scY_m = math.clamp(math.max(0, formSizeY) / 3, 0.5, 4)
-                            local H_m = 9 * scY_m
-                            local shY_m = H_m * 0.76
-                            local handSide = stickArmIsLeft and -1 or 1
-                            local handW = rs.Position
-                                + rs.CFrame.RightVector * (handSide * H_m * 1.15)
-                                + rs.CFrame.UpVector * (shY_m + 2.5 * scY_m)
-                                + rs.CFrame.LookVector * H_m * 0.9
-                            local mParams = OverlapParams.new()
-                            mParams.FilterType = Enum.RaycastFilterType.Exclude
-                            mParams.FilterDescendantsInstances = {char, workspace.Terrain}
-                            local parts = workspace:GetPartBoundsInRadius(handW, 35, mParams)
-                            for _, obj in ipairs(parts) do
-                                if obj:IsA("BasePart") and not obj.Anchored
-                                    and obj.AssemblyMass ~= math.huge and not isSelected(obj) then
-                                    local dist = (obj.Position - handW).Magnitude
-                                    if dist > 0.5 then
-                                        pcall(function()
-                                            local pullDir = (handW - obj.Position).Unit
-                                            local pullStrength = 120000 / math.max(dist^1.2, 1)
-                                            local pullVel = pullDir * pullStrength
-                                            obj.AssemblyLinearVelocity = obj.AssemblyLinearVelocity + pullVel * 0.3
-                                            if obj.Position.Y < handW.Y + 5 then
-                                                obj.AssemblyLinearVelocity = obj.AssemblyLinearVelocity + Vector3.new(0, 30000, 0) * 0.2
-                                            end
-                                        end)
-                                    end
-                                end
-                            end
-                        end
+if false and stickMagnetActive then
+                        _G._billySitPos = nil
+                        _G._billySitCF = nil
+                    else
+                        _G._billySitPos = nil
+                        _G._billySitCF = nil
                     end
             end
         end
@@ -3720,6 +3820,7 @@ if stickMagnetActive then
                     end
                     railgunTouchConns[part] = part.Touched:Connect(function(hit)
                         if not hit or not hit.Parent or hit.Anchored then return end
+                        if isVelImmune(hit) then return end
                         if hit == workspace.Terrain or hit == part then return end
                         if isSelected(hit) then return end
                         pcall(function()
@@ -4226,7 +4327,8 @@ if isDV2 then
 
                         if not barrageTouchConns[part] then
                             barrageTouchConns[part] = part.Touched:Connect(function(hit)
-                                if not hit or not hit.Parent then return end
+                                if not hit or not hit.Parent or hit.Anchored then return end
+                                if isVelImmune(hit) then return end
                                 if hit == part then return end
                                 if isSelected(hit) then return end
 
@@ -5116,10 +5218,14 @@ function buildPartsPanel(Cont, mPanels)
             clickSelActive = not clickSelActive
             clickSelBtn.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
             clickSelBtn.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
-            clickSelBtn.Text = "Click-Select: "..(clickSelActive and "ON ✓" or "OFF")
+            local base = "Click-Select: "..(clickSelActive and "ON ✓" or "OFF")
+            if buttonKeybinds[clickSelBtn] and buttonKeybinds[clickSelBtn].originalText then
+                base = base .. " [" .. buttonKeybinds[clickSelBtn].key.Name .. "]"
+            end
+            clickSelBtn.Text = base
         end)
 
-        local _,_,_ = (function()
+        local selectAllBtn, selectInRangeBtn = (function()
             local row,b1,b2=mkRow2(selP,3,
                 {BackgroundColor3=PAL.B_DEF,Text="All",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham},
                 {BackgroundColor3=PAL.B_DEF,Text="In Range",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham})
@@ -5182,7 +5288,7 @@ function buildPartsPanel(Cont, mPanels)
         end)
         refreshAutoSelectButtons()
 
-        return selInfo, clickSelBtn, clearBtn, refreshAutoSelectButtons
+        return selInfo, clickSelBtn, clearBtn, refreshAutoSelectButtons, selectAllBtn, selectInRangeBtn, selectUnweldedBtn, selectNDSRangeBtn
     end
 
 
@@ -5201,7 +5307,11 @@ function buildPartsPanel(Cont, mPanels)
             frozenTargets={}
             freezeBtn.BackgroundColor3=frozen and Color3.fromRGB(22,38,75) or PAL.B_DEF
             freezeBtn.TextColor3=frozen and Color3.fromRGB(130,175,255) or PAL.T1
-            freezeBtn.Text="Formation Freeze: "..(frozen and "ON ✓" or "OFF")
+            local base = "Formation Freeze: "..(frozen and "ON ✓" or "OFF")
+            if buttonKeybinds[freezeBtn] and buttonKeybinds[freezeBtn].originalText then
+                base = base .. " [" .. buttonKeybinds[freezeBtn].key.Name .. "]"
+            end
+            freezeBtn.Text=base
         end)
 
         local attractBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
@@ -5250,7 +5360,7 @@ function buildPartsPanel(Cont, mPanels)
         fakeColBtn.Text="Fake Collisions: "..(fakeCollisions and "ON ✓" or "OFF")
     end
 
-    local selInfo, clickSelBtn, clearBtn, _refreshAutoSel = buildSelSubPanel(spCont, sPanels)
+        local selInfo, clickSelBtn, clearBtn, _refreshAutoSel, selectAllBtn, selectInRangeBtn, selectUnweldedBtn, selectNDSRangeBtn = buildSelSubPanel(spCont, sPanels)
     local selSF = sPanels["Sel"]
     local freezeBtn = buildFormationSection(selSF)
     buildOwnershipSection(selSF)
@@ -5297,6 +5407,9 @@ function buildPartsPanel(Cont, mPanels)
             yellow = {bg=Color3.fromRGB(50,44,10), bgOn=Color3.fromRGB(168,148,30), tx=Color3.fromRGB(235,210,85)},
             black  = {bg=Color3.fromRGB(14,14,14), bgOn=Color3.fromRGB(38,38,38), tx=Color3.fromRGB(225,225,225)},
         }
+        _G.MODE_CAT = MODE_CAT
+        _G.CAT_COL = CAT_COL
+        _G.refreshModes = nil
         local modeBtns={}
         for _,mn in ipairs(MODES) do
             local cat = MODE_CAT[mn] or "blue"
@@ -5315,8 +5428,14 @@ function buildPartsPanel(Cont, mPanels)
                 local col = CAT_COL[cat]
                 mb.BackgroundColor3=on and col.bgOn or col.bg
                 mb.TextColor3=on and Color3.fromRGB(8,8,12) or col.tx
+                if buttonKeybinds[mb] and buttonKeybinds[mb].originalText then
+                    local keyName = buttonKeybinds[mb].key.Name
+                    local originalText = buttonKeybinds[mb].originalText
+                    mb.Text = originalText .. " [" .. keyName .. "]"
+                end
             end
         end
+        _G.refreshModes = refreshModes
         refreshModes()
         for name,mb in pairs(modeBtns) do
             mb.MouseButton1Click:Connect(function()
@@ -5327,6 +5446,7 @@ function buildPartsPanel(Cont, mPanels)
                 end
             end)
         end
+        _G.modeButtons = modeBtns
 
         mkDiv(modSF,2)
         mkSec("FORMATION TARGET", modSF, 3)
@@ -5366,9 +5486,16 @@ function buildPartsPanel(Cont, mPanels)
                 local on = (ftype == formationType) or (ftype == "Mouse" and formationType == "Mouse")
                 btn.BackgroundColor3 = on and PAL.ACC or PAL.B_DEF
                 btn.TextColor3 = on and Color3.fromRGB(8,8,12) or PAL.T1
+                if buttonKeybinds[btn] and buttonKeybinds[btn].originalText then
+                    local keyName = buttonKeybinds[btn].key.Name
+                    local originalText = buttonKeybinds[btn].originalText
+                    btn.Text = originalText .. " [" .. keyName .. "]"
+                end
             end
         end
         refreshFormationType()
+        _G.formTypeBtns = formTypeBtns
+        _G.refreshFormationType = refreshFormationType
 
         ftb1.MouseButton1Click:Connect(function() formationType="Mouse"; refreshFormationType() end)
         ftb2.MouseButton1Click:Connect(function() formationType="Player"; refreshFormationType() end)
@@ -5384,19 +5511,19 @@ function buildPartsPanel(Cont, mPanels)
         mkSlider(modSF,"Form Size Z",0,100,formSizeZ,9,function(v) formSizeZ=v end,0.1)
 
 
-        mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v end)
+mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v end)
 
-        mkL({Size=UDim2.new(1,0,0,14),
-            Text="Hold Mouse1 while in Draw mode to trace a path",
-            TextColor3=PAL.T3,TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=8},modSF)
-        local clearDrawBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
-            Text="Clear Draw Trail",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=9},modSF)
-        clearDrawBtn.MouseButton1Click:Connect(function() clearDrawDots() end)
-        task.defer(function()
-            if modLL.AbsoluteContentSize.Y > 0 then
-                modSF.CanvasSize=UDim2.new(0,0,0,modLL.AbsoluteContentSize.Y+8)
-            end
-        end)
+         local clearDrawBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
+             Text="Clear Draw Trail",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=8},modSF)
+         clearDrawBtn.MouseButton1Click:Connect(function() clearDrawDots() end)
+         mkL({Size=UDim2.new(1,0,0,14),
+             Text="Hold Mouse1 while in Draw mode to trace a path",
+             TextColor3=PAL.T3,TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=9},modSF)
+         task.defer(function()
+             if modLL.AbsoluteContentSize.Y > 0 then
+                 modSF.CanvasSize=UDim2.new(0,0,0,modLL.AbsoluteContentSize.Y+8)
+             end
+         end)
     end
 
     buildModesSubPanel(spCont, sPanels)
@@ -5413,7 +5540,7 @@ function buildPartsPanel(Cont, mPanels)
         end)
 
         mkSec("VELOCITY", parSF, 1)
-        mkSlider(parSF,"Part Speed",   1,120,partSpeed,   2,function(v) partSpeed=v end) 
+        mkSlider(parSF,"Part Speed",   1,120,partSpeed,   2,function(v) partSpeed=v end)                                                --haha penis
 
         mkDiv(parSF,4)
         mkSec("MODE PARAMETERS", parSF, 5)
@@ -5476,7 +5603,11 @@ function buildPartsPanel(Cont, mPanels)
             if not spcActive then spcPart=nil; updateSpcHighlight(nil) end
             spcBtn.BackgroundColor3=spcActive and Color3.fromRGB(18,40,24) or PAL.B_DEF
             spcBtn.TextColor3=spcActive and Color3.fromRGB(110,210,130) or PAL.T1
-            spcBtn.Text="Single Part Control: "..(spcActive and "ON ✓" or "OFF")
+            local base = "Single Part Control: "..(spcActive and "ON ✓" or "OFF")
+            if buttonKeybinds[spcBtn] and buttonKeybinds[spcBtn].originalText then
+                base = base .. " [" .. buttonKeybinds[spcBtn].key.Name .. "]"
+            end
+            spcBtn.Text=base
         end)
         spcRelBtn.MouseButton1Click:Connect(function()
             if spcPart then pcall(function() spcPart.AssemblyLinearVelocity=Vector3.zero end) end
@@ -6048,15 +6179,566 @@ UI = (function()
 
 
     buildNpcPanelFull()
-
     setMTab("Parts")
-
+    local keybindButtons = {}
+    if clickSelBtn then table.insert(keybindButtons, clickSelBtn) end
+    if clearBtn then table.insert(keybindButtons, clearBtn) end
+    if freezeBtn then table.insert(keybindButtons, freezeBtn) end
+    if spcBtn then table.insert(keybindButtons, spcBtn) end
     return {
         ScreenGui=ScreenGui, selInfo=selInfo, clickSelBtn=clickSelBtn,
         clearBtn=clearBtn, freezeBtn=freezeBtn, spcBtn=spcBtn, npcStat=npcStat,
-        unload=unloadScript,
+        unload=unloadScript, keybindButtons=keybindButtons,
+        selectAllBtn = selectAllBtn,
+        selectInRangeBtn = selectInRangeBtn,
+        selectUnweldedBtn = selectUnweldedBtn,
+        selectNDSRangeBtn = selectNDSRangeBtn,
     }
 end)()
+_G.importantButtons = {
+    clickSelBtn = UI.clickSelBtn,
+    clearBtn = UI.clearBtn,
+    freezeBtn = UI.freezeBtn,
+    spcBtn = UI.spcBtn,
+    selectAllBtn = UI.selectAllBtn,
+    selectInRangeBtn = UI.selectInRangeBtn,
+    selectUnweldedBtn = UI.selectUnweldedBtn,
+    selectNDSRangeBtn = UI.selectNDSRangeBtn,
+}
+
+local function bindKeyToButton(button, key)
+    if not button or not key then return end
+    if buttonKeybinds[button] then return end
+    if not buttonOriginalAppearance[button] then
+        local cleanText = button.Text
+        cleanText = string.gsub(cleanText, "%s*%[.-%]", "")
+        cleanText = cleanText:match("^%s*(.-)%s*$")
+        buttonOriginalAppearance[button] = {
+            bg = button.BackgroundColor3,
+            textColor = button.TextColor3,
+            text = cleanText
+        }
+    end
+    
+    local originalText = buttonOriginalAppearance[button].text
+    originalText = string.gsub(originalText, "%s*%[.-%]", "")
+    originalText = originalText:match("^%s*(.-)%s*$")
+    buttonOriginalAppearance[button].text = originalText
+    
+    local conn = UserInputService.InputBegan:Connect(function(inp, gameProcessed)
+        if inp.KeyCode == key and UserInputService:GetFocusedTextBox() == nil then
+            if button and button.Parent then
+                local modeName = nil
+                if _G.modeButtons then
+                    for name, mb in pairs(_G.modeButtons) do
+                        if mb == button then
+                            modeName = name
+                            break
+                        end
+                    end
+                end
+                local ftype = nil
+                if _G.formTypeBtns then
+                    for ft, btn in pairs(_G.formTypeBtns) do
+                        if btn == button then ftype = ft; break end
+                    end
+                    if not ftype and buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                        local ot = string.lower(buttonKeybinds[button].originalText:gsub("%s*%[.-%]", ""):match("^%s*(.-)%s*$"))
+                        for ft, _ in pairs(_G.formTypeBtns) do
+                            if ot == string.lower(ft) or ot == string.lower(ft:gsub("([A-Z])", " %1"):match("^%s*(.-)%s*$")) then ftype = ft; break end
+                            local ftSpaced = ft:gsub("([a-z])([A-Z])", "%1 %2")
+                            if ot == string.lower(ftSpaced) then ftype = ft; break end
+                        end
+                    end
+                    if not ftype then
+                        local bt = string.lower(button.Text:gsub("%s*%[.-%]", ""):match("^%s*(.-)%s*$"))
+                        for ft, _ in pairs(_G.formTypeBtns) do
+                            if bt == string.lower(ft) then ftype = ft; break end
+                            local ftSpaced = ft:gsub("([a-z])([A-Z])", "%1 %2")
+                            if bt == string.lower(ftSpaced) then ftype = ft; break end
+                        end
+                    end
+                end
+                if modeName then
+                    pcall(function()
+                        if activeMode ~= modeName then
+                            clearModeState(activeMode, modeName)
+                            activeMode = modeName
+                            if _G.refreshModes then
+                                pcall(_G.refreshModes)
+                            else
+                                for name, mb in pairs(_G.modeButtons) do
+                                    local on = name == activeMode
+                                    local cat = (_G.MODE_CAT and _G.MODE_CAT[name] or "blue")
+                                    local col = (_G.CAT_COL and _G.CAT_COL[cat] or {bg=Color3.fromRGB(16,24,50), bgOn=Color3.fromRGB(38,70,148), tx=Color3.fromRGB(110,145,235)})
+                                    mb.BackgroundColor3 = on and col.bgOn or col.bg
+                                    mb.TextColor3 = on and Color3.fromRGB(8,8,12) or col.tx
+                                    if buttonKeybinds[mb] and buttonKeybinds[mb].originalText then
+                                        local keyName = buttonKeybinds[mb].key.Name
+                                        local originalText = buttonKeybinds[mb].originalText
+                                        mb.Text = originalText .. " [" .. keyName .. "]"
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                elseif ftype then
+                    pcall(function()
+                        formationType = ftype
+                        if _G.refreshFormationType then pcall(_G.refreshFormationType) end
+                    end)
+                elseif _G.importantButtons then
+                    if button == _G.importantButtons.clickSelBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(string.lower(buttonKeybinds[button].originalText), "click-select")) or string.find(string.lower(button.Text), "click-select") then
+                        pcall(function()
+                            clickSelActive = not clickSelActive
+                            button.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
+                            button.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
+                            local originalText = buttonKeybinds[button] and buttonKeybinds[button].originalText or "Click-Select: OFF"
+                            button.Text = "Click-Select: "..(clickSelActive and "ON ?" or "OFF")
+                            button.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
+                            button.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
+                            local originalText = buttonKeybinds[button] and buttonKeybinds[button].originalText or "Click-Select: OFF"
+                            button.Text = "Click-Select: "..(clickSelActive and "ON ✓" or "OFF")
+                            if buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                                local keyName = buttonKeybinds[button].key.Name
+                                button.Text = button.Text .. " [" .. keyName .. "]"
+                            end
+                        end)
+                     elseif button == _G.importantButtons.spcBtn then
+                         pcall(function()
+                             spcActive = not spcActive
+                             if not spcActive then spcPart = nil; updateSpcHighlight(nil) end
+                             spcBtn.BackgroundColor3 = spcActive and Color3.fromRGB(18,40,24) or PAL.B_DEF
+                             spcBtn.TextColor3 = spcActive and Color3.fromRGB(110,210,130) or PAL.T1
+                             spcBtn.Text = "Single Part Control: "..(spcActive and "ON ✓" or "OFF")
+                             if buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                                 local keyName = buttonKeybinds[button].key.Name
+                                 spcBtn.Text = spcBtn.Text .. " [" .. keyName .. "]"
+                             end
+                         end)
+                    elseif button == _G.importantButtons.selectAllBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(buttonKeybinds[button].originalText, "All")) then
+                          pcall(function()
+                              local before=#selectedParts
+                              selectAll()
+                          end)
+                      elseif button == _G.importantButtons.selectInRangeBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(buttonKeybinds[button].originalText, "In Range")) then
+                          pcall(function()
+                              local before=#selectedParts
+                              selectInRange(autoSelRange)
+                          end)
+                    elseif button == _G.importantButtons.selectUnweldedBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(string.lower(buttonKeybinds[button].originalText), "nds unanchored") and not string.find(string.lower(buttonKeybinds[button].originalText), "range")) or string.find(string.lower(button.Text), "select nds unanchored") and not string.find(string.lower(button.Text), "range") then
+                          pcall(function()
+                              local before=#selectedParts
+                              local added=0
+                              for _,obj in ipairs(workspace:GetDescendants()) do
+                                  if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and not isSelected(obj) then
+                                      selectPart(obj)
+                                      added=added+1
+                                      if added%50==0 then task.wait() end
+                                  end
+                              end
+                          end)
+                      elseif button == _G.importantButtons.selectNDSRangeBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(string.lower(buttonKeybinds[button].originalText), "range select nds")) or string.find(string.lower(button.Text), "range select nds") then
+                           pcall(function()
+                               local before=#selectedParts
+                              local r = autoSelRange or 60
+                              local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+                              local myPos = root and root.Position or Vector3.zero
+                              local added=0
+                              for _,obj in ipairs(workspace:GetDescendants()) do
+                                  if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and (obj.Position - myPos).Magnitude <= r and not isSelected(obj) then
+                                      selectPart(obj)
+                                      added=added+1
+                                      if added%50==0 then task.wait() end
+                                  end
+                              end
+                          end)
+                     elseif button == _G.importantButtons.clearBtn then
+                        pcall(function()
+                            autoSelectAll = false
+                            autoSelectNear = false
+                            spcPart = nil
+                            clearSelection(false)
+                            refreshAutoSelectButtons()
+                        end)
+                    elseif button == _G.importantButtons.freezeBtn then
+                        pcall(function()
+                            frozen = not frozen
+                            if not frozen then
+                                local boostUntil = tick() + 0.75
+                                for _, p in ipairs(selectedParts) do unfreezeBoost[p] = boostUntil end
+                            end
+                            frozenTargets = {}
+                            button.BackgroundColor3 = frozen and Color3.fromRGB(22,38,75) or PAL.B_DEF
+                            button.TextColor3 = frozen and Color3.fromRGB(130,175,255) or PAL.T1
+                            local originalText = buttonKeybinds[button] and buttonKeybinds[button].originalText or "Formation Freeze: OFF"
+                            button.Text = "Formation Freeze: "..(frozen and "ON ✓" or "OFF")
+                            if buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                                local keyName = buttonKeybinds[button].key.Name
+                                button.Text = button.Text .. " [" .. keyName .. "]"
+                            end
+                        end)
+                    else
+                        local bt = string.lower(button.Text)
+                        local ot = buttonKeybinds[button] and buttonKeybinds[button].originalText and string.lower(buttonKeybinds[button].originalText) or bt
+                        if string.find(ot, "nds unanchored") or string.find(bt, "nds unanchored") then
+                            if string.find(ot, "range") or string.find(bt, "range") then
+                                pcall(function()
+                                    local before=#selectedParts
+                                    local r = autoSelRange or 60
+                                    local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+                                    local myPos = root and root.Position or Vector3.zero
+                                    local added=0
+                                    for _,obj in ipairs(workspace:GetDescendants()) do
+                                        if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and (obj.Position - myPos).Magnitude <= r and not isSelected(obj) then
+                                            selectPart(obj)
+                                            added=added+1
+                                        end
+                                    end
+                                end)
+                            else
+                                pcall(function()
+                                    local before=#selectedParts
+                                    local added=0
+                                    for _,obj in ipairs(workspace:GetDescendants()) do
+                                        if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and not isSelected(obj) then
+                                            selectPart(obj)
+                                            added=added+1
+                                        end
+                                    end
+                                end)
+                            end
+                        else
+                            pcall(function()
+                                button.MouseButton1Click:Fire()
+                            end)
+                            pcall(function()
+                                button:Activate()
+                            end)
+                        end
+                    end
+                else
+                    local bt2 = string.lower(button.Text)
+                    local ot2 = buttonKeybinds[button] and buttonKeybinds[button].originalText and string.lower(buttonKeybinds[button].originalText) or bt2
+                    if string.find(ot2, "nds unanchored") or string.find(bt2, "nds unanchored") then
+                        if string.find(ot2, "range") or string.find(bt2, "range") then
+                            pcall(function()
+                                local r = autoSelRange or 60
+                                local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+                                local myPos = root and root.Position or Vector3.zero
+                                for _,obj in ipairs(workspace:GetDescendants()) do
+                                    if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and (obj.Position - myPos).Magnitude <= r and not isSelected(obj) then
+                                        selectPart(obj)
+                                    end
+                                end
+                            end)
+                        else
+                            pcall(function()
+                                for _,obj in ipairs(workspace:GetDescendants()) do
+                                    if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and not isSelected(obj) then
+                                        selectPart(obj)
+                                    end
+                                end
+                            end)
+                        end
+                    else
+                        pcall(function()
+                            button.MouseButton1Click:Fire()
+                        end)
+                        pcall(function()
+                            button:Activate()
+                        end)
+                    end
+                end
+            end
+        end
+    end)
+    buttonKeybinds[button] = {conn = conn, key = key, button = button, originalText = originalText}
+    button.Text = originalText .. " [" .. key.Name .. "]"
+end
+task.wait(0.5)
+
+if savedKeybinds then
+    local restoredCount = 0
+    for btnText, keyName in pairs(savedKeybinds) do
+        local ok, key = pcall(function()
+            return Enum.KeyCode[keyName]
+        end)
+        if ok and key then
+            local function scanButtons(parent)
+                if not parent then return end
+                for _, child in ipairs(parent:GetDescendants()) do
+                    if child:IsA("TextButton") then
+                        local originalText = buttonOriginalAppearance[child] and buttonOriginalAppearance[child].text or child.Text
+                        local currentOriginal = string.gsub(originalText, "%s*%[.-%]", "")
+                        currentOriginal = currentOriginal:match("^%s*(.-)%s*$")
+                        local cleanBtnText = string.gsub(btnText, "%s*%[.-%]", "")
+                        cleanBtnText = cleanBtnText:match("^%s*(.-)%s*$")
+                        if currentOriginal == cleanBtnText or currentOriginal == btnText or child.Text == btnText then
+                            bindKeyToButton(child, key)
+                            return true
+                        end
+                    end
+                end
+                return false
+            end
+            local guiParents = {}
+            if UI and UI.ScreenGui then table.insert(guiParents, UI.ScreenGui) end
+            if ScreenGui then table.insert(guiParents, ScreenGui) end
+            if gethui then
+                local ok, hui = pcall(gethui)
+                if ok and hui then table.insert(guiParents, hui) end
+            end
+            
+            local found = false
+            for _, guiParent in ipairs(guiParents) do
+                if scanButtons(guiParent) then
+                    found = true
+                    restoredCount = restoredCount + 1
+                    break
+                end
+            end
+            
+            if not found then
+            end
+        end
+    end
+    updateAllButtonKeybindTexts()
+else
+end
+
+
+reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
+    if keybindSettingButton and inp.UserInputType == Enum.UserInputType.Keyboard then
+        local key = inp.KeyCode
+        if key == Enum.KeyCode.Escape then
+
+            resetButtonAppearance(keybindSettingButton)
+            keybindSettingButton = nil
+            return
+        end
+
+        if buttonKeybinds[keybindSettingButton] then
+            buttonKeybinds[keybindSettingButton].conn:Disconnect()
+            buttonKeybinds[keybindSettingButton] = nil
+        end
+        bindKeyToButton(keybindSettingButton, key)
+        local function fireButtonLogic(button)
+            if button and _G.modeButtons then
+                for name, mb in pairs(_G.modeButtons) do
+                    if mb == button then
+                        pcall(function()
+                            if activeMode ~= name then
+                                clearModeState(activeMode, name)
+                                activeMode = name
+                                if _G.refreshModes then
+                                    pcall(_G.refreshModes)
+                                else
+                                    for nm, mbtn in pairs(_G.modeButtons) do
+                                        local on = nm == activeMode
+                                        local cat = (_G.MODE_CAT and _G.MODE_CAT[nm] or "blue")
+                                        local col = (_G.CAT_COL and _G.CAT_COL[cat] or {bg=Color3.fromRGB(16,24,50), bgOn=Color3.fromRGB(38,70,148), tx=Color3.fromRGB(110,145,235)})
+                                        mbtn.BackgroundColor3 = on and col.bgOn or col.bg
+                                        mbtn.TextColor3 = on and Color3.fromRGB(8,8,12) or col.tx
+                                        if buttonKeybinds[mbtn] and buttonKeybinds[mbtn].originalText then
+                                            local keyName = buttonKeybinds[mbtn].key.Name
+                                            local origText = buttonKeybinds[mbtn].originalText
+                                            mbtn.Text = origText .. " [" .. keyName .. "]"
+                                        end
+                                    end
+                                end
+                            end
+                        end)
+                        return
+                    end
+                end
+            end
+            if _G.formTypeBtns then
+                for ftype, btn in pairs(_G.formTypeBtns) do
+                    if btn == button then
+                        pcall(function()
+                            formationType = ftype
+                            if _G.refreshFormationType then pcall(_G.refreshFormationType) end
+                        end)
+                        return
+                    end
+                    if buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                        local ot = string.lower(buttonKeybinds[button].originalText)
+                        if string.find(ot, string.lower(ftype), 1, true) then
+                            pcall(function()
+                                formationType = ftype
+                                if _G.refreshFormationType then pcall(_G.refreshFormationType) end
+                            end)
+                            return
+                        end
+                    end
+                end
+                local bt = string.lower(button.Text)
+                for ftype, _ in pairs(_G.formTypeBtns) do
+                    if string.find(bt, string.lower(ftype), 1, true) then
+                        pcall(function()
+                            formationType = ftype
+                            if _G.refreshFormationType then pcall(_G.refreshFormationType) end
+                        end)
+                        return
+                    end
+                end
+            end
+            if _G.importantButtons then
+                if button == _G.importantButtons.clickSelBtn then -- IF BUTTON = IMPORTANT BUTTON THEN CLICK BUTTON ✓✓✓✓✓
+                    pcall(function()
+                        clickSelActive = not clickSelActive
+                        button.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
+                        button.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
+                        button.Text = "Click-Select: "..(clickSelActive and "ON ✓" or "OFF")
+                        if buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                            button.Text = button.Text .. " [" .. buttonKeybinds[button].key.Name .. "]"
+                        end
+                    end)
+                elseif button == _G.importantButtons.spcBtn then
+                    pcall(function()
+                        spcActive = not spcActive
+                        if not spcActive then spcPart = nil; updateSpcHighlight(nil) end
+                        spcBtn.BackgroundColor3 = spcActive and Color3.fromRGB(18,40,24) or PAL.B_DEF
+                        spcBtn.TextColor3 = spcActive and Color3.fromRGB(110,210,130) or PAL.T1
+                        spcBtn.Text = "Single Part Control: "..(spcActive and "ON ✓" or "OFF")
+                        if buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                            spcBtn.Text = spcBtn.Text .. " [" .. buttonKeybinds[button].key.Name .. "]"
+                        end
+                    end)
+                elseif button == _G.importantButtons.clearBtn then
+                    pcall(function()
+                        autoSelectAll = false
+                        autoSelectNear = false
+                        spcPart = nil
+                        clearSelection(false)
+                        refreshAutoSelectButtons()
+                    end)
+                elseif button == _G.importantButtons.freezeBtn then
+                    pcall(function()
+                        frozen = not frozen
+                        if not frozen then
+                            local boostUntil = tick() + 0.75
+                            for _, p in ipairs(selectedParts) do unfreezeBoost[p] = boostUntil end
+                        end
+                        frozenTargets = {}
+                        button.BackgroundColor3 = frozen and Color3.fromRGB(22,38,75) or PAL.B_DEF
+                        button.TextColor3 = frozen and Color3.fromRGB(130,175,255) or PAL.T1
+                        button.Text = "Formation Freeze: "..(frozen and "ON ✓" or "OFF")
+                        if buttonKeybinds[button] and buttonKeybinds[button].originalText then
+                            button.Text = button.Text .. " [" .. buttonKeybinds[button].key.Name .. "]"
+                        end
+                    end)
+                elseif button == _G.importantButtons.selectAllBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(buttonKeybinds[button].originalText, "All")) then
+                    pcall(function()
+                        local before=#selectedParts
+                        selectAll()
+                    end)
+                elseif button == _G.importantButtons.selectInRangeBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(buttonKeybinds[button].originalText, "In Range")) then
+                    pcall(function()
+                        local before=#selectedParts
+                        selectInRange(autoSelRange)
+                    end)
+                elseif button == _G.importantButtons.selectUnweldedBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(buttonKeybinds[button].originalText, "NDS unanchored") and not string.find(buttonKeybinds[button].originalText, "Range")) then
+                    pcall(function()
+                        local before=#selectedParts
+                        local added=0
+                        for _,obj in ipairs(workspace:GetDescendants()) do
+                            if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and not isSelected(obj) then
+                                selectPart(obj)
+                                added=added+1
+                            end
+                        end
+                    end)
+                elseif button == _G.importantButtons.selectNDSRangeBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(buttonKeybinds[button].originalText, "Range Select NDS")) then
+                    pcall(function()
+                        local before=#selectedParts
+                        local r = autoSelRange or 60
+                        local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+                        local myPos = root and root.Position or Vector3.zero
+                        local added=0
+                        for _,obj in ipairs(workspace:GetDescendants()) do
+                            if obj:IsA("BasePart") and not obj.Anchored and obj~=workspace.Terrain and not isPlayerPart(obj) and obj.AssemblyMass~=math.huge and (obj.Position - myPos).Magnitude <= r and not isSelected(obj) then
+                                selectPart(obj)
+                                added=added+1
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+        fireButtonLogic(keybindSettingButton)
+
+        resetButtonAppearanceKeepKeybind(keybindSettingButton)
+        keybindSettingButton = nil
+    end
+end))
+
+
+task.wait(0.2)
+reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+        if UserInputService:GetFocusedTextBox() then return end
+        
+        local mousePos = UserInputService:GetMouseLocation() -- mouse stuffaslmda
+        local guiInset = GuiService:GetGuiInset()
+        
+
+        local bestButton = nil
+        local bestScore = -math.huge
+        
+
+        local guiParents = {}
+        if UI and UI.ScreenGui then table.insert(guiParents, UI.ScreenGui) end
+        if ScreenGui then table.insert(guiParents, ScreenGui) end
+        if gethui then
+            local ok, hui = pcall(gethui)
+            if ok and hui then table.insert(guiParents, hui) end
+        end
+        
+        for _, guiParent in ipairs(guiParents) do
+            for _, btn in ipairs(guiParent:GetDescendants()) do
+                if btn:IsA("TextButton") and btn.Visible then
+                    local allVisible = true
+                    local parent = btn.Parent
+                    while parent and parent ~= guiParent do
+                        if parent:IsA("GuiObject") and not parent.Visible then
+                            allVisible = false
+                            break
+                        end
+                        parent = parent.Parent
+                    end
+                    
+                    if allVisible then
+                        local ap = btn.AbsolutePosition
+                        local as = btn.AbsoluteSize
+                        
+
+                        if as.X >= 1 and as.Y >= 1 then
+                            local inBounds = mousePos.X >= ap.X and mousePos.X <= ap.X + as.X
+                                and mousePos.Y - guiInset.Y >= ap.Y and mousePos.Y - guiInset.Y <= ap.Y + as.Y
+                            
+                            if inBounds then
+                                local area = as.X * as.Y
+                                local zIndex = btn.ZIndex or 0
+                                local score = (1000000 - area) + (zIndex * 10000)
+                                
+                                if score > bestScore then
+                                    bestScore = score
+                                    bestButton = btn
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        if bestButton then
+            startKeybindSetting(bestButton)
+        end
+    end
+end))
 
 
 if hasFileSystem then saveConfig(true) end
@@ -6073,7 +6755,7 @@ reg(Mouse.Button1Up:Connect(function()
                 root.AssemblyLinearVelocity = dir.Unit * GRAB_TOSS_POWER + Vector3.new(0, 20, 0)
             end)
         end
-    end
+    end -- secret penis
     if model then
         local h = model:FindFirstChildOfClass("Humanoid")
         if h then pcall(function() h.PlatformStand = (NX.savedPS == true) end) end
@@ -6182,13 +6864,13 @@ reg(Mouse.Button1Down:Connect(function()
     end
 
     if activeMode=="Railgun" then
-        if not railgunCharging and not railgunFired then
+        if not railgunCharging and not railgunFired then -- boom
             railgunCharging = true
             railgunChargeStart = tick()
         end
     end
 
-    if fingerGunEnabled or sitGunEnabled or grabGunEnabled then
+    if fingerGunEnabled or sitGunEnabled or grabGunEnabled then -- im gonna fjnger you reading
         local function raycastNpc()
 
             local origin = Camera.CFrame.Position
@@ -6277,7 +6959,7 @@ reg(Mouse.Button1Down:Connect(function()
     end
 
 
-    if NX.freezeGun then
+    if NX.freezeGun then -- freeiz
         local origin = Camera.CFrame.Position
         local dir = (currentMouseHit - origin)
         if dir.Magnitude > 0.001 then
@@ -6311,12 +6993,12 @@ reg(Mouse.Button1Down:Connect(function()
         return
     end
 
-    if formationType == "ClickArea" then
+    if formationType == "ClickArea" and not clickSelActive then
         clickFormPos = currentMouseHit
         return
     end
 
-    if formationType == "Anchor" then
+    if formationType == "Anchor" and not clickSelActive then
         local char = LP.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         anchorPos = root and root.Position or currentMouseHit
@@ -6371,6 +7053,7 @@ reg(Mouse.Button1Down:Connect(function()
                 local myChar = LP.Character
                 sniperTouchConns[p] = p.Touched:Connect(function(hit)
                     if not hit or not hit.Parent or hit.Anchored then return end
+                    if isVelImmune(hit) then return end
                     if hit == workspace.Terrain or isSelected(hit) then return end
                     if myChar and hit:IsDescendantOf(myChar) then return end
                     pcall(function()
@@ -6396,6 +7079,7 @@ reg(Mouse.Button1Down:Connect(function()
                 if boomerangConns[p] then pcall(function() boomerangConns[p]:Disconnect() end) end
                 boomerangConns[p] = p.Touched:Connect(function(hit)
                     if not hit or not hit.Parent or hit.Anchored then return end
+                    if isVelImmune(hit) then return end
                     if hit == workspace.Terrain or isSelected(hit) then return end
                     pcall(function()
                         local d3 = hit.Position - p.Position
@@ -6499,6 +7183,7 @@ reg(Mouse.Button1Down:Connect(function()
             if not lightningTouchConns[part] then
                 lightningTouchConns[part] = part.Touched:Connect(function(hit)
                     if not hit or not hit.Parent or hit.Anchored then return end
+                    if isVelImmune(hit) then return end
                     if hit == workspace.Terrain or hit == part then return end
                     if isSelected(hit) then return end
                     pcall(function()
@@ -6548,6 +7233,7 @@ reg(Mouse.Button1Down:Connect(function()
                 end
                 satTouchConns[part] = part.Touched:Connect(function(hit)
                     if not hit or not hit.Parent or hit.Anchored then return end
+                    if isVelImmune(hit) then return end
                     if hit == workspace.Terrain then return end
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.new(
@@ -6571,7 +7257,7 @@ reg(Mouse.Button1Down:Connect(function()
         end
         return
     end
-
+-- i pooped in a peanut butter jar and put it back in the target aisle and watched a grandma buy it
     if spcActive then
         if clickTarget and clickTarget:IsA("BasePart") and not clickTarget.Anchored then
             local char=LP.Character
@@ -6651,6 +7337,7 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
         for _, p in ipairs(selectedParts) do
             stickSlapConns[p] = p.Touched:Connect(function(hit)
                 if not hit or not hit.Parent or hit.Anchored then return end
+                if isVelImmune(hit) then return end
                 if hit == workspace.Terrain or hit == p then return end
                 if isSelected(hit) then return end
                 pcall(function()
@@ -6679,6 +7366,7 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                 if isArm and armMatch then
                     stickBeamConns[p] = p.Touched:Connect(function(hit)
                         if not hit or not hit.Parent or hit.Anchored then return end
+                        if isVelImmune(hit) then return end
                         if hit == workspace.Terrain or hit == p then return end
                         if isSelected(hit) then return end
                         pcall(function()
@@ -6709,7 +7397,7 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
         end
     end
     if inp.KeyCode==Enum.KeyCode.M and activeMode=="Stickman" then
-        stickMagnetActive = not stickMagnetActive
+        do end
     end
     if inp.KeyCode==Enum.KeyCode.Y and activeMode=="Stickman" then
         stickWaveUntil = tick() + 1.9
@@ -6855,7 +7543,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     end
 
 
-    if #selectedParts>0 or spcActive or globalOwnership or activeMode=="Comet" then
+    if #selectedParts>0 or spcActive or globalOwnership or activeMode=="Comet" or activeMode=="Stickman" then
         tickParts()
     end
 
@@ -6932,21 +7620,8 @@ reg(RunService.RenderStepped:Connect(function()
     if next(espLabels) then updateESP() end
     syncSelectionProxyModel()
 end))
-
-
-
-
-
-
-
-
-
-
-
-
-
--- if youre looking at this, you love obama dih and aristo dih
 penis = true
 if penis == true then
 print("catalyst loadeeed")
 end
+-- pickle
