@@ -1,5 +1,5 @@
 --[[ i hate catalyst so much it give me pain in butt
-like 68 modes? idk prob
+like 64 modes? idk prob
 best fling ever trust 
 i love catalylyst
 if you ever say catalylyst bad ill use sniper on your home                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           ]]
@@ -1940,6 +1940,13 @@ local function isPlayerPart(part)
     if parentModel and parentModel:FindFirstChildOfClass("Humanoid") then
         return true
     end
+    return false
+end
+local function isLocalPlayerPart(part)
+    if not part then return false end
+    if LP.Character and part:IsDescendantOf(LP.Character) then return true end
+    local m = part:FindFirstAncestorOfClass("Model")
+    if m and Players:GetPlayerFromCharacter(m) == LP then return true end
     return false
 end
 
@@ -4202,7 +4209,7 @@ local function impactBurst(pos, radius, power)
     local function fling(obj)
         if seen >= 120 then return end
         if obj:IsA("BasePart") and not obj.Anchored and not isVelImmune(obj) and obj ~= workspace.Terrain
-           and not isSelected(obj)
+           and not isSelected(obj) and not isLocalPlayerPart(obj)
            and (obj.Position - pos).Magnitude <= radius then
             seen += 1
             pcall(function()
@@ -4402,6 +4409,7 @@ if false and stickMagnetActive then
                         if isVelImmune(hit) then return end
                         if hit == workspace.Terrain or hit == part then return end
                         if isSelected(hit) then return end
+                        if isLocalPlayerPart(hit) then return end
                         pcall(function()
                             local burstDir = hit.Position - part.Position
                             burstDir = burstDir.Magnitude > 0.001 and burstDir.Unit or Vector3.new(0, 1, 0)
@@ -4948,6 +4956,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                                 if hit == part then return end
                                 if isSelected(hit) then return end
 
+                                if isLocalPlayerPart(hit) then return end
                                 pcall(function()
                                     part.AssemblyAngularVelocity = Vector3.new(
                                         (math.random() - 0.5) * 9e9,
@@ -7840,7 +7849,7 @@ reg(Mouse.Button1Down:Connect(function()
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if isVelImmune(hit) then return end
                     if hit == workspace.Terrain or isSelected(hit) then return end
-                    if myChar and hit:IsDescendantOf(myChar) then return end
+                    if isLocalPlayerPart(hit) then return end
                     pcall(function()
                         local d2 = hit.Position - p.Position
                         d2 = d2.Magnitude > 0.001 and d2.Unit or Vector3.new(0, 1, 0)
@@ -7866,6 +7875,8 @@ reg(Mouse.Button1Down:Connect(function()
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if isVelImmune(hit) then return end
                     if hit == workspace.Terrain or isSelected(hit) then return end
+                    if isSelected(hit) then return end
+                    if isLocalPlayerPart(hit) then return end
                     pcall(function()
                         local d3 = hit.Position - p.Position
                         d3 = d3.Magnitude > 0.001 and d3.Unit or Vector3.new(0, 1, 0)
@@ -7971,6 +7982,7 @@ reg(Mouse.Button1Down:Connect(function()
                     if isVelImmune(hit) then return end
                     if hit == workspace.Terrain or hit == part then return end
                     if isSelected(hit) then return end
+                    if isLocalPlayerPart(hit) then return end
                     pcall(function()
                         local burstDir = hit.Position - part.Position
                         burstDir = burstDir.Magnitude > 0.001 and burstDir.Unit or Vector3.new(0, 1, 0)
@@ -8020,6 +8032,9 @@ reg(Mouse.Button1Down:Connect(function()
                     if not hit or not hit.Parent or hit.Anchored then return end
                     if isVelImmune(hit) then return end
                     if hit == workspace.Terrain then return end
+                    if isSelected(hit) then return end
+                   if isLocalPlayerPart(hit) then return end
+                    if isLocalPlayerPart(hit) then return end
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.new(
                             (math.random() - 0.5) * 9e10,
@@ -8050,14 +8065,14 @@ reg(Mouse.Button1Down:Connect(function()
         scytheCenter = scytheSwingPos
         for _, p in ipairs(selectedParts) do
             if scytheConns[p] then pcall(function() scytheConns[p]:Disconnect() end) end
-            scytheConns[p] = p.Touched:Connect(function(hit)
-                if not hit or not hit.Parent or hit.Anchored then return end
-                if isVelImmune(hit) then return end
-                if hit == workspace.Terrain or hit == p then return end
-                if isSelected(hit) then return end
-                if LP.Character and hit:IsDescendantOf(LP.Character) then return end
-                if isPlayerPart(hit) then return end
-                if scytheState ~= "swing" then return end
+                scytheConns[p] = p.Touched:Connect(function(hit)
+                    if not hit or not hit.Parent or hit.Anchored then return end
+                    if isVelImmune(hit) then return end
+                    if hit == workspace.Terrain or hit == p then return end
+                    if isSelected(hit) then return end
+                   if isLocalPlayerPart(hit) then return end
+                    if isLocalPlayerPart(hit) then return end
+                    if scytheState ~= "swing" then return end
                 pcall(function()
                     local dir = hit.Position - p.Position
                     dir = dir.Magnitude>0.001 and dir.Unit or Vector3.new(0,1,0) -- boom boom 
@@ -8086,7 +8101,8 @@ reg(Mouse.Button1Down:Connect(function()
                     if isVelImmune(hit) then return end
                     if hit == workspace.Terrain or hit == p then return end
                     if isSelected(hit) then return end
-                    if LP.Character and hit:IsDescendantOf(LP.Character) then return end
+                   if isLocalPlayerPart(hit) then return end
+                    if isLocalPlayerPart(hit) then return end
                     if not chainedActive then return end
                     pcall(function()
                         local dir = hit.Position - p.Position
@@ -8193,6 +8209,7 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                 if isVelImmune(hit) then return end
                 if hit == workspace.Terrain or hit == p then return end
                 if isSelected(hit) then return end
+                if isLocalPlayerPart(hit) then return end
                 pcall(function()
                     p.AssemblyAngularVelocity = Vector3.new(
                         (math.random() - 0.5) * 9e10,
@@ -8222,6 +8239,7 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                         if isVelImmune(hit) then return end
                         if hit == workspace.Terrain or hit == p then return end
                         if isSelected(hit) then return end
+                        if isLocalPlayerPart(hit) then return end
                         pcall(function()
                             p.AssemblyAngularVelocity = Vector3.new(
                                 (math.random() - 0.5) * 9e12,
