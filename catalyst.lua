@@ -4423,19 +4423,7 @@ if false and stickMagnetActive then
                         end)
                     end)
                 end
-                local myRoot=char and char:FindFirstChild("HumanoidRootPart")
-                if myRoot then
-                    local dir = (currentMouseHit - myRoot.Position).Unit
-                    local rayParams = RaycastParams.new()
-                    rayParams.FilterDescendantsInstances = getMouseExcludeList()
-                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                    local hit = workspace:Raycast(myRoot.Position, dir * 4000, rayParams)
-                    if hit then
-                        railgunHitPos = hit.Position
-                    else
-                        railgunHitPos = myRoot.Position + dir * 4000
-                    end
-                end
+                railgunHitPos = currentMouseHit
             end
         end
         if railgunFired then
