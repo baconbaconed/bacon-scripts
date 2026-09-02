@@ -1,4 +1,11 @@
--- noooo my catalysytysitistic
+--[[ i hate catalyst so much it give me pain in butt
+like 68 modes? idk prob
+best fling ever trust 
+i love catalylyst
+if you ever say catalylyst bad ill use sniper on your home                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           ]]
+
+
+
 do
     local ok = false
     if type(sethiddenproperty) == "function" then
@@ -9,9 +16,9 @@ do
     end
     if not ok then return end
 end
-workspace.FallenPartsDestroyHeight = 0/0
+workspace.FallenPartsDestroyHeight = 0/0 -- PLEASE remove this if you deem necessary, i added this solely so your parts dont instantly get fucking obliterated by the void when u try flinging someone
 
-local Players          = game:GetService("Players")
+local Players          = game:GetService("Players") -- local player = die.true
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local GuiService       = game:GetService("GuiService")
@@ -19,7 +26,24 @@ local CoreGui          = game:GetService("CoreGui")
 
 local LP     = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-local Mouse  = LP:GetMouse()
+local Mouse  = LP:GetMouse() -- me <3 this guy
+
+do
+    local isMobile = false
+    pcall(function()
+        if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled then
+            isMobile = true
+        end
+        local plat = UserInputService:GetPlatform()
+        if plat == Enum.Platform.IOS or plat == Enum.Platform.Android then
+            isMobile = true
+        end
+    end)
+    if isMobile then
+        pcall(function() LP:Kick("Catalyst is not built for mobile, and never will be, i apologize") end)
+        return
+    end
+end
 
 -- keybinds were a pain, dont touch pls
 local keybindSettingButton = nil
@@ -121,6 +145,20 @@ local function fixCanQueryForRaycast()
                 return
             end
         end
+        if part.Anchored then
+            pcall(function() part.CanQuery = true end)
+            if not part:GetAttribute("_cat_canquery_hooked") then
+                part:SetAttribute("_cat_canquery_hooked", true)
+                part:GetPropertyChangedSignal("Transparency"):Connect(function()
+                    if part.Transparency > 0.80 then
+                        pcall(function() part.CanQuery = false end)
+                    else
+                        pcall(function() part.CanQuery = true end)
+                    end
+                end)
+            end
+            return
+        end
         if part.AssemblyMass == math.huge then
             if part.Transparency <= 0.80 then
                 pcall(function() part.CanQuery = true end)
@@ -216,6 +254,56 @@ EspScreenGui.IgnoreGuiInset   = true
 EspScreenGui.ZIndexBehavior   = Enum.ZIndexBehavior.Global
 EspScreenGui.DisplayOrder     = GUI.ESP_ORDER
 EspScreenGui.Parent           = getGuiParent()
+
+TextScreenGui = Instance.new("ScreenGui")
+TextScreenGui.Name             = "CatalystText"
+TextScreenGui.ResetOnSpawn     = false
+TextScreenGui.IgnoreGuiInset   = true
+TextScreenGui.ZIndexBehavior   = Enum.ZIndexBehavior.Global
+TextScreenGui.DisplayOrder     = 100
+TextScreenGui.Parent           = getGuiParent()
+
+do
+    local bar = Instance.new("Frame")
+    bar.Name = "TextBar"
+    bar.Size = UDim2.new(0, 400, 0, 28)
+    bar.Position = UDim2.new(0.5, -200, 0, 4)
+    bar.BackgroundColor3 = Color3.fromRGB(12, 8, 14)
+    bar.BackgroundTransparency = 0.15
+    bar.BorderSizePixel = 0
+    bar.ZIndex = 110
+    bar.Visible = false
+    bar.Parent = TextScreenGui
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 6)
+    local stroke = Instance.new("UIStroke", bar)
+    stroke.Color = Color3.fromRGB(62, 38, 66)
+    stroke.Thickness = 1
+    stroke.Transparency = 0.3
+    local tb = Instance.new("TextBox")
+    tb.Name = "TextInput"
+    tb.Size = UDim2.new(1, -12, 1, -6)
+    tb.Position = UDim2.new(0, 6, 0, 3)
+    tb.BackgroundTransparency = 1
+    tb.Text = (textContent ~= nil and textContent or "CATALYST")
+    tb.PlaceholderText = "TYPE TEXT (A-Z 0-9) ..."
+    tb.PlaceholderColor3 = Color3.fromRGB(152, 106, 138)
+    tb.TextColor3 = Color3.fromRGB(242, 212, 228)
+    tb.TextSize = 14
+    tb.Font = Enum.Font.GothamBold
+    tb.TextXAlignment = Enum.TextXAlignment.Left
+    tb.ClearTextOnFocus = false
+    tb.ZIndex = 111
+    tb.Parent = bar
+    textGui = bar
+    textBox = tb
+    tb:GetPropertyChangedSignal("Text"):Connect(function()
+        local t = tb.Text or ""
+        t = string.upper(t)
+        t = t:gsub("[^%-A-Z0-9 !?+=]", "")
+        if tb.Text ~= t then tb.Text = t end
+        textContent = t
+    end)
+end
 
 local function reg(c) table.insert(connections,c); return c end
 
@@ -333,6 +421,271 @@ anchoredAuditInterval= 2.8
 stickLastOrigin  = nil
 stickLastOT      = nil
 stickLastPosWalk = 0
+
+if textContent == nil then textContent = "CATALYST" end
+
+scytheState = "idle"
+scytheStart = 0
+SCYTHE_SWING = 0.6
+scytheConns = {}
+scytheCenter = Vector3.zero
+scytheSwingPos = Vector3.zero
+chainedTarget = Vector3.zero
+chainedFireTime = 0
+CHAINED_TTL = 1.5
+chainedFired = {}
+chainedConns = {}
+chainedActive = false
+
+-- TEXT STUFF, IGNORE, DO NOT TICKLE OR TOUCH, THANKS
+TEXT_FONT = {
+    ["A"]={"  X  "," X X ","X   X","XXXXX","X   X","X   X","X   X"},
+    ["B"]={"XXXX ","X   X","X   X","XXXX ","X   X","X   X","XXXX "},
+    ["C"]={" XXX ","X    ","X    ","X    ","X    ","X    "," XXX "},
+    ["D"]={"XXXX ","X   X","X   X","X   X","X   X","X   X","XXXX "},
+    ["E"]={"XXXXX","X    ","X    ","XXXX ","X    ","X    ","XXXXX"},
+    ["F"]={"XXXXX","X    ","X    ","XXXX ","X    ","X    ","X    "},
+    ["G"]={" XXX ","X   X","X    ","X XXX","X   X","X   X"," XXX "},
+    ["H"]={"X   X","X   X","X   X","XXXXX","X   X","X   X","X   X"},
+    ["I"]={"XXXXX","  X  ","  X  ","  X  ","  X  ","  X  ","XXXXX"},
+    ["J"]={"XXXXX","    X","    X","    X","X   X","X   X"," XXX "},
+    ["K"]={"X   X","X  X ","X X  ","XX   ","X X  ","X  X ","X   X"},
+    ["L"]={"X    ","X    ","X    ","X    ","X    ","X    ","XXXXX"},
+    ["M"]={"X   X","XX XX","X X X","X   X","X   X","X   X","X   X"},
+    ["N"]={"X   X","XX  X","X X X","X X X","X  XX","X   X","X   X"},
+    ["O"]={" XXX ","X   X","X   X","X   X","X   X","X   X"," XXX "},
+    ["P"]={"XXXX ","X   X","X   X","XXXX ","X    ","X    ","X    "},
+    ["Q"]={" XXX ","X   X","X   X","X   X","X X X","X  X "," XX X"},
+    ["R"]={"XXXX ","X   X","X   X","XXXX ","X X  ","X  X ","X   X"},
+    ["S"]={" XXX ","X   X","X    "," XXX ","    X","X   X"," XXX "},
+    ["T"]={"XXXXX","  X  ","  X  ","  X  ","  X  ","  X  ","  X  "},
+    ["U"]={"X   X","X   X","X   X","X   X","X   X","X   X"," XXX "},
+    ["V"]={"X   X","X   X","X   X","X   X"," X X "," X X ","  X  "},
+    ["W"]={"X   X","X   X","X   X","X X X","X X X","XX XX","X   X"},
+    ["X"]={"X   X"," X X ","  X  ","  X  ","  X  "," X X ","X   X"},
+    ["Y"]={"X   X"," X X ","  X  ","  X  ","  X  ","  X  ","  X  "},
+    ["Z"]={"XXXXX","    X","   X ","  X  "," X   ","X    ","XXXXX"},
+    ["0"]={" XXX ","X   X","X  XX","X X X","XX  X","X   X"," XXX "},
+    ["1"]={"  X  "," XX  ","  X  ","  X  ","  X  ","  X  ","XXXXX"},
+    ["2"]={" XXX ","X   X","    X","  XX "," X   ","X    ","XXXXX"},
+    ["3"]={"XXXXX","    X","   X ","  XX ","    X","X   X"," XXX "},
+    ["4"]={"   X ","  XX "," X X ","X  X ","XXXXX","   X ","   X "},
+    ["5"]={"XXXXX","X    ","XXXX ","    X","    X","X   X"," XXX "},
+    ["6"]={" XXX ","X   X","X    ","XXXX ","X   X","X   X"," XXX "},
+    ["7"]={"XXXXX","    X","   X ","  X  "," X   "," X   "," X   "},
+    ["8"]={" XXX ","X   X","X   X"," XXX ","X   X","X   X"," XXX "},
+    ["9"]={" XXX ","X   X","X   X"," XXXX","    X","X   X"," XXX "},
+    [" "]={"     ","     ","     ","     ","     ","     ","     "},
+    ["!"]={"  X  ","  X  ","  X  ","  X  ","     ","  X  ","     "},
+    ["?"]={" XXX ","X   X","    X","  XX ","  X  ","     ","  X  "},
+    ["+"]={"     ","  X  ","  X  ","XXXXX","  X  ","  X  ","     "},
+    ["-"]={"     ","     ","     ","XXXXX","     ","     ","     "},
+    ["="]={"     ","     ","XXXXX","     ","XXXXX","     ","     "},
+}
+TEXT_LETTER_W = 5
+TEXT_LETTER_H = 7
+TEXT_PIXEL_GAP = 0.1
+TEXT_LETTER_SPACING = 2.2
+TEXT_SPACE_EXTRA = 4.2
+TEXT_PIXEL_SIZE = 1.0
+textCachedPoints = nil
+textCachedString = ""
+
+local function getTextPixelPoints(txt)
+    txt = string.upper(txt or "")
+    local points = {}
+    local cursorX = 0
+    for i=1, #txt do
+        local ch = txt:sub(i,i)
+        local glyph = TEXT_FONT[ch]
+        if not glyph then glyph = TEXT_FONT[" "] end
+        if ch == " " then
+            cursorX = cursorX + TEXT_LETTER_W + TEXT_SPACE_EXTRA
+        else
+            for row=1, TEXT_LETTER_H do
+                local line = glyph[row]
+                for col=1, TEXT_LETTER_W do
+                    local c = line:sub(col,col)
+                    if c=="X" then
+                        local px = cursorX + (col-1)*(TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP)
+                        local py = (TEXT_LETTER_H-row)*(TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP)
+                        table.insert(points, Vector2.new(px, py))
+                    end
+                end
+            end
+            cursorX = cursorX + TEXT_LETTER_W*(TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP) + TEXT_LETTER_SPACING
+        end
+    end
+    local minX, maxX = math.huge, -math.huge
+    for _,p in ipairs(points) do
+        if p.X < minX then minX=p.X end
+        if p.X > maxX then maxX=p.X end
+    end
+    if #points>0 then
+        local cx = (minX+maxX)*0.5
+        for i,p in ipairs(points) do
+            points[i] = Vector2.new(p.X - cx, p.Y)
+        end
+    end
+    return points, cursorX
+end
+local textAvgCache = 1
+local textAvgCacheCount = 0
+local function getAvgPartSize()
+    local total = #selectedParts
+    if total == 0 then return 1 end
+    if textAvgCacheCount == total then return textAvgCache end
+    local sum = 0
+    local cnt = 0
+    for _,p in ipairs(selectedParts) do
+        if p and p.Parent then
+            local s = p.Size
+            local m = math.max(s.X, s.Y, s.Z)
+            sum = sum + m
+            cnt = cnt + 1
+        end
+    end
+    if cnt == 0 then return 1 end
+    local avg = sum / cnt
+    avg = math.clamp(avg, 0.8, 12)
+    textAvgCache = avg
+    textAvgCacheCount = total
+    return avg
+end
+local textPointsDataCache = nil
+local textPointsDataCacheStr = nil
+local textAssignment = {}
+local textPartAngles = {}
+local textAssignmentCacheCount = 0
+local textAssignmentCacheStr = nil
+local function getPixelAngle(glyph, col, row)
+    local hasLeft = col>1 and glyph[row]:sub(col-1,col-1)=="X"
+    local hasRight = col<5 and glyph[row]:sub(col+1,col+1)=="X"
+    local hasUp = row>1 and glyph[row-1]:sub(col,col)=="X"
+    local hasDown = row<7 and glyph[row+1]:sub(col,col)=="X"
+    local hasUpLeft = row>1 and col>1 and glyph[row-1]:sub(col-1,col-1)=="X"
+    local hasUpRight = row>1 and col<5 and glyph[row-1]:sub(col+1,col+1)=="X"
+    local hasDownLeft = row<7 and col>1 and glyph[row+1]:sub(col-1,col-1)=="X"
+    local hasDownRight = row<7 and col<5 and glyph[row+1]:sub(col+1,col+1)=="X"
+    if (hasLeft or hasRight) and not (hasUp or hasDown) then
+        return 0
+    elseif (hasUp or hasDown) and not (hasLeft or hasRight) then
+        return 90
+    elseif (hasUpLeft or hasDownRight) and not (hasLeft or hasRight or hasUp or hasDown) then
+        return 45
+    elseif (hasUpRight or hasDownLeft) and not (hasLeft or hasRight or hasUp or hasDown) then
+        return 135
+    elseif (hasLeft or hasRight) and (hasUp or hasDown) then
+        return 0
+    else
+        if hasUpLeft or hasDownRight then return 45 end
+        if hasUpRight or hasDownLeft then return 135 end
+        return 0
+    end
+end
+local function getPixelRunLen(glyph, col, row)
+    local h=1; local c=col-1; while c>=1 and glyph[row]:sub(c,c)=="X" do h=h+1; c=c-1 end; c=col+1; while c<=5 and glyph[row]:sub(c,c)=="X" do h=h+1; c=c+1 end
+    local v=1; local r=row-1; while r>=1 and glyph[r]:sub(col,col)=="X" do v=v+1; r=r-1 end; r=row+1; while r<=7 and glyph[r]:sub(col,col)=="X" do v=v+1; r=r+1 end
+    local d1=1; c=col-1; r=row-1; while c>=1 and r>=1 and glyph[r]:sub(c,c)=="X" do d1=d1+1; c=c-1; r=r-1 end; c=col+1; r=row+1; while c<=5 and r<=7 and glyph[r]:sub(c,c)=="X" do d1=d1+1; c=c+1; r=r+1 end
+    local d2=1; c=col+1; r=row-1; while c<=5 and r>=1 and glyph[r]:sub(c,c)=="X" do d2=d2+1; c=c+1; r=r-1 end; c=col-1; r=row+1; while c>=1 and r<=7 and glyph[r]:sub(c,c)=="X" do d2=d2+1; c=c-1; r=r+1 end
+    return math.max(h, v, d1, d2)
+end
+local function buildTextPointsData(txt)
+    txt = string.upper(txt or "")
+    local points = {}
+    local cursorX = 0
+    for li=1, #txt do
+        local ch = txt:sub(li,li)
+        local glyph = TEXT_FONT[ch]
+        if not glyph then glyph = TEXT_FONT[" "] end
+        if ch == " " then
+            cursorX = cursorX + TEXT_LETTER_W + TEXT_SPACE_EXTRA
+        else
+            for row=1, TEXT_LETTER_H do
+                local line = glyph[row]
+                for col=1, TEXT_LETTER_W do
+                    if line:sub(col,col)=="X" then
+                        local px = cursorX + (col-1)*(TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP)
+                        local py = (TEXT_LETTER_H-row)*(TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP)
+                        local ang = getPixelAngle(glyph, col, row)
+                        local runLen = getPixelRunLen(glyph, col, row)
+                        table.insert(points, {pos=Vector2.new(px, py), angle=ang, runLen=runLen, letter=ch, letterIdx=li})
+                    end
+                end
+            end
+            cursorX = cursorX + TEXT_LETTER_W*(TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP) + TEXT_LETTER_SPACING
+        end
+    end
+    if #points>0 then
+        local minX, maxX = math.huge, -math.huge
+        for _,pd in ipairs(points) do
+            if pd.pos.X < minX then minX=pd.pos.X end
+            if pd.pos.X > maxX then maxX=pd.pos.X end
+        end
+        local cx = (minX+maxX)*0.5
+        for _,pd in ipairs(points) do
+            pd.pos = Vector2.new(pd.pos.X - cx, pd.pos.Y)
+        end
+    end
+    return points
+end
+local function buildTextAssignment()
+    local txt = textContent or ""
+    local total = #selectedParts
+    if txt == "" or #txt==0 or total==0 then
+        textPointsDataCache = {}
+        textPointsDataCacheStr = txt
+        textAssignment = {}
+        textPartAngles = {}
+        textAssignmentCacheCount = total
+        textAssignmentCacheStr = txt
+        return
+    end
+    local pointsData = buildTextPointsData(txt)
+    textPointsDataCache = pointsData
+    textPointsDataCacheStr = txt
+    if #pointsData==0 then
+        textAssignment = {}
+        textPartAngles = {}
+        textAssignmentCacheCount = total
+        textAssignmentCacheStr = txt
+        return
+    end
+    local sortedPoints = {}
+    for i,pd in ipairs(pointsData) do table.insert(sortedPoints, pd) end
+    table.sort(sortedPoints, function(a,b) return a.runLen > b.runLen end)
+    local partEntries = {}
+    for idx, p in ipairs(selectedParts) do
+        if p and p.Parent then
+            local s = p.Size
+            local wallLong = s.X >= s.Y and "X" or "Y"
+            local maxDim = math.max(s.X, s.Y)
+            table.insert(partEntries, {idx=idx, part=p, len=maxDim, longAxis=wallLong})
+        end
+    end
+    table.sort(partEntries, function(a,b) return a.len > b.len end)
+    textAssignment = {}
+    textPartAngles = {}
+    for i, pe in ipairs(partEntries) do
+        local pd = sortedPoints[((i-1) % #sortedPoints)+1]
+        textAssignment[pe.part] = pd
+        local partAngle = 0
+        if pe.longAxis=="Y" then partAngle=90 end
+        local mirroredAngle = (180 - pd.angle) % 180
+        local need = mirroredAngle - partAngle
+        need = ((need+45)%180)-90
+        textPartAngles[pe.part] = need
+        textAssignment[pe.idx] = pd
+    end
+    textAssignmentCacheCount = total
+    textAssignmentCacheStr = txt
+end
+local function ensureTextAssignment()
+    local total = #selectedParts
+    if textAssignmentCacheStr ~= textContent or textAssignmentCacheCount ~= total or not textPointsDataCache or #textPointsDataCache==0 then
+        buildTextAssignment()
+    end
+end
 
 spcActive = false
 spcPart   = nil
@@ -642,7 +995,7 @@ end
 loadConfig()
 
 
-local MODES = { --why are there so many aaa [currently 60]
+local MODES = { --why are there so many aaa [currently 68] send help theyre invading my house i hate these so much
     "Mouse",   "Tornado",    "Ring",      "Orbit",
     "Spiral",  "Wave",       "Halo",      "Drone",
     "DroneV2", "Shield",     "Comet",     "Wall",
@@ -658,6 +1011,7 @@ local MODES = { --why are there so many aaa [currently 60]
     "Sinewave", "Heart", "Wings", "Crystal",
     "TwinStars", "Tesseract", "Atom", "Lightning",
     "Sniper", "Bridge", "Strike", "Boomerang",
+    "Text", "Scythe", "Pentagram", "Chained", -- PENIS MODE SOON I SWEAR ILL GIVE EVERYONE A MASSIVE DONG THAT SWINGS AROUND LIKE A POOL NOODLE
 }
 
 
@@ -1176,6 +1530,37 @@ local function clearModeState(prevMode, nextMode)
             barrageLabel.Text = "Inactive"
         end
     end
+    if prevMode == "Scythe" or nextMode ~= "Scythe" then
+        if nextMode ~= "Scythe" then
+            scytheState = "idle"
+            scytheStart = 0
+            for p,c in pairs(scytheConns) do pcall(function() c:Disconnect() end) end
+            scytheConns = {}
+            scytheSwingPos = Vector3.zero
+            scytheCenter = Vector3.zero
+        end
+    end
+    if prevMode == "Chained" or nextMode ~= "Chained" then
+        if nextMode ~= "Chained" then
+            chainedActive = false
+            chainedTarget = Vector3.zero
+            for p,c in pairs(chainedConns) do pcall(function() c:Disconnect() end) end
+            chainedConns = {}
+            chainedFired = {}
+        end
+    end
+    if prevMode == "Text" or nextMode ~= "Text" then
+        if textGui then
+            textGui.Visible = (nextMode == "Text")
+        end
+    end
+    if nextMode == "Text" and textGui then
+        textGui.Visible = true
+    elseif textGui then -- help
+        if activeMode ~= "Text" and nextMode ~= "Text" then
+            textGui.Visible = false
+        end
+    end
 
     for _, part in ipairs(selectedParts) do
         if part and part.Parent then
@@ -1193,7 +1578,7 @@ local espLabels = {}
 
 local function getPartScreenRect(part)
 
-    local ok, pCFrame, pSize = pcall(function() return part:GetBoundingBox() end)
+    local ok, pCFrame, pSize = pcall(function() return part:GetBoundingBox() end) -- IDK WHY I HAVE SO MUCH PCALLS DONT ASK PLS
     local half
     if ok and pCFrame and pSize then
         half = pSize * 0.5
@@ -1211,7 +1596,7 @@ local function getPartScreenRect(part)
 
     local minX, minY, maxX, maxY
     local anyVisible = false
-    for _, offset in ipairs(localOffsets) do
+    for _, offset in ipairs(localOffsets) do -- FOR OFFSET ROBLOX DO GET SOLARA EXECUTOR = TRUE SOLARA.OFFSETS = UPDATED 🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑 SOLARA.UPDATE = NOW ROBLOX.INTERNAL OFFSETS PRINT() ELSE DIE.TRUE = TRUE IF SOLARA.UPDATED = FALSE THEN REPLICATESIGNAL(PLAYER.SUPERKILL) ELSEIF PRINT("HAPPY SOLARA") PRINT.OFFSET = 0x0
         local worldPos = pCFrame:PointToWorldSpace(offset)
         local screenPos, onScreen = Camera:WorldToScreenPoint(worldPos)
         if onScreen and screenPos.Z > 0 then
@@ -1239,7 +1624,7 @@ local function createEspOverlay(part, style)
         tag.Parent = EspScreenGui
 
         local stroke = Instance.new("UIStroke", tag)
-        stroke.Color = GUI.ESP_ACCENT
+        stroke.Color = GUI.ESP_ACCENT -- my gui has a accent i wonder how it talks now
         stroke.Thickness = 2
         stroke.Transparency = 0
 
@@ -1662,7 +2047,7 @@ local r=math.random
     
     if strengthenParts then
         pcall(function()
-            part.CustomPhysicalProperties = PhysicalProperties.new(strengthenDensity, 0.3, 0.5)
+            part.CustomPhysicalProperties = PhysicalProperties.new(strengthenDensity, 0.3, 0.5) -- part.customphysicalproperties = killbrick = true
         end)
     end
     pcall(function() disableSelectedCollision(part) end)
@@ -2080,6 +2465,15 @@ local function getGroundYAt(x, z, defaultY, ignorePart)
         Vector3.new(0, -4000, 0),
         _groundRayParams
     )
+    if not hit then
+        local fallback = RaycastParams.new()
+        fallback.FilterType = Enum.RaycastFilterType.Exclude
+        local fList = {LP.Character}
+        if ignorePart then table.insert(fList, ignorePart) end
+        fallback.FilterDescendantsInstances = fList
+        fallback.IgnoreWater = true
+        hit = workspace:Raycast(Vector3.new(x, castOriginY, z), Vector3.new(0, -4000, 0), fallback)
+    end
     return hit and hit.Position.Y or nil
 end
 
@@ -2110,6 +2504,13 @@ local function updateMouseHit()
 
     local ray = Camera:ScreenPointToRay(x, y)
     local hit = workspace:Raycast(ray.Origin, ray.Direction * 5000, _mouseRayParams)
+    if not hit then
+        local fallback = RaycastParams.new()
+        fallback.FilterType = Enum.RaycastFilterType.Exclude
+        fallback.FilterDescendantsInstances = {LP.Character}
+        fallback.IgnoreWater = true
+        hit = workspace:Raycast(ray.Origin, ray.Direction * 5000, fallback)
+    end
     if hit then
         currentMouseHit = hit.Position
     else
@@ -3613,6 +4014,183 @@ local function getTarget(index, total, part, t)
             end
         end
         return idlePos()
+    elseif activeMode=="Pentagram" then
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local origin = root and root.Position or mHit
+        origin = origin + Vector3.new(0, 5*scY, 0)
+        local lookDir = root and root.CFrame.LookVector or Vector3.new(0,0,-1)
+        local rightDir = root and root.CFrame.RightVector or Vector3.new(1,0,0)
+        local upDir = root and root.CFrame.UpVector or Vector3.new(0,1,0)
+        local pentR = formRadius * 1.6
+        local verts = {}
+        for i=0,4 do
+            local th = math.rad(-90) + i*math.pi*2/5
+            verts[i+1] = Vector2.new(math.cos(th)*pentR, math.sin(th)*pentR)
+        end
+        local order = {1,3,5,2,4}
+        local perEdge = math.max(1, math.ceil(total/5))
+        local eIdx = ((index-1) % 5) + 1
+        local seg = math.floor((index-1)/5)
+        local tEdge = perEdge>1 and seg/(perEdge-1) or 0.5
+        local aIdx = order[eIdx]
+        local bIdx = order[eIdx %5 +1]
+        local pa = verts[aIdx]; local pb = verts[bIdx]
+        local lx = pa.X + (pb.X - pa.X)*tEdge
+        local ly = pa.Y + (pb.Y - pa.Y)*tEdge
+        local pulse = 1 + 0.06*math.sin(t*2.5 + index*0.15)
+        lx = lx * pulse; ly = ly * pulse
+        return origin + rightDir*(lx*scX*0.55) + upDir*(ly*scY*0.55) + lookDir*0.2
+
+    elseif activeMode=="Text" then
+        ensureTextAssignment()
+        local pd = textAssignment[part] or textAssignment[index]
+        if not pd or not pd.pos then
+            if textCachedString ~= textContent or not textCachedPoints then
+                textCachedPoints = getTextPixelPoints(textContent)
+                textCachedString = textContent
+            end
+            local pts = textCachedPoints
+            if not pts or #pts==0 then
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local origin = root and root.Position or mHit
+                return origin + Vector3.new(0, 5*scY, 0)
+            end
+            local totalPts = #pts
+            local pt
+            if total >= totalPts and totalPts>0 then
+                local pi = ((index-1) % totalPts)+1
+                pt = pts[pi]
+            elseif totalPts>0 then
+                local fi = math.floor((index-1)/math.max(total-1,1)*(totalPts-1))+1
+                pt = pts[math.clamp(fi,1,totalPts)]
+            else
+                pt = Vector2.new(0,0)
+            end
+            pd = {pos=pt, angle=0}
+        end
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local origin = root and root.Position or mHit
+        local look0 = root and root.CFrame.LookVector or Vector3.new(0,0,-1)
+        local lookDir = Vector3.new(look0.X, 0, look0.Z)
+        if lookDir.Magnitude < 0.01 then lookDir = Vector3.new(0,0,-1) else lookDir = lookDir.Unit end
+        local upDir = Vector3.new(0,1,0)
+        local rightDir = Vector3.new(lookDir.Z, 0, -lookDir.X).Unit
+        origin = origin + lookDir*6*math.max(scX,scZ) + Vector3.new(0, 5*scY, 0)
+        local avg = getAvgPartSize()
+        local avgScale = avg * 0.78 + 0.22
+        local formScale = (formRadius/7)*0.38 + 0.62
+        local scScale = math.max(scX, math.max(scY, scZ))*0.38 + 0.62
+        local textScale = avgScale * formScale * scScale
+        textScale = math.clamp(textScale, 0.45, 6) * (TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP) * 0.92
+        local pt = pd.pos
+        local midY = TEXT_LETTER_H*0.5*(TEXT_PIXEL_SIZE+TEXT_PIXEL_GAP)
+        local jitter = Vector3.new(math.sin(t*9+index*1.1)*0.06, math.cos(t*8+index)*0.06, math.sin(t*11+index)*0.06)
+        return origin + rightDir*(pt.X*textScale) + upDir*((pt.Y - midY)*textScale) + jitter
+
+    elseif activeMode=="Scythe" then
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local rpS = root and root.Position or mHit
+        local idleCenter = rpS + Vector3.new(0, 6.5*scY, 0)
+        local spin = t*0.85
+        local swingP = 0
+        local isSwing = scytheState=="swing"
+        if isSwing then
+            swingP = math.clamp((t - scytheStart)/SCYTHE_SWING,0,1)
+        end
+        local handleLen = formRadius*1.35*scY + 4.2
+        local bladeR = formRadius*0.95*scR + 1.5
+        local localPos
+        local r = ratio
+        if r < 0.62 then
+            local hr = r/0.62
+            localPos = Vector3.new(math.sin(spin*0.6 + index*0.4)*0.12, hr*handleLen - handleLen*0.5, math.cos(spin*0.4+index)*0.08)
+        else
+            local br = (r-0.62)/0.38
+            local handleTip = Vector3.new(0, handleLen*0.5, 0)
+            local tip = handleTip + Vector3.new(0, -bladeR*0.11, bladeR*1.42)
+            local tt = math.pow(br, 0.90)
+            local basePos = handleTip:Lerp(tip, tt)
+            local belly = math.sin(br*math.pi) * bladeR*0.20
+            localPos = basePos + Vector3.new(math.sin(br*math.pi*0.7)*bladeR*0.04, -belly*0.55, belly*0.22)
+        end
+        local baseCF
+        if isSwing then
+            local ease = swingP*swingP*(3-2*swingP)
+            local yaw = -85 + ease*170
+            local tilt = 90
+            local swingCenter = scytheSwingPos
+            if swingCenter == Vector3.zero then
+                swingCenter = currentMouseHit + Vector3.new(0,0.4,0)
+            end
+            scytheCenter = swingCenter
+            baseCF = CFrame.new(swingCenter) * CFrame.Angles(0, math.rad(yaw), math.rad(tilt))
+        else
+            local idleYaw = spin*18
+            local idleTilt = 52 + math.sin(t*0.7)*6
+            scytheCenter = idleCenter + Vector3.new(math.sin(t*0.9)*0.7, math.sin(t*1.3)*0.35, math.cos(t*0.9)*0.7)
+            baseCF = CFrame.new(scytheCenter) * CFrame.Angles(math.rad(idleTilt), math.rad(idleYaw), 0)
+        end
+        return baseCF:PointToWorldSpace(localPos)
+    elseif activeMode=="Chained" then
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local rp = root and root.Position or mHit
+        local rightDir = root and root.CFrame.RightVector or Vector3.new(1,0,0)
+        local upDir = root and root.CFrame.UpVector or Vector3.new(0,1,0)
+        local lookDir = root and root.CFrame.LookVector or Vector3.new(0,0,-1)
+        local crownN = math.max(4, math.floor(total*0.22))
+        if crownN > total then crownN = total end
+        local ringTotal = total - crownN
+        local leftN = math.floor(ringTotal/2)
+        local rightN = ringTotal - leftN
+        if index > leftN + rightN then
+            local cIdx = index - leftN - rightN
+            local cRatio = crownN>1 and (cIdx-1)/(crownN-1) or 0
+            local a = cRatio*math.pi*2 + t*0.7
+            local radius = formRadius*0.85*scR + 1.9
+            local crownCenter = rp + upDir*(7.8*scY) + lookDir*0.2
+            local rPulse = radius * (1 + math.sin(t*2.2 + cIdx*0.5)*0.06)
+            local isSpike = (cIdx % 4 == 1)
+            local h = isSpike and (1.4*scY + math.sin(t*3.2 + cIdx)*0.25) or (math.sin(t*2.6 + cIdx*0.7)*0.18*scY)
+            local pos = crownCenter + rightDir*math.cos(a)*rPulse + lookDir*math.sin(a)*rPulse + upDir*h
+            return pos + Vector3.new(math.sin(t*5+cIdx)*0.10, math.cos(t*4+cIdx)*0.07, math.sin(t*6+cIdx)*0.08)
+        end
+        local isLeft = index <= leftN
+        local hand = isLeft and (rp + (-rightDir*1.45*scR + upDir*0.45*scY + lookDir*0.35*scR)) or (rp + (rightDir*1.45*scR + upDir*0.45*scY + lookDir*0.35*scR))
+        local ringN = isLeft and leftN or rightN
+        local localIdx = isLeft and index or (index - leftN)
+        local firing = chainedActive and chainedFired[part] and chainedTarget ~= Vector3.zero
+        if firing then
+            local rRatio = ringN>1 and (localIdx-1)/(ringN-1) or 0
+            local toT = chainedTarget - hand
+            if toT.Magnitude < 0.1 then return hand end
+            local targetPos = hand:Lerp(chainedTarget, rRatio)
+            local helixTurns = 3.4
+            local helixA = rRatio*helixTurns*math.pi*2 + t*4.2 + localIdx*0.35
+            local helixR = 0.42*scR + math.sin(t*3.1 + localIdx*0.7)*0.06*scR
+            local dir = toT.Magnitude>0.01 and toT.Unit or lookDir
+            local perp = dir:Cross(Vector3.yAxis)
+            if perp.Magnitude < 0.01 then perp = rightDir end
+            perp = perp.Unit
+            local binorm = dir:Cross(perp).Unit
+            local helixOffset = perp*math.cos(helixA)*helixR + binorm*math.sin(helixA)*helixR
+            local sag = math.sin(rRatio*math.pi) * 0.6*scY
+            local twitch = Vector3.new(math.sin(t*7 + localIdx*1.2)*0.10, math.sin(t*6.5 + localIdx*0.9)*0.08, math.cos(t*5.2+localIdx*0.7)*0.10)
+            local kink = (localIdx % 3 == 0) and (perp*math.sin(rRatio*18 + t*2)*0.18*scR) or Vector3.zero-- wow so kinky right
+            return targetPos + helixOffset + Vector3.new(0, -sag, 0) + twitch*0.6 + kink
+        else
+            local radius = formRadius*0.95*scR + 2.4
+            local center = isLeft and (hand + (-rightDir*radius*0.95)) or (hand + (rightDir*radius*0.95))
+            local ringRatio = ringN>1 and (localIdx-1)/ringN or 0
+            local a = ringRatio*math.pi*2 + t*1.5 + (isLeft and 0 or math.pi*0.12) + math.sin(t*2.2 + localIdx*0.9)*0.18
+            local wobbleR = radius * (1 + math.sin(t*3.1 + localIdx*0.6)*0.05)-- stuff
+            local basePos = center + (rightDir*math.cos(a) + lookDir*math.sin(a))*wobbleR
+            local linkLift = (localIdx % 2 == 0 and 0.16 or -0.16)*scY + math.sin(t*2.4 + localIdx*1.1)*0.06*scY
+            local linkPush = (localIdx % 2 == 0 and 0.10 or -0.10)*scR
+            local tangent = (-rightDir*math.sin(a) + lookDir*math.cos(a)).Unit
+            basePos = basePos + upDir*linkLift + tangent*linkPush*0.5
+            basePos = basePos + upDir*(math.sin(a*2 + t*2.4)*0.12*scY) + Vector3.new(math.sin(t*3+localIdx)*0.05, 0, math.cos(t*3+localIdx)*0.05)
+            return basePos
+        end
     end
 
     return mHit
@@ -4072,6 +4650,28 @@ if false and stickMagnetActive then
         end
     end
 
+    if activeMode=="Scythe" then
+        if scytheState=="swing" and (tick() - scytheStart) >= SCYTHE_SWING then
+            scytheState = "idle"
+            for p,c in pairs(scytheConns) do pcall(function() c:Disconnect() end) end
+            scytheConns = {}
+        end
+    end
+
+    if activeMode=="Chained" then
+        if chainedActive and chainedTarget ~= Vector3.zero then
+            chainedTarget = currentMouseHit
+        end
+    else
+        if chainedActive then
+            chainedActive = false
+            chainedTarget = Vector3.zero
+            for p,c in pairs(chainedConns) do pcall(function() c:Disconnect() end) end
+            chainedConns = {}
+            chainedFired = {}
+        end
+    end
+
 
     local isWall   = activeMode=="Wall"
     local isMG     = activeMode=="Minigun"
@@ -4086,6 +4686,8 @@ if false and stickMagnetActive then
     local isStrike = activeMode=="Strike"
     local isSniper = activeMode=="Sniper"
     local isBoom   = activeMode=="Boomerang"
+    local isChained = activeMode=="Chained"
+    local isText = activeMode=="Text"
 
     for i=#selectedParts,1,-1 do
         local part=selectedParts[i]
@@ -4159,8 +4761,21 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                     responsiveness = getMoveResponsiveness(50)
                 end
 
+                if isChained and chainedActive and chainedFired[part] then
+                    responsiveness = getMoveResponsiveness(52)
+                end
 
-if isDV2 then
+                if isChained then
+                    local d = (tgt - part.Position)
+                    if d.Magnitude > 0.05 then
+                        local baseCF = CFrame.lookAt(part.Position, tgt)
+                        local twist = (i % 2 == 0) and 0 or 90
+                        targetRotation = baseCF * CFrame.Angles(math.rad(90), 0, math.rad(twist)) * CFrame.Angles(math.sin(t*3 + i*0.7)*6, 0, 0)
+                    end
+                end
+
+
+                if isDV2 then
                     local AP = getNetAP(part)
                     if AP then AP.Enabled = true end
                     local AO = getNetAO(part)
@@ -4365,6 +4980,22 @@ if isDV2 then
                     end)
                 elseif isWall and wallRoot then
                     targetRotation = wallPanelBasis(part) + tgt
+                    pcall(function()
+                        part.AssemblyAngularVelocity = Vector3.zero
+                        if not partTargets[part] then partTargets[part]={} end
+                        partTargets[part].position = tgt
+                        partTargets[part].rotation = targetRotation
+                        partTargets[part].responsiveness = responsiveness
+                        syncAlignTarget(part, partTargets[part])
+                    end)
+                elseif isText then
+                    local root = char and char:FindFirstChild("HumanoidRootPart")
+                    local look0 = root and root.CFrame.LookVector or Vector3.new(0,0,-1)
+                    local lookDir = Vector3.new(look0.X, 0, look0.Z)
+                    if lookDir.Magnitude < 0.01 then lookDir = Vector3.new(0,0,-1) else lookDir = lookDir.Unit end
+                    local upDir = Vector3.new(0,1,0)
+                    local ang = textPartAngles[part] or 0
+                    targetRotation = CFrame.lookAt(tgt, tgt + lookDir, upDir) * CFrame.Angles(0, 0, math.rad(ang))
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.zero
                         if not partTargets[part] then partTargets[part]={} end
@@ -4870,6 +5501,16 @@ do function unloadScript()
 
     if ScreenGui and ScreenGui.Parent then pcall(function() ScreenGui:Destroy() end) end
     if EspScreenGui and EspScreenGui.Parent then pcall(function() EspScreenGui:Destroy() end) end
+    if TextScreenGui and TextScreenGui.Parent then pcall(function() TextScreenGui:Destroy() end) end
+    for p,c in pairs(scytheConns) do pcall(function() c:Disconnect() end) end
+    scytheConns = {}
+    scytheSwingPos = Vector3.zero
+    scytheCenter = Vector3.zero
+    for p,c in pairs(chainedConns) do pcall(function() c:Disconnect() end) end
+    chainedConns = {}
+    chainedFired = {}
+    chainedTarget = Vector3.zero
+    chainedActive = false
 end end
 function corner(p,r) Instance.new("UICorner",p).CornerRadius=UDim.new(0,r or 5) end
 
@@ -4990,6 +5631,7 @@ function buildMinButton(TBar)
     local MinBtn=mkB({Size=UDim2.new(0,24,0,24),Position=UDim2.new(1,-58,0,9),
         BackgroundColor3=Color3.fromRGB(32,32,42),Text="-",TextColor3=PAL.T1,TextSize=13,
         Font=Enum.Font.GothamBold,ZIndex=GUI.Z+2},TBar)
+    MinBtn:SetAttribute("NoKeybind", true)
     return MinBtn
 end
 
@@ -4998,6 +5640,7 @@ function buildCloseButton(TBar)
     local CloseBtn=mkB({Size=UDim2.new(0,24,0,24),Position=UDim2.new(1,-30,0,9),
         BackgroundColor3=PAL.B_RED,Text="X",TextColor3=Color3.new(1,1,1),TextSize=12,
         Font=Enum.Font.GothamBold,ZIndex=GUI.Z+2},TBar)
+    CloseBtn:SetAttribute("NoKeybind", true)
     CloseBtn.MouseButton1Click:Connect(function()
         unloadScript()
     end)
@@ -5017,7 +5660,7 @@ function buildTitleBar(Main, MINI)
     mkF({Size=UDim2.new(1,0,0,10),Position=UDim2.new(0,0,1,-10),BackgroundColor3=PAL.TBAR,ZIndex=GUI.Z+1},TBar)
 
     mkL({Size=UDim2.new(1,-80,1,0),Position=UDim2.new(0,12,0,0),
-        Text="Catalyst",TextColor3=PAL.T1,TextSize=13,Font=Enum.Font.GothamBold,
+        Text="Catalyst!",TextColor3=PAL.T1,TextSize=13,Font=Enum.Font.GothamBold,
         TextXAlignment=Enum.TextXAlignment.Left,ZIndex=GUI.Z+2},TBar)
 
     local MinBtn = buildTitleBarButtons(TBar)
@@ -5086,6 +5729,7 @@ function buildMainFrame()
     ResizeHandle.TextYAlignment = Enum.TextYAlignment.Center
     ResizeHandle.ZIndex = GUI.Z + 10
     ResizeHandle.AutoButtonColor = false
+    ResizeHandle:SetAttribute("NoKeybind", true)
     ResizeHandle.Parent = Main
 
     local resizeCorner = Instance.new("UICorner", ResizeHandle)
@@ -5128,6 +5772,78 @@ function buildMainFrame()
     MinBtn.MouseButton1Click:Connect(function()
         ResizeHandle.Visible = Body.Visible
     end)
+    local Hover = mkF({Name="HoverDesc",Size=UDim2.new(0, 280, 0, 360),Position=UDim2.new(1, 12, 0, 0),BackgroundColor3=PAL.SURFACE,BackgroundTransparency=0.35,ZIndex=GUI.Z,Visible=false}, Main)
+    corner(Hover, 6)
+    local hStroke = Instance.new("UIStroke", Hover)
+    hStroke.Color = PAL.BORDER
+    hStroke.Thickness = 1.2
+    hStroke.Transparency = 0.25
+    hStroke.Parent = Hover
+    local hTitle = mkL({Name="HoverTitle",Size=UDim2.new(1,-12,0,22),Position=UDim2.new(0,6,0,6),Text="",TextColor3=PAL.ACC,TextSize=12,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=GUI.Z+1,BackgroundTransparency=1}, Hover)
+    local hScroll = Instance.new("ScrollingFrame")
+    hScroll.Name = "HoverScroll"
+    hScroll.Size = UDim2.new(1,-12,1,-34)
+    hScroll.Position = UDim2.new(0,6,0,28)
+    hScroll.BackgroundTransparency = 1
+    hScroll.BorderSizePixel = 0
+    hScroll.ScrollBarThickness = 3
+    hScroll.ScrollBarImageColor3 = PAL.ACC2
+    hScroll.CanvasSize = UDim2.new(0,0,0,0)
+    hScroll.ZIndex = GUI.Z+1
+    hScroll.Parent = Hover
+    local hDesc = Instance.new("TextLabel")
+    hDesc.Name = "HoverDescLabel"
+    hDesc.Size = UDim2.new(1,-6,0,0)
+    hDesc.BackgroundTransparency = 1
+    hDesc.TextColor3 = PAL.T1
+    hDesc.TextSize = 10
+    hDesc.Font = Enum.Font.Gotham
+    hDesc.TextXAlignment = Enum.TextXAlignment.Left
+    hDesc.TextYAlignment = Enum.TextYAlignment.Top
+    hDesc.TextWrapped = true
+    hDesc.AutomaticSize = Enum.AutomaticSize.Y
+    hDesc.ZIndex = GUI.Z+1
+    hDesc.Text = ""
+    hDesc.Parent = hScroll
+    hDesc:GetPropertyChangedSignal("TextBounds"):Connect(function()
+        hScroll.CanvasSize = UDim2.new(0,0,0,hDesc.TextBounds.Y+6)
+    end)
+    hDesc:GetPropertyChangedSignal("Text"):Connect(function()
+        hScroll.CanvasSize = UDim2.new(0,0,0,hDesc.TextBounds.Y+6)
+    end)
+    _G.HoverPanel = Hover
+    _G.HoverTitle = hTitle
+    _G.HoverDescLabel = hDesc
+    local function setHoverDesc(modeName)
+        Hover.Visible = true
+        if _G.MODE_DESC and _G.MODE_DESC[modeName] then
+            local full = _G.MODE_DESC[modeName]
+            local firstNL = string.find(full, "\n")
+            if firstNL then
+                hTitle.Text = string.sub(full, 1, firstNL-1)
+                hDesc.Text = string.sub(full, firstNL+1)
+            else
+                hTitle.Text = modeName
+                hDesc.Text = full
+            end
+            local key = nil
+            if _G.modeButtons and _G.modeButtons[modeName] and buttonKeybinds and buttonKeybinds[_G.modeButtons[modeName]] then
+                key = buttonKeybinds[_G.modeButtons[modeName]].key.Name
+            end
+            if key then
+                hDesc.Text = hDesc.Text .. "\n\nKeybind: [" .. key .. "]"
+            end
+        else
+            hTitle.Text = modeName
+            hDesc.Text = "No description"
+        end
+        hScroll.CanvasSize = UDim2.new(0,0,0,hDesc.TextBounds.Y+6)
+    end
+    local function hideHoverDesc()
+        Hover.Visible = false
+    end
+    _G.setHoverDesc = setHoverDesc
+    _G.hideHoverDesc = hideHoverDesc
 
     return Main, Body
 end
@@ -5219,7 +5935,7 @@ function buildPartsPanel(Cont, mPanels)
             clickSelActive = not clickSelActive
             clickSelBtn.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
             clickSelBtn.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
-            local base = "Click-Select: "..(clickSelActive and "ON ✓" or "OFF")
+            local base = "Click-Select: "..(clickSelActive and "ON" or "OFF")
             if buttonKeybinds[clickSelBtn] and buttonKeybinds[clickSelBtn].originalText then
                 base = base .. " [" .. buttonKeybinds[clickSelBtn].key.Name .. "]"
             end
@@ -5251,11 +5967,11 @@ function buildPartsPanel(Cont, mPanels)
         local function refreshAutoSelectButtons()
             autoAllBtn.BackgroundColor3 = autoSelectAll and Color3.fromRGB(18,55,24) or PAL.B_DEF
             autoAllBtn.TextColor3 = autoSelectAll and Color3.fromRGB(110,210,130) or PAL.T1
-            autoAllBtn.Text = "Auto Select: "..(autoSelectAll and "ON ✓" or "OFF")
+            autoAllBtn.Text = "Auto Select: "..(autoSelectAll and "ON" or "OFF")
 
             autoNearBtn.BackgroundColor3 = autoSelectNear and Color3.fromRGB(22,38,75) or PAL.B_DEF
             autoNearBtn.TextColor3 = autoSelectNear and Color3.fromRGB(130,175,255) or PAL.T1
-            autoNearBtn.Text = "Auto Near Select: "..(autoSelectNear and "ON ✓" or "OFF")
+            autoNearBtn.Text = "Auto Near Select: "..(autoSelectNear and "ON" or "OFF")
         end
 
         autoAllBtn.MouseButton1Click:Connect(function()
@@ -5308,7 +6024,7 @@ function buildPartsPanel(Cont, mPanels)
             frozenTargets={}
             freezeBtn.BackgroundColor3=frozen and Color3.fromRGB(22,38,75) or PAL.B_DEF
             freezeBtn.TextColor3=frozen and Color3.fromRGB(130,175,255) or PAL.T1
-            local base = "Formation Freeze: "..(frozen and "ON ✓" or "OFF")
+            local base = "Formation Freeze: "..(frozen and "ON" or "OFF")
             if buttonKeybinds[freezeBtn] and buttonKeybinds[freezeBtn].originalText then
                 base = base .. " [" .. buttonKeybinds[freezeBtn].key.Name .. "]"
             end
@@ -5332,11 +6048,11 @@ function buildPartsPanel(Cont, mPanels)
             globalOwnership=not globalOwnership
             gOwnBtn.BackgroundColor3=globalOwnership and Color3.fromRGB(22,38,75) or PAL.B_DEF
             gOwnBtn.TextColor3=globalOwnership and Color3.fromRGB(130,175,255) or PAL.T1
-            gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON ✓" or "OFF")
+            gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON" or "OFF")
         end)
         gOwnBtn.BackgroundColor3=globalOwnership and Color3.fromRGB(22,38,75) or PAL.B_DEF
         gOwnBtn.TextColor3=globalOwnership and Color3.fromRGB(130,175,255) or PAL.T1
-        gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON ✓" or "OFF")
+        gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON" or "OFF")
 
         mkSlider(selP,"Owner Radius",10,300,ownerRadius,15,function(v) ownerRadius=v end)
 
@@ -5346,7 +6062,7 @@ function buildPartsPanel(Cont, mPanels)
             fakeCollisions=not fakeCollisions
             fakeColBtn.BackgroundColor3=fakeCollisions and Color3.fromRGB(22,38,75) or PAL.B_DEF
             fakeColBtn.TextColor3=fakeCollisions and Color3.fromRGB(130,175,255) or PAL.T1
-            fakeColBtn.Text="Fake Collisions: "..(fakeCollisions and "ON ✓" or "OFF")
+            fakeColBtn.Text="Fake Collisions: "..(fakeCollisions and "ON" or "OFF")
 
             for _, part in ipairs(selectedParts) do
                 if fakeCollisions then
@@ -5358,7 +6074,7 @@ function buildPartsPanel(Cont, mPanels)
         end)
         fakeColBtn.BackgroundColor3=fakeCollisions and Color3.fromRGB(22,38,75) or PAL.B_DEF
         fakeColBtn.TextColor3=fakeCollisions and Color3.fromRGB(130,175,255) or PAL.T1
-        fakeColBtn.Text="Fake Collisions: "..(fakeCollisions and "ON ✓" or "OFF")
+        fakeColBtn.Text="Fake Collisions: "..(fakeCollisions and "ON" or "OFF")
     end
 
         local selInfo, clickSelBtn, clearBtn, _refreshAutoSel, selectAllBtn, selectInRangeBtn, selectUnweldedBtn, selectNDSRangeBtn = buildSelSubPanel(spCont, sPanels)
@@ -5390,16 +6106,18 @@ function buildPartsPanel(Cont, mPanels)
             mGrid.Size=UDim2.new(1,0,0,mgL.AbsoluteContentSize.Y)
         end)
 
-        local MODE_CAT = { -- this is coloring stuff its kinda simple, i like it
-            Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="green",
-            Drone="blue", DroneV2="red", Shield="green", Comet="blue", Wall="green",
+        local MODE_CAT = { -- i love cats i swear
+            Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="blue",
+            Drone="red", DroneV2="red", Shield="green", Comet="blue", Wall="green",
             Draw="blue", Beam="blue", Sphere="blue", Vortex="red", DNA="yellow", Pulse="blue", Grid="blue", Cube="green",
             Scatter="blue", Star="yellow", Pendulum="yellow", Rain="blue", Galaxy="yellow", Blackhole="red", Lemniscate="yellow", Blender="red",
             Crown="green", Swarm="blue", Minigun="red", Satellite="red",
-            Seek="blue", Stickman="black", Slinky="blue", Fountain="blue", Bounce="blue", Ripple="blue", Juggle="blue", Constellation="yellow", --STICKMAN is the code name for billy, he used to be named stickman but billy is a better name
+            Seek="blue", Stickman="black", Slinky="blue", Fountain="blue", Bounce="blue", Ripple="blue", Juggle="blue", Constellation="yellow",
             Rose="yellow", OrbitSin="yellow", Liss="yellow", Swing="blue", Aura="blue", Homing="red", Railgun="red", Barrage="red",
             Sinewave="yellow", Heart="green", Wings="green", Crystal="yellow", TwinStars="yellow", Tesseract="yellow", Atom="yellow", Lightning="red",
             Sniper="red", Bridge="green", Strike="red", Boomerang="red",
+            Text="green", Scythe="red", Pentagram="green",
+            Chained="red", -- penisdingalingswingmode = "pink"
         }
         local CAT_COL = {
             red    = {bg=Color3.fromRGB(50,16,16), bgOn=Color3.fromRGB(148,30,30), tx=Color3.fromRGB(235,85,85)},
@@ -5408,8 +6126,75 @@ function buildPartsPanel(Cont, mPanels)
             yellow = {bg=Color3.fromRGB(50,44,10), bgOn=Color3.fromRGB(168,148,30), tx=Color3.fromRGB(235,210,85)},
             black  = {bg=Color3.fromRGB(14,14,14), bgOn=Color3.fromRGB(38,38,38), tx=Color3.fromRGB(225,225,225)},
         }
+        local MODE_DESC = {
+            Mouse="Mouse\nTarget: Formation Target (default Mouse) - change in Modes > Formation Target\nParts cluster around Target plus offset*2.5 + up 1*scY\nControls: Move Target (move mouse by default, or set Formation Target to Player/ClosestNPC/ClickArea/Anchor/ClickedPlayer)\nMath: pos = Target + offset*2.5",
+            Tornado="Tornado\nTarget: Formation Target - 6-band helical column with skirt, height = ceil(total/6)*2.2*scY\nControls: Move Target\nMath: band=(idx-1)%6 h=floor((idx-1)/6)*2.2*scY hf=h/totalH spin=band/6*2pi+t*tornadoSpeed*(1.25-hf*0.5) r=(3+sin)*rMax*(1-0.55*hf)*skirt",
+            Ring="Ring\nTarget: Formation Target - single horizontal ring\nControls: Move Target\nMath: r=max(total*0.45,formRadius)*rMax a=angle+t*1 y=1.5*scY+sin(t*1.2)*0.4",
+            Orbit="Orbit\nTarget: Formation Target - tilted orbit with vertical bob\nControls: Move Target\nMath: a=angle+t*3.2 vOff=sin(a*2+idx)*4*scY pos= Target+cos(a)*orbitRadius*scX, y=4*scY+vOff",
+            Spiral="Spiral\nTarget: Formation Target - flat spiral rising\nControls: Move Target\nMath: a=ratio*2.5*2pi+t*1.2 r=ratio*8*maxSc y=ratio*spiralHeight*scY",
+            Wave="Wave\nTarget: Formation Target - sine wave line along X\nControls: Move Target\nMath: x=(ratio-.5)*total*1.3*scX wY=sin(ratio*5pi+t*5)*waveAmp*scY wZ=cos(ratio*3pi+t*3)*1.2*scZ",
+            Halo="Halo\nTarget: Around Player (not Formation Target) at 7*scY above root\nControls: Auto orbit around you\nMath: r=max(total*0.4,formRadius)*rMax a=angle+t*0.7 pos=rp.X+cos(a)*r*scX, y=rp.Y+7*scY+sin(t*2.2)*0.3",
+            Drone="Drone\nTarget: Formation Target - jittery cloud + drift around Target\nControls: Move Target\nMath: pos=Target+off*1.8*sc + drift sin/cos*2 + up 4*scY",
+            DroneV2="DroneV2\nTarget: Auto nearest player/NPC within flingRange, else orbit\nControls: Auto seek\nMath: passOffset=look*4.2*sign(sin(attackClock)) vertical cos*0.45 lead=vel*0.012 flingBoost=flingForce*8+close*14",
+            Shield="Shield\nTarget: Around Player - Fibonacci sphere\nControls: Auto around you\nMath: phi=(1+sqrt5)/2 theta=2pi*i/phi cosY=-0.2+ (i/total)*1.2 r=(formRadius+0.5)*scR",
+            Comet="Comet\nTarget: Your movement history (trail behind you)\nControls: Move character\nMath: cometHistory push if dist>0.45-0.8 histIdx = #history - ratio*trailLen",
+            Wall="Wall\nTarget: In front of Player (wallDist in look dir, not Formation Target)\nControls: Face direction, wallDist/wallGap sliders pack by size via _wallSlots()\nMath: center=rp+look*wallDist*maxSc right*slot.r + up*slot.u",
+            Draw="Draw\nTarget: Your drawn trail (mouse trail while holding)\nControls: Hold Mouse1 in Draw to draw path, Clear Draw Trail to reset\nMath: sampleDrawTrailPoint splits total across trails, lerp trail segment",
+            Beam="Beam\nTarget: Line from Player to Formation Target - double helix\nControls: Move Target (beam follows)\nMath: start=rp+2*scY dir=Target-start dist=|dir| strand 0/1 turns=max(dist/6,2) aa=ratio*turns*2pi+t*6+strand*pi r=0.6+0.9*sin(ratio*pi)",
+            Sphere="Sphere\nTarget: Formation Target - Fibonacci sphere, flat Y scale 0.28\nControls: Move Target\nMath: yLatScale 0.28 rx=formRadius*scX ry=formRadius*scY rz=formRadius*scZ pos=Target+ sinY*cos(theta+t*0.4)*rx etc y=cosY*ry*0.28",
+            Vortex="Vortex\nTarget: Formation Target - inverted tornado (narrowing upward)\nControls: Move Target\nMath: spin=band/6*2pi -t*tornadoSpeed*2 r=(1+h/maxR*0.35)*maxR y=Target.Y+14*scY-h clamped",
+            DNA="DNA\nTarget: Formation Target - double helix vertical 12*scY tall\nControls: Move Target\nMath: strand (idx%2) pr=pos/2 a=pr*3*2pi+t*1.6+strand*pi r=3*scR h=pr*12*scY",
+            Pulse="Pulse\nTarget: Formation Target - expanding/contracting ring\nControls: Auto pulse\nMath: pulseR=formRadius*(1+sin(t*6)*0.45)*maxSc a=angle y=2*scY+sin(t*6)*0.5",
+            Grid="Grid\nTarget: Formation Target - flat grid at Target y+4*scY\nControls: Move Target\nMath: cols=ceil(sqrt(total)) col=(idx%cols)-(cols-1)/2 row=floor(idx/cols) spacing=part.Size.X+wallGap",
+            Cube="Cube\nTarget: Formation Target + 4*scY up, rotating cube edges\nControls: Move Target (cube follows)\nMath: 8 verts -1/1, 12 edges, perEdge=ceil(total/12) tEdge lerp, half=max(formRadius,2) rot Angles(t*0.45,t*0.32)",
+            Scatter="Scatter\nTarget: Formation Target - expand/contract to far cloud\nControls: Auto\nMath: scatter=(sin(t*1.5)+1)/2 far=Target+off*14*scX+up*4*scY pos=Target:Lerp(far,scatter)",
+            Star="Star\nTarget: Formation Target - 2 radii alternating point/inner\nControls: Move Target\nMath: isPoint=(idx%2==0) sAngle= spoke*2pi+ t*0.6 r=isPoint?formRadius*2:0.75",
+            Pendulum="Pendulum\nTarget: Formation Target - swinging pendulum line\nControls: Auto\nMath: swing=sin(t*4+idx*0.55)*formRadius*scX dip=-(1-cos)*0.5*formRadius*scY",
+            Rain="Rain\nTarget: Formation Target X/Z, Y is falling loop to ground\nControls: Move Target X/Z\nMath: topY=Target.Y+14*scY floorY=getGroundYAt(x,z) dropHeight=top-floor fall=(t*38+phase)%dropHeight y=top-fall",
+            Galaxy="Galaxy\nTarget: Formation Target - 3-arm spiral\nControls: Move Target\nMath: arm=(idx-1)%3 ar=posInArm/(perArm-1) spiral=arm/3*2pi+ar*2.5pi+t*0.8 r=ar*formRadius*2 tilt sin*0.35*scY",
+            Blackhole="Blackhole\nTarget: Formation Target - collapse then spin out\nControls: Auto cycle 1.5s\nMath: cycle=t*1.5%1 pull=1-cycle*2.2 r=formRadius*pull spin=angle -t*10*(1.2-pull*0.9) h=pull*4",
+            Lemniscate="Lemniscate\nTarget: Formation Target - figure-8 infinity\nControls: Move Target\nMath: phase=ratio*2pi+t*1.3 denom=1+sin(phase)^2 a=formRadius*1.6*scR x=a*cos/denom z=a*sin*cos/denom y=sin*0.55*scY",
+            Blender="Blender\nTarget: Formation Target - random axis spin per offset\nControls: Move Target\nMath: axis=sin(off*3.14) spd=5.6+idx%7*0.25 r=formRadius*maxR pos=Target+up 3*scY + p1*cos* r + p2*sin*r",
+            Crown="Crown\nTarget: Around Player (rp) - spiked ring + inner ring\nControls: Auto around you\nMath: isSpike=(idx%2==0) a=spoke*2pi+t*0.24 r=formRadius outer 2x inner 0.65 y 10*scY /7*scY",
+            Swarm="Swarm\nTarget: Formation Target - wander + jitter\nControls: Move Target\nMath: wander sin*formRadius + jitter sin*18*0.7",
+            Minigun="Minigun\nTarget: Formation Target for firing, rest queue behind player\nControls: Auto cycles\nMath: firing idx=minigunIdx at Target, others behind -look* (5+row*2) + right*col*1.6 cycles when dist<reach or 12s",
+            Satellite="Satellite\nTarget: High orbit 20*scY around player, on click fire cluster to Formation Target\nControls: Click to set satTarget (mouse)\nMath: idle ring 3.5*scX high 20*scY, fire vel 1000+ burst 8000, TTL 2s",
+            Seek="Seek\nTarget: Nearest NPC within 200 else Formation Target\nControls: Auto chase\nMath: getNearestNPC 200 if found -> npcRoot+offset*0.5 else Target+offset",
+            Stickman="Stickman/Billy\nFull stick figure with face, walk, arms, beam, dance, crawl\nTarget: Around Player\nControls:\n Move = walk (walkPhase+=dt*spd*0.35*sgn)\n J = switch arm\n T = TPose\n P = slap 0.5s burst\n C = beam hold\n Y = wave 1.9s\n U = dance toggle\n Z = crawl toggle\n Q = face mode 0-4\n Mouse = aim arm\nMath:\n walkPhase+=dt*spd*0.35*sgn\n u head 0.10-0.22 torso 0.22-0.37 arms 0.37-0.73 legs 0.73-1\n head/face tilt to mouse, legs sin/cos walk, face 10 parts eyes/brows/mouth",
+            Slinky="Slinky\nTarget: Mouse trail history (like Comet but spaced by formRadius)\nControls: Move mouse to leave slinkyHistory\nMath: step=index*(formRadius*0.35+1.5) idx=#history-step pos=history[idx]+off*0.35",
+            Fountain="Fountain\nTarget: Formation Target - parabolic jets up from Target\nControls: Move Target\nMath: jet=(t*4.4+ratio*1.8)%1 h=sin(jet*pi)*formRadius*2.8 +1.5*scY off*formRadius*0.35",
+            Bounce="Bounce\nTarget: Lerp between Formation Target and player 7*scY\nControls: Auto\nMath: phase=t*2.8+idx*0.12 alpha=phase<1?phase:2-phase pos=Target:Lerp(rp+7*scY,alpha)",
+            Ripple="Ripple\nTarget: Formation Target - expanding waves per part\nControls: Move Target\nMath: waveR=(t*4.8-idx*0.18)%(formRadius*2.2*maxR+1)+1 a=angle+t*0.5 pos=Target+cos(a)*waveR*scX",
+            Juggle="Juggle\nTarget: Formation Target - toss in circle\nControls: Move Target\nMath: toss=sin(t*4.8+idx*0.75) h=(toss+1)*0.5*formRadius*2.2+2 spread 0.35*scX",
+            Constellation="Constellation\nTarget: Formation Target - orbit with bob\nControls: Move Target\nMath: r=formRadius*scR*(0.85+0.15*sin) bob=sin(t*3.6)*0.4 y=2.5*scY+bob",
+            Rose="Rose\nTarget: Formation Target - rose k=3+(total%4)-1\nControls: Move Target\nMath: k=3+... theta=angle+t*1.2 a=formRadius*scR*(0.75+0.25*sin) r=a*cos(k*theta) y=2*scY+sin*6*scY",
+            OrbitSin="OrbitSin\nTarget: Formation Target - orbit radius pulses + Y sine\nControls: Move Target\nMath: baseR=formRadius*scR r=baseR*(0.75+0.25*sin(t*4.2+ratio*6)) y=2*scY+scY*2.5*sin(t*2.8+ratio*2pi)",
+            Liss="Liss\nTarget: Formation Target - Lissajous 3D\nControls: Move Target\nMath: u=ratio*2pi+t*1.1 x=sin(3*u+t*0.6) y=cos(2*u -t*0.44) z=sin(4*u+t*0.36)",
+            Swing="Swing\nTarget: Formation Target but follows cursor if far\nControls: Move Target\nMath: swingA=angle+sin(t*2.4)*0.35+t*0.5 swingLen=(formRadius*scR)*(0.7+0.3*sin) d>25 extra 0.18*scR lerp to Target+2*scY 0.35",
+            Aura="Aura\nTarget: Formation Target - 3 layered orbits with wobble\nControls: Move Target\nMath: layer=index%3 baseR=formRadius*(1+layer*0.4) orbitSpeed 1.6+layer*0.3 bob 5+layer*0.8 wobble sin*0.8",
+            Homing="Homing\nTarget: Locked player (click) for 3s, else Formation Target\nControls: Click player/NPC to lock\nMath: homingTarget valid? center=launch:Lerp(target,0.94) dir=CFrame.lookAt helix L=9*scR u 0-1 rr 1.5/2.6",
+            Railgun="Railgun\nTarget: Barrel at player 11*scY aiming at Formation Target\nControls: Hold click 1s to charge (coil spin 1.4+charge^3*100) then fire to raycast hit\nMath: origin=rp+11*scY + sin*1.6 aimDir=Target-origin coilN=total*0.45 len=(formRadius*2.2+8)*maxSc firing prog ease->hitPos",
+            Barrage="Barrage\nTarget: Formation Target ground - fall from sky bombard\nControls: Move Target (bombs follow)\nMath: groundY=getGroundYAt(Target) targetY=ground+size*0.5 launchHeight 35+maxSc*8 drop (t+idx*0.12)%0.5 height=launch*(1-progress) wobble sin*pi*2",
+            Sinewave="Sinewave\nTarget: Formation Target - 2D plane wave interference 3 waves\nControls: Move Target\nMath: x=(ratio-.5)*formRadius*4 y=(sin(x*0.5+t*4)*cos(z*0.5+t*3)+cos(x*0.3-t*3.6)*sin(z*0.4+t*4.4)+sin((x+z)*0.2+t*5))*formRadius*0.8 y=Target.Y+3*scY+y",
+            Heart="Heart\nTarget: In front of Player (not Formation Target) facing your look - classic heart\nControls: Auto in front of you\nMath: origin=rp look/right/up theta=ratio*2pi+t heartScale=formRadius*0.8 x=16*sin^3 y=13*cos-5*cos2-2*cos3-cos4 localPos*heartScale*0.05+5",
+            Wings="Wings\nTarget: In front of Player - pair of wings off back flapping\nControls: Auto\nMath: origin=rp wingSide ±1 wingIndex wingCurves sin(ratio*pi*0.5)*span flap sin(t*4)*0.3",
+            Crystal="Crystal\nTarget: Formation Target - 5 stacked fibonacci layers\nControls: Move Target\nMath: layer=index%5 scale 1-layer*0.15 radius=formRadius*scale y=layer*0.8*formRadius phi golden theta=2pi*idx/phi+t*0.6*(layer+1)",
+            TwinStars="TwinStars\nTarget: Formation Target - two cores + lemniscate belt\nControls: Move Target\nMath: orbitR=(formRadius*1.1+4)*scR coreA=t*1.5 c1=Target+cos*orbitR bob sin*1.5*scY belt lemniscate denom=1+sin^2",
+            Tesseract="Tesseract\nTarget: Formation Target +5*scY - 4D hypercube projection\nControls: Move Target\nMath: 16 verts 2^4 edges H=max(formRadius,5)*1.35 4D rotations a1 0.55 a2 0.34 a3 0.21 persp dist/(dist-w*H) spin 0.19/0.27",
+            Atom="Atom\nTarget: Formation Target - nucleus 12% + 3 shells tilted\nControls: Move Target\nMath: nucleus pulse sin*0.12 shells 3 tilt=shell/3*pi+sin*0.25 spin 1.5+shell*0.65 r=formRadius*1.5+shell*3.2",
+            Lightning="Lightning\nTarget: Cloud 34 above player to Formation Target bolt\nControls: Click to set lightningTarget\nMath: segs 8 bolt lerp cloud->target + rand*14 stagger ratio*0.08 prog=(age-stagger)/0.35 else explode ir=2+age*9",
+            Sniper="Sniper\nTarget: Ring 8*scY in front of face, sequential fire to Formation Target\nControls: Click to set sniperTargetPos (hold to charge Railgun-style, but Sniper fires on click)\nMath: ringR=5*scR ca=(idx/total)*2pi+t*2.4 slotP=center+right*cos+up*sin delay=idx/total*0.35 prog lerp slot->target 0.3 explode 1.2",
+            Bridge="Bridge\nTarget: Formation Target ground - two-click bridge\nControls: Click A then B to build (arch), third click reset\nMath: dir=(B-A).Unit sideU=-dir.Z,0,dir.X cols 2-3 rows ceil(n/cols) arch=sin(u*pi)*min(D*0.08,3.5) y=g+arch+1.4 freeze",
+            Strike="Strike\nTarget: Idle atom around player (10% nucleus +4 shells), on click descend to Formation Target\nControls: Click to set strikeTarget\nMath: idle atom, descend lerp 70->0 prog^2 + spin rr 2.5*(1-prog) drill circle ir 0.8+rand*0.35 return lerp",
+            Boomerang="Boomerang\nTarget: Disc home 7*scY around player, on click boomerang to Formation Target +42 extra\nControls: Click to set boomerangTarget\nMath: u=clamp((t-start)/1.45) D=|target-origin| center=origin+dir*s*(D+min*0.48) side -D*0.16 tilt 76->14 spin 22 ringR 0.45+ring*0.32",
+            Text="Text\nTarget: Vertical wall 6 studs in front of Player facing outwards (world up, not Formation Target) - 5x7 font A-Z0-9 !?+-= Uppercase, spacing 2.2/4.2 adapts to avg part size (avg*0.78+0.22), long parts auto-assigned to stick letters (I/L/T) longest run first, parts rotated Z to match stroke 0/90/45/135 (C less closed: middle rows open)\nControls: Type in top bar (live, filtered [^%-A-Z0-9 !?+=])\nMath: points buildTextPointsData angle via 8-neighbor h/v/diag runLen, textScale= (0.78*avg+0.22)*(formRadius/7*0.38+0.62)*(maxSc*0.38+0.62)*1.1*0.92, pos=origin+right*X+up*(Y-midY)+jitter",
+            Scythe="Scythe\nTarget: Idle hovers 6.5*scY above player, swing at Formation Target floor Y+0.4 flat 90° (horizontal)\nControls: Click to swing 0.6s (no cooldown) fling 38500+13200 stronger than Sniper\nMath: idle tilt 52 yaw spin*18, swing yaw -85->85 ease tilt 90 handle 1.35*scY bladeR 0.95*scR tip hook offZ 1.42*bladeR offY -0.34*bladeR, flat X-Z after 90° tilt",
+            Pentagram="Pentagram\nTarget: In front of Player 5*scY facing your look (not Formation Target) - 5-point star {5/2}\nControls: Move with your look\nMath: r=formRadius*1.6 verts 5 order 1,3,5,2,4 perEdge ceil(total/5) tEdge lerp pulse 1+sin*0.06 right*X+up*Y",
+            Chained="Chained\nTarget: Idle 2 horizontal chain rings at hands (±right*1.45*scR+up*0.45*scY) + crown 7.8*scY above head r 0.85*scR+1.9, firing to Formation Target\nControls: Hold click to shoot both chains from hands to Target as tangled helix 3.4 turns helixR 0.42*scR, fling 33500+11000 velimmune filtered\nMath: crown rPulse 1+sin*0.06 spike every 4th 1.4*scY, rings center hand±right*radius a=ratio*2pi+t*1.5 wobbleR 1+sin*0.05 linkLift ±0.16*scY, firing helix perp/binorm cos/sin*helixR + sag 0.6*scY",
+        }
         _G.MODE_CAT = MODE_CAT
         _G.CAT_COL = CAT_COL
+        _G.MODE_DESC = MODE_DESC
         _G.refreshModes = nil
         local modeBtns={}
         for _,mn in ipairs(MODES) do
@@ -5446,6 +6231,8 @@ function buildPartsPanel(Cont, mPanels)
                     refreshModes()
                 end
             end)
+            mb.MouseEnter:Connect(function() if _G.setHoverDesc then pcall(_G.setHoverDesc, name) end end)
+            mb.MouseLeave:Connect(function() if _G.hideHoverDesc then pcall(_G.hideHoverDesc) end end)
         end
         _G.modeButtons = modeBtns
 
@@ -5472,7 +6259,7 @@ function buildPartsPanel(Cont, mPanels)
         local formTypeRow3 = mkF({Size=UDim2.new(1,0,0,28), BackgroundTransparency=1, LayoutOrder=6}, modSF)
         local ftb5 = mkFormBtn({BackgroundColor3=PAL.B_DEF, Text="Anchor", TextColor3=PAL.T1, TextSize=11, Font=Enum.Font.Gotham},
             formTypeRow3, UDim2.new(0,0,0,0))
-        local ftb6 = mkFormBtn({BackgroundColor3=PAL.B_DEF, Text="Clicked Player", TextColor3=PAL.T1, TextSize=11, Font=Enum.Font.Gotham},
+        local ftb6 = mkFormBtn({BackgroundColor3=PAL.B_DEF, Text="Clicked Player", TextColor3=PAL.T1, TextSize=11, Font=Enum.Font.Gotham}, -- GONNA CHANGE THIS TO CLICKEDPENIS SOON
             formTypeRow3, UDim2.new(0.5,2,0,0))
 
         formTypeBtns["Mouse"] = ftb1
@@ -5557,7 +6344,7 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
         dv2Label=mkL({Size=UDim2.new(1,0,0,14),Text="Inactive",TextColor3=PAL.DV2C,
             TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=15},parSF)
         mkSlider(parSF,"Fling Force",50,8000,flingForce,16,function(v) flingForce=v end)
-        mkSlider(parSF,"Fling Range", 5, 500,flingRange,17,function(v) flingRange=v end)
+        mkSlider(parSF,"Fling Range", 5, 500,flingRange,17,function(v) flingRange=v end) --funny if u set it to 500 nglll
         mkDiv(parSF,18)
         mkSec("HOMING", parSF, 19)
         homingLabel=mkL({Size=UDim2.new(1,0,0,14),Text="Inactive",TextColor3=Color3.fromRGB(255,100,100),
@@ -5590,7 +6377,7 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
         end)
 
         mkSec("SINGLE PART CONTROL", toolP, 1)
-        mkL({Size=UDim2.new(1,0,0,14),Text="Enable → click any unanchored part → follows camera ray",
+        mkL({Size=UDim2.new(1,0,0,14),Text="enable > click any unanchored part > follows camera ray [this is old af might not keep ownership well]",
             TextColor3=PAL.T3,TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=2},toolP)
 
         local spcBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
@@ -5604,7 +6391,7 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
             if not spcActive then spcPart=nil; updateSpcHighlight(nil) end
             spcBtn.BackgroundColor3=spcActive and Color3.fromRGB(18,40,24) or PAL.B_DEF
             spcBtn.TextColor3=spcActive and Color3.fromRGB(110,210,130) or PAL.T1
-            local base = "Single Part Control: "..(spcActive and "ON ✓" or "OFF")
+            local base = "Single Part Control: "..(spcActive and "ON" or "OFF")
             if buttonKeybinds[spcBtn] and buttonKeybinds[spcBtn].originalText then
                 base = base .. " [" .. buttonKeybinds[spcBtn].key.Name .. "]"
             end
@@ -5622,7 +6409,7 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
         end))
 
         mkDiv(toolP,6)
-        mkSec("PART LIMITS", toolP, 7)
+        mkSec("PART LIMITS [WIP]", toolP, 7)
 
         local limitsBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Limits: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=7},toolP)
@@ -5643,7 +6430,7 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
         mkSec("PART ACTIONS", toolP, 10)
         do
             local _,a1,a2=mkRow2(toolP,11,
-                {BackgroundColor3=PAL.B_GRN,Text=" Anchor",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham},
+                {BackgroundColor3=PAL.B_GRN,Text=" Anchor [does not replicate]",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham},
                 {BackgroundColor3=PAL.B_BLU,Text=" Unanchor",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham})
             a1.MouseButton1Click:Connect(function()
                 for _,p in ipairs(selectedParts) do pcall(function() p.Anchored=true end) end end)
@@ -5651,7 +6438,7 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
                 for _,p in ipairs(selectedParts) do pcall(function() p.Anchored=false end) end end)
         end
         local delBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_RED,
-            Text="Delete Selected",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=12},toolP)
+            Text="Delete Selected  [also does not replicate]",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=12},toolP)
         delBtn.MouseButton1Click:Connect(function()
             clearSelection(true)
         end)
@@ -5665,13 +6452,13 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
         
         physBtn.BackgroundColor3 = strengthenParts and Color3.fromRGB(18,55,24) or PAL.B_DEF
         physBtn.TextColor3       = strengthenParts and Color3.fromRGB(110,210,130) or PAL.T1
-        physBtn.Text = "Strengthen Parts: "..(strengthenParts and "ON ✓" or "OFF")
+        physBtn.Text = "Strengthen Parts: "..(strengthenParts and "ON" or "OFF")
 
         physBtn.MouseButton1Click:Connect(function()
             strengthenParts = not strengthenParts
             physBtn.BackgroundColor3 = strengthenParts and Color3.fromRGB(18,55,24) or PAL.B_DEF
             physBtn.TextColor3       = strengthenParts and Color3.fromRGB(110,210,130) or PAL.T1
-            physBtn.Text = "Strengthen Parts: "..(strengthenParts and "ON ✓" or "OFF")
+            physBtn.Text = "Strengthen Parts: "..(strengthenParts and "ON" or "OFF")
             updatePhysPropertiesForSelected()
         end)
 
@@ -5765,13 +6552,13 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
             local on = HL.outlineTransparency == 0
             hlOutlineBtn.BackgroundColor3 = on and Color3.fromRGB(18,55,24) or PAL.B_DEF
             hlOutlineBtn.TextColor3       = on and Color3.fromRGB(110,210,130) or PAL.T1
-            hlOutlineBtn.Text = "Outline: "..(on and "ON ✓" or "OFF")
+            hlOutlineBtn.Text = "Outline: "..(on and "ON" or "OFF")
             refreshAllHighlights()
         end)
 
 
         local hlDepthBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=Color3.fromRGB(18,55,24),
-            Text="Through Walls: ON ✓",TextColor3=Color3.fromRGB(110,210,130),
+            Text="Through Walls: ON",TextColor3=Color3.fromRGB(110,210,130),
             TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=23},toolP)
         hlDepthBtn.MouseButton1Click:Connect(function()
             local throughWalls = HL.depthMode == Enum.HighlightDepthMode.AlwaysOnTop
@@ -5781,7 +6568,7 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,10,function(v) formOffsetY=v e
             local on = HL.depthMode == Enum.HighlightDepthMode.AlwaysOnTop
             hlDepthBtn.BackgroundColor3 = on and Color3.fromRGB(18,55,24) or PAL.B_DEF
             hlDepthBtn.TextColor3       = on and Color3.fromRGB(110,210,130) or PAL.T1
-            hlDepthBtn.Text = "Through Walls: "..(on and "ON ✓" or "OFF")
+            hlDepthBtn.Text = "Through Walls: "..(on and "ON" or "OFF")
             refreshAllHighlights()
         end)
 
@@ -5802,7 +6589,7 @@ local function buildNpcSearchBox(npcControlPanel)
     SB.box.BackgroundColor3 = PAL.B_DEF
     SB.box.BorderSizePixel = 0
     SB.box.Text = ""
-    SB.box.PlaceholderText = "🔍 Search NPCs..."
+    SB.box.PlaceholderText = "Search NPCs..."
     SB.box.PlaceholderColor3 = PAL.T3
     SB.box.TextColor3 = PAL.T1
     SB.box.TextSize = 11
@@ -5901,7 +6688,7 @@ local function buildNpcControlTab(npcControlPanel, npcStat)
             npcPickActive=on
             pb.BackgroundColor3=on and Color3.fromRGB(18,55,24) or PAL.B_DEF
             pb.TextColor3=on and Color3.fromRGB(110,210,130) or PAL.T1
-            pb.Text=on and " Pick NPC: ON ✓" or " Pick NPC"
+            pb.Text=on and " Pick NPC: ON" or " Pick NPC"
             _G._npcPickActive=on
         end
         pb.MouseButton1Click:Connect(function() setNPCPick(not npcPickActive) end)
@@ -5953,7 +6740,7 @@ local function buildNpcControlTab(npcControlPanel, npcStat)
     mkSlider(npcControlPanel,"Jump Power",0,200,50,12,function(v)
         if npcTarget then local h=npcTarget:FindFirstChildOfClass("Humanoid"); if h then h.JumpPower=v end end end)
 
-    mkDiv(npcControlPanel,13); mkSec("LIFECYCLE",npcControlPanel,14)
+    mkDiv(npcControlPanel,13); mkSec("LIFECYCLE",npcControlPanel,14) -- jizztop was here
     do
         local _,hb,kb=mkRow2(npcControlPanel,16,
             {BackgroundColor3=PAL.B_GRN,Text=" Heal",TextColor3=Color3.new(1,1,1),TextSize=11,Font=Enum.Font.Gotham},
@@ -5980,7 +6767,7 @@ local function buildNpcControlTab(npcControlPanel, npcStat)
         npcControlEnabled = not npcControlEnabled
         npcCtrlBtn.BackgroundColor3 = npcControlEnabled and Color3.fromRGB(18,55,24) or PAL.B_DEF
         npcCtrlBtn.TextColor3 = npcControlEnabled and Color3.fromRGB(110,210,130) or PAL.T1
-        npcCtrlBtn.Text = "NPC Control: "..(npcControlEnabled and "ON ✓" or "OFF")
+        npcCtrlBtn.Text = "NPC Control: "..(npcControlEnabled and "ON" or "OFF")
         if npcControlEnabled and npcTarget then
             local h = npcTarget:FindFirstChildOfClass("Humanoid")
             if h then h.WalkSpeed=npcControlWalkSpeed; h.JumpPower=npcControlJumpPower; h.AutoRotate=not npcControlFreezeAutoJump end
@@ -6001,7 +6788,7 @@ local function buildNpcControlTab(npcControlPanel, npcStat)
             npcControlFreezeAutoJump=not npcControlFreezeAutoJump
             fajBtn.BackgroundColor3=npcControlFreezeAutoJump and Color3.fromRGB(18,55,24) or PAL.B_DEF
             fajBtn.TextColor3=npcControlFreezeAutoJump and Color3.fromRGB(110,210,130) or PAL.T1
-            fajBtn.Text="Freeze AutoJump: "..(npcControlFreezeAutoJump and "ON ✓" or "OFF")
+            fajBtn.Text="Freeze AutoJump: "..(npcControlFreezeAutoJump and "ON" or "OFF")
         end)
         local hmBtn=mkB({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Halt MoveTo: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=23},npcControlPanel)
@@ -6009,7 +6796,7 @@ local function buildNpcControlTab(npcControlPanel, npcStat)
             npcControlHaltMoveTo=not npcControlHaltMoveTo
             hmBtn.BackgroundColor3=npcControlHaltMoveTo and Color3.fromRGB(18,55,24) or PAL.B_DEF
             hmBtn.TextColor3=npcControlHaltMoveTo and Color3.fromRGB(110,210,130) or PAL.T1
-            hmBtn.Text="Halt MoveTo: "..(npcControlHaltMoveTo and "ON ✓" or "OFF")
+            hmBtn.Text="Halt MoveTo: "..(npcControlHaltMoveTo and "ON" or "OFF")
         end)
     end
 end
@@ -6046,7 +6833,7 @@ local function buildNpcAurasTab(npcAurasPanel)
             setF(not getF())
             btn.BackgroundColor3 = getF() and onBg or PAL.B_DEF
             btn.TextColor3       = getF() and onTc or PAL.T1
-            btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
+            btn.Text = lbl..": "..(getF() and "ON" or "OFF")
         end)
         mkSlider(npcAurasPanel,lbl:match("^%S+").." Range",3,rMax,getR(),lo+1,setR)
 
@@ -6060,7 +6847,7 @@ end
 
 local function buildNpcGunsTab(npcToolsPanel)
     local GUN_DEFS = {
-        {"Finger Gun", function() return fingerGunEnabled end, function(v) fingerGunEnabled=v end,
+        {"Finger Gun", function() return fingerGunEnabled end, function(v) fingerGunEnabled=v end, -- gonna finger YOU that is reading
          Color3.fromRGB(60,60,140),  Color3.fromRGB(170,190,255), 1},
         {"Grab Gun",   function() return grabGunEnabled end,   function(v) grabGunEnabled=v end,
          Color3.fromRGB(110,70,20),  Color3.fromRGB(255,210,120), 2},
@@ -6075,7 +6862,7 @@ local function buildNpcGunsTab(npcToolsPanel)
             setF(not getF())
             btn.BackgroundColor3 = getF() and onBg or PAL.B_DEF
             btn.TextColor3       = getF() and onTc or PAL.T1
-            btn.Text = lbl..": "..(getF() and "ON ✓" or "OFF")
+            btn.Text = lbl..": "..(getF() and "ON" or "OFF")
         end)
     end
 
@@ -6086,10 +6873,10 @@ local function buildNpcGunsTab(npcToolsPanel)
     local function refreshTKFZ()
         tkBtn.BackgroundColor3=NX.tkGun and Color3.fromRGB(90,40,120) or PAL.B_DEF
         tkBtn.TextColor3=NX.tkGun and Color3.fromRGB(220,170,255) or PAL.T1
-        tkBtn.Text="Telekinesis Gun: "..(NX.tkGun and "ON ✓" or "OFF")
+        tkBtn.Text="Telekinesis Gun: "..(NX.tkGun and "ON" or "OFF")
         fzBtn.BackgroundColor3=NX.freezeGun and Color3.fromRGB(20,70,120) or PAL.B_DEF
         fzBtn.TextColor3=NX.freezeGun and Color3.fromRGB(150,210,255) or PAL.T1
-        fzBtn.Text="Freeze Gun: "..(NX.freezeGun and "ON ✓" or "OFF")
+        fzBtn.Text="Freeze Gun: "..(NX.freezeGun and "ON" or "OFF")
     end
     tkBtn.MouseButton1Click:Connect(function() NX.tkGun=not NX.tkGun; if NX.tkGun then NX.freezeGun=false end; refreshTKFZ() end)
     fzBtn.MouseButton1Click:Connect(function() NX.freezeGun=not NX.freezeGun; if NX.freezeGun then NX.tkGun=false end; refreshTKFZ() end)
@@ -6210,6 +6997,7 @@ _G.importantButtons = {
 local function bindKeyToButton(button, key)
     if not button or not key then return end
     if buttonKeybinds[button] then return end
+    if button:GetAttribute("NoKeybind") then return end
     if not buttonOriginalAppearance[button] then
         local cleanText = button.Text
         cleanText = string.gsub(cleanText, "%s*%[.-%]", "")
@@ -6295,11 +7083,11 @@ local function bindKeyToButton(button, key)
                             button.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
                             button.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
                             local originalText = buttonKeybinds[button] and buttonKeybinds[button].originalText or "Click-Select: OFF"
-                            button.Text = "Click-Select: "..(clickSelActive and "ON ?" or "OFF")
+                            button.Text = "Click-Select: "..(clickSelActive and "ON" or "OFF")
                             button.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
                             button.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
                             local originalText = buttonKeybinds[button] and buttonKeybinds[button].originalText or "Click-Select: OFF"
-                            button.Text = "Click-Select: "..(clickSelActive and "ON ✓" or "OFF")
+                            button.Text = "Click-Select: "..(clickSelActive and "ON" or "OFF")
                             if buttonKeybinds[button] and buttonKeybinds[button].originalText then
                                 local keyName = buttonKeybinds[button].key.Name
                                 button.Text = button.Text .. " [" .. keyName .. "]"
@@ -6311,7 +7099,7 @@ local function bindKeyToButton(button, key)
                              if not spcActive then spcPart = nil; updateSpcHighlight(nil) end
                              spcBtn.BackgroundColor3 = spcActive and Color3.fromRGB(18,40,24) or PAL.B_DEF
                              spcBtn.TextColor3 = spcActive and Color3.fromRGB(110,210,130) or PAL.T1
-                             spcBtn.Text = "Single Part Control: "..(spcActive and "ON ✓" or "OFF")
+                             spcBtn.Text = "Single Part Control: "..(spcActive and "ON" or "OFF")
                              if buttonKeybinds[button] and buttonKeybinds[button].originalText then
                                  local keyName = buttonKeybinds[button].key.Name
                                  spcBtn.Text = spcBtn.Text .. " [" .. keyName .. "]"
@@ -6373,7 +7161,7 @@ local function bindKeyToButton(button, key)
                             button.BackgroundColor3 = frozen and Color3.fromRGB(22,38,75) or PAL.B_DEF
                             button.TextColor3 = frozen and Color3.fromRGB(130,175,255) or PAL.T1
                             local originalText = buttonKeybinds[button] and buttonKeybinds[button].originalText or "Formation Freeze: OFF"
-                            button.Text = "Formation Freeze: "..(frozen and "ON ✓" or "OFF")
+                            button.Text = "Formation Freeze: "..(frozen and "ON" or "OFF")
                             if buttonKeybinds[button] and buttonKeybinds[button].originalText then
                                 local keyName = buttonKeybinds[button].key.Name
                                 button.Text = button.Text .. " [" .. keyName .. "]"
@@ -6586,12 +7374,12 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
                 end
             end
             if _G.importantButtons then
-                if button == _G.importantButtons.clickSelBtn then -- IF BUTTON = IMPORTANT BUTTON THEN CLICK BUTTON ✓✓✓✓✓
+                if button == _G.importantButtons.clickSelBtn then -- IF BUTTON = IMPORTANT BUTTON THEN CLICK BUTTON ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓
                     pcall(function()
                         clickSelActive = not clickSelActive
                         button.BackgroundColor3 = clickSelActive and Color3.fromRGB(18,55,24) or PAL.B_DEF
                         button.TextColor3 = clickSelActive and Color3.fromRGB(110,210,130) or PAL.T1
-                        button.Text = "Click-Select: "..(clickSelActive and "ON ✓" or "OFF")
+                        button.Text = "Click-Select: "..(clickSelActive and "ON" or "OFF")
                         if buttonKeybinds[button] and buttonKeybinds[button].originalText then
                             button.Text = button.Text .. " [" .. buttonKeybinds[button].key.Name .. "]"
                         end
@@ -6602,7 +7390,7 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
                         if not spcActive then spcPart = nil; updateSpcHighlight(nil) end
                         spcBtn.BackgroundColor3 = spcActive and Color3.fromRGB(18,40,24) or PAL.B_DEF
                         spcBtn.TextColor3 = spcActive and Color3.fromRGB(110,210,130) or PAL.T1
-                        spcBtn.Text = "Single Part Control: "..(spcActive and "ON ✓" or "OFF")
+                        spcBtn.Text = "Single Part Control: "..(spcActive and "ON" or "OFF")
                         if buttonKeybinds[button] and buttonKeybinds[button].originalText then
                             spcBtn.Text = spcBtn.Text .. " [" .. buttonKeybinds[button].key.Name .. "]"
                         end
@@ -6625,7 +7413,7 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
                         frozenTargets = {}
                         button.BackgroundColor3 = frozen and Color3.fromRGB(22,38,75) or PAL.B_DEF
                         button.TextColor3 = frozen and Color3.fromRGB(130,175,255) or PAL.T1
-                        button.Text = "Formation Freeze: "..(frozen and "ON ✓" or "OFF")
+                        button.Text = "Formation Freeze: "..(frozen and "ON" or "OFF")
                         if buttonKeybinds[button] and buttonKeybinds[button].originalText then
                             button.Text = button.Text .. " [" .. buttonKeybinds[button].key.Name .. "]"
                         end
@@ -6641,7 +7429,7 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
                         selectInRange(autoSelRange)
                     end)
                 elseif button == _G.importantButtons.selectUnweldedBtn or (buttonKeybinds[button] and buttonKeybinds[button].originalText and string.find(buttonKeybinds[button].originalText, "NDS unanchored") and not string.find(buttonKeybinds[button].originalText, "Range")) then
-                    pcall(function()
+                    pcall(function() -- ppcall
                         local before=#selectedParts
                         local added=0
                         for _,obj in ipairs(workspace:GetDescendants()) do
@@ -6691,7 +7479,7 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
 
         local guiParents = {}
         if UI and UI.ScreenGui then table.insert(guiParents, UI.ScreenGui) end
-        if ScreenGui then table.insert(guiParents, ScreenGui) end
+        if ScreenGui then table.insert(guiParents, ScreenGui) end -- table.insert(plate + math.huge of fried chicken) do bacon.head.mouth.eat(50 fried chickens) then do bacon.torso.digest(true) else bacon.torso.vomit(true) if bacon.torso.vomit(false) then bacon.torso.stomach(full)
         if gethui then
             local ok, hui = pcall(gethui)
             if ok and hui then table.insert(guiParents, hui) end
@@ -6699,7 +7487,7 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
         
         for _, guiParent in ipairs(guiParents) do
             for _, btn in ipairs(guiParent:GetDescendants()) do
-                if btn:IsA("TextButton") and btn.Visible then
+                if btn:IsA("TextButton") and btn.Visible and not btn:GetAttribute("NoKeybind") then
                     local allVisible = true
                     local parent = btn.Parent
                     while parent and parent ~= guiParent do
@@ -6713,17 +7501,13 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
                     if allVisible then
                         local ap = btn.AbsolutePosition
                         local as = btn.AbsoluteSize
-                        
-
                         if as.X >= 1 and as.Y >= 1 then
                             local inBounds = mousePos.X >= ap.X and mousePos.X <= ap.X + as.X
                                 and mousePos.Y - guiInset.Y >= ap.Y and mousePos.Y - guiInset.Y <= ap.Y + as.Y
-                            
-                            if inBounds then
+                            if inBounds then -- inbound = ballistic nuclear missile
                                 local area = as.X * as.Y
                                 local zIndex = btn.ZIndex or 0
                                 local score = (1000000 - area) + (zIndex * 10000)
-                                
                                 if score > bestScore then
                                     bestScore = score
                                     bestButton = btn
@@ -6785,7 +7569,7 @@ reg(RunService.Heartbeat:Connect(function()
             NX.frozen[model] = nil
         else
             local root = model:FindFirstChild("HumanoidRootPart")
-            local h = model:FindFirstChildOfClass("Humanoid")
+            local h = model:FindFirstChildOfClass("Humanoid") -- human = oid hahahaha again
             if root then pcall(function()
                 root.AssemblyLinearVelocity = Vector3.zero
                 root.AssemblyAngularVelocity = Vector3.zero
@@ -6801,7 +7585,7 @@ reg(RunService.Heartbeat:Connect(function()
     for part, storedPos in pairs(frozenTargets) do
         if not part or not part.Parent then
             doUnfreeze(part)
-        else
+        else -- theres a fart trynna slip out my butt as i write this yo someone help me
             pcall(function()
                 local currentPos = part.Position
                 local diff = storedPos - currentPos
@@ -6830,7 +7614,7 @@ reg(Mouse.Button1Down:Connect(function()
         table.insert(drawTrails, currentTrail)
     end
 
-    if activeMode=="Homing" then
+    if activeMode=="Homing" then -- i hate homing so much someone fucking kill it 
         local newTarget = nil
         if clickTarget then
             local model = clickTarget:FindFirstAncestorOfClass("Model")
@@ -7136,7 +7920,7 @@ reg(Mouse.Button1Down:Connect(function()
                 if UI and UI.freezeBtn then
                     UI.freezeBtn.BackgroundColor3 = Color3.fromRGB(22,38,75)
                     UI.freezeBtn.TextColor3 = Color3.fromRGB(130,175,255)
-                    UI.freezeBtn.Text = "Formation Freeze: ON ✓"
+                    UI.freezeBtn.Text = "Formation Freeze: ON"
                 end
             else
                 bridgeB = nil
@@ -7258,6 +8042,64 @@ reg(Mouse.Button1Down:Connect(function()
         end
         return
     end
+
+    if activeMode=="Scythe" and #selectedParts>0 then
+        scytheState = "swing"
+        scytheStart = tick()
+        scytheSwingPos = currentMouseHit + Vector3.new(0,0.4,0)
+        scytheCenter = scytheSwingPos
+        for _, p in ipairs(selectedParts) do
+            if scytheConns[p] then pcall(function() scytheConns[p]:Disconnect() end) end
+            scytheConns[p] = p.Touched:Connect(function(hit)
+                if not hit or not hit.Parent or hit.Anchored then return end
+                if isVelImmune(hit) then return end
+                if hit == workspace.Terrain or hit == p then return end
+                if isSelected(hit) then return end
+                if LP.Character and hit:IsDescendantOf(LP.Character) then return end
+                if isPlayerPart(hit) then return end
+                if scytheState ~= "swing" then return end
+                pcall(function()
+                    local dir = hit.Position - p.Position
+                    dir = dir.Magnitude>0.001 and dir.Unit or Vector3.new(0,1,0) -- boom boom 
+                    hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*38500 + Vector3.new(0, 13200, 0) + Vector3.new((math.random()-0.5)*2200,0,(math.random()-0.5)*2200)
+                    hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*4800, (math.random()-0.5)*4800, (math.random()-0.5)*4800)
+                    p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*3400, (math.random()-0.5)*3400, (math.random()-0.5)*3400)
+                end)
+            end)
+        end
+        return
+    end
+
+    if activeMode=="Chained" and #selectedParts>0 then
+        chainedTarget = currentMouseHit
+        chainedActive = true
+        chainedFireTime = tick()
+        chainedFired = {}
+        local crownN = math.max(4, math.floor(#selectedParts*0.22))
+        if crownN > #selectedParts then crownN = #selectedParts end
+        for i, p in ipairs(selectedParts) do
+            if i <= (#selectedParts - crownN) then
+                chainedFired[p] = true
+                if chainedConns[p] then pcall(function() chainedConns[p]:Disconnect() end) end
+                chainedConns[p] = p.Touched:Connect(function(hit)
+                    if not hit or not hit.Parent or hit.Anchored then return end
+                    if isVelImmune(hit) then return end
+                    if hit == workspace.Terrain or hit == p then return end
+                    if isSelected(hit) then return end
+                    if LP.Character and hit:IsDescendantOf(LP.Character) then return end
+                    if not chainedActive then return end
+                    pcall(function()
+                        local dir = hit.Position - p.Position
+                        dir = dir.Magnitude>0.001 and dir.Unit or Vector3.new(0,1,0)
+                        hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*33500 + Vector3.new(0, 11000, 0) + Vector3.new((math.random()-0.5)*1800,0,(math.random()-0.5)*1800)
+                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*4200, (math.random()-0.5)*4200, (math.random()-0.5)*4200)
+                        p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*3200, (math.random()-0.5)*3200, (math.random()-0.5)*3200)
+                    end)
+                end)
+            end
+        end
+        return
+    end
 -- i pooped in a peanut butter jar and put it back in the target aisle and watched a grandma buy it
     if spcActive then
         if clickTarget and clickTarget:IsA("BasePart") and not clickTarget.Anchored then
@@ -7285,7 +8127,7 @@ reg(Mouse.Button1Down:Connect(function()
                 _G._setNPCPick(false)
                 npcCtrlBtn.BackgroundColor3=Color3.fromRGB(18,55,24)
                 npcCtrlBtn.TextColor3=Color3.fromRGB(110,210,130)
-                npcCtrlBtn.Text="NPC Control: ON ✓"
+                npcCtrlBtn.Text="NPC Control: ON"
             end
         end
     end
@@ -7306,6 +8148,16 @@ reg(Mouse.Button1Up:Connect(function()
         if railgunLabel then
             railgunLabel.Text = "Hold click to charge"
         end
+    end
+end))
+
+reg(Mouse.Button1Up:Connect(function()
+    if activeMode=="Chained" and chainedActive then
+        chainedActive = false
+        chainedTarget = Vector3.zero
+        for p,c in pairs(chainedConns) do pcall(function() c:Disconnect() end) end
+        chainedConns = {}
+        chainedFired = {}
     end
 end))
 
@@ -7544,7 +8396,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     end
 
 
-    if #selectedParts>0 or spcActive or globalOwnership or activeMode=="Comet" or activeMode=="Stickman" then
+    if #selectedParts>0 or spcActive or globalOwnership or activeMode=="Comet" or activeMode=="Stickman" or activeMode=="Scythe" or activeMode=="Text" or activeMode=="Pentagram" or activeMode=="Chained" then
         tickParts()
     end
 
@@ -7555,6 +8407,11 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     UI.selInfo.Text="#"..#selectedParts.." selected · "..(activeMode=="Stickman" and "Billy" or activeMode)
         ..(frozen and " [FROZEN]" or "")..(attracting and " [ATTRACT]" or "")
         ..(hasFileSystem and " · cfg" or "")
+
+    if textGui then
+        local shouldShow = activeMode=="Text"
+        if textGui.Visible ~= shouldShow then textGui.Visible = shouldShow end
+    end
 
 
     saveConfig()
