@@ -1041,7 +1041,7 @@ local preSimConn = RunService.PreSimulation and
 
 local ownerConn = RunService.Heartbeat:Connect(function()
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2" then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
             pcall(reinforceOwnershipConstraints, part, partTargets[part])
@@ -1062,7 +1062,7 @@ end)
 
 
 local renderOwnerConn = RunService.RenderStepped:Connect(function()
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2"  then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
             pcall(reinforceOwnershipConstraints, part, partTargets[part])
@@ -1085,7 +1085,7 @@ local renderOwnerConn = RunService.RenderStepped:Connect(function()
     end
 end)
 local aggressiveOwnerConn = RunService.Heartbeat:Connect(function()
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2" then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored then
             pcall(reinforceOwnershipHeartbeat, part, partTargets[part])
@@ -1124,7 +1124,7 @@ end
 
 reinforceOwnershipConstraints = function(part, target)
     if not (part and part.Parent and target) then return end
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2" then return end
 
     local AP = getNetAP(part)
     if AP then
@@ -1151,7 +1151,7 @@ end
 
 reinforceOwnershipHeartbeat = function(part, target)
     if not (part and part.Parent and target and target.position) then return end
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2" then return end
 
     local originalVelocity = part.AssemblyLinearVelocity
     local diff = target.position - part.Position
@@ -1164,7 +1164,7 @@ end
 
 reinforceOwnershipRender = function(part, target)
     if not (part and part.Parent and target and target.position) then return end
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2" then return end
 
     local originalVelocity = part.AssemblyLinearVelocity
     local diff = target.position - part.Position
@@ -1177,7 +1177,7 @@ end
 
 reinforceOwnershipDrive = function(part, target, deltaTime)
     if not (part and part.Parent and target and target.position) then return end
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2" then return end
 
     local originalVelocity = part.AssemblyLinearVelocity
     local diff = target.position - part.Position
@@ -1286,7 +1286,7 @@ function syncAlignTarget(part, target)
     end
 end
 local smoothMovementConn = RunService.RenderStepped:Connect(function()
-    if activeMode == "DroneV2" or activeMode == "Homing" then return end
+    if activeMode == "DroneV2" then return end
     for _, part in ipairs(selectedParts) do
         if part and part.Parent and not part.Anchored and not frozenTargets[part] then
             pcall(function()
@@ -1350,7 +1350,7 @@ end
 local function reclaimOnTouch(part)
     if not part or not part.Parent then return end
 
-    local isVelMode = activeMode == "DroneV2" or activeMode == "Homing"
+    local isVelMode = activeMode == "DroneV2"
 
 pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     local target = partTargets[part]
