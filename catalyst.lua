@@ -4977,6 +4977,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                     end)
                 elseif isWall and wallRoot then
                     targetRotation = wallPanelBasis(part) + tgt
+                    responsiveness = getMoveResponsiveness(3.8)
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.zero
                         if not partTargets[part] then partTargets[part]={} end
@@ -4984,6 +4985,11 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         partTargets[part].rotation = targetRotation
                         partTargets[part].responsiveness = responsiveness
                         syncAlignTarget(part, partTargets[part])
+                        local ap = getNetAP(part)
+                        if ap then ap.MaxForce = math.huge; ap.MaxVelocity = math.huge; ap.Responsiveness = 420; ap.Enabled=true end
+                        local ao = getNetAO(part)
+                        if ao then ao.MaxTorque = math.huge; ao.MaxAngularVelocity = math.huge; ao.Responsiveness = 260; ao.Enabled=true end
+                        part.AssemblyLinearVelocity = Vector3.new(15,15,15)
                     end)
                 elseif isText then
                     local root = char and char:FindFirstChild("HumanoidRootPart")
