@@ -155,7 +155,11 @@ local function fixCanQueryForRaycast()
             end
         end
         if part.Anchored then
-            pcall(function() part.CanQuery = true end)
+            if part.Transparency > 0.80 then
+                pcall(function() part.CanQuery = false end)
+            else
+                pcall(function() part.CanQuery = true end)
+            end
             if not part:GetAttribute("_cat_canquery_hooked") then
                 part:SetAttribute("_cat_canquery_hooked", true)
                 part:GetPropertyChangedSignal("Transparency"):Connect(function()
@@ -169,11 +173,19 @@ local function fixCanQueryForRaycast()
             return
         end
         if not part.Anchored and part.AssemblyMass ~= math.huge then
-            pcall(function() part.CanQuery = true end)
+            if part.Transparency > 0.80 then
+                pcall(function() part.CanQuery = false end)
+            else
+                pcall(function() part.CanQuery = true end)
+            end
             if not part:GetAttribute("_cat_canquery_hooked") then
                 part:SetAttribute("_cat_canquery_hooked", true)
                 part:GetPropertyChangedSignal("Transparency"):Connect(function()
-                    pcall(function() part.CanQuery = true end)
+                    if part.Transparency > 0.80 then
+                        pcall(function() part.CanQuery = false end)
+                    else
+                        pcall(function() part.CanQuery = true end)
+                    end
                 end)
             end
             return
@@ -216,6 +228,8 @@ task.defer(function()
     for _, d in ipairs(workspace:GetDescendants()) do
         if d.Name == "HLProxy" or (d.Parent and d.Parent.Name == "CatalystSelectionProxy") then
             pcall(function() d.CanQuery = false end)
+        elseif d:IsA("BasePart") and d.Anchored and d.Transparency > 0.80 and d.CanQuery then
+            pcall(function() d.CanQuery = false end)
         end
     end
 end)
@@ -223,10 +237,12 @@ if not _G._hlProxyFix then
     _G._hlProxyFix = true
     task.spawn(function()
         while true do
-            task.wait(0.1)
+            task.wait(0.05)
             for _, d in ipairs(workspace:GetDescendants()) do
                 if d.Name == "HLProxy" then
                     if d.CanQuery then pcall(function() d.CanQuery = false end) end
+                elseif d:IsA("BasePart") and d.Anchored and d.Transparency > 0.80 and d.CanQuery then
+                    pcall(function() d.CanQuery = false end)
                 end
             end
             if selectionProxyModel then
@@ -1637,9 +1653,9 @@ local function getPartScreenRect(part)
 
     local minX, minY, maxX, maxY
     local anyVisible = false
-    for _, offset in ipairs(localOffsets) do -- FOR OFFSET ROBLOX DO GET SOLARA EXECUTOR = TRUE SOLARA.OFFSETS = UPDATED 🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑🤑 SOLARA.UPDATE = NOW ROBLOX.INTERNAL OFFSETS PRINT() ELSE DIE.TRUE = TRUE IF SOLARA.UPDATED = FALSE THEN REPLICATESIGNAL(PLAYER.SUPERKILL) ELSEIF PRINT("HAPPY SOLARA") PRINT.OFFSET = 0x0
+    for _, offset in ipairs(localOffsets) do
         local worldPos = pCFrame:PointToWorldSpace(offset)
-        local screenPos, onScreen = Camera:WorldToScreenPoint(worldPos)
+        local screenPos, onScreen = Camera:WorldToViewportPoint(worldPos)
         if onScreen and screenPos.Z > 0 then
             anyVisible = true
             minX = minX and math.min(minX, screenPos.X) or screenPos.X
@@ -1950,16 +1966,16 @@ local function updateESP()
                     frame.Visible = true
                     frame.Size = UDim2.fromOffset(math.max(10, maxX - minX + 8), math.max(10, maxY - minY + 8))
                     local centerX = (minX + maxX) * 0.5
-                    local centerY = (minY + maxY) * 0.5 - inset.Y
+                    local centerY = (minY + maxY) * 0.5
                     frame.Position = UDim2.fromOffset(centerX, centerY)
                 else
                     frame.Visible = false
                 end
             else
-                local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
                 if onScreen and screenPos.Z > 0 then
                     frame.Visible = true
-                    frame.Position = UDim2.fromOffset(screenPos.X, screenPos.Y - inset.Y)
+                    frame.Position = UDim2.fromOffset(screenPos.X, screenPos.Y)
                     local dist = (part.Position - myPos).Magnitude
                     tag.distLbl.Text = string.format("%.0f studs", dist)
                     local pName = part.Parent and part.Parent:IsA("Model") and part.Parent.Name or part.Name
@@ -2579,7 +2595,6 @@ local function getClosestSelectablePartFromRay(origin, dir, maxDist, tolerance)
         end
         if bestOff then return bestOff end
     end
-    -- 1c) Spherecast for thin/wedge edge-on (still respects first hit)
     do
         local paramsS = RaycastParams.new()
         paramsS.FilterType = Enum.RaycastFilterType.Exclude
@@ -4837,7 +4852,8 @@ if false and stickMagnetActive then
                 strikeState = "drill"
                 strikeStart = tick()
                 strikePulse = 0
-                impactBurst(strikeTarget, 28, 7200)
+                impactBurst(strikeTarget, 24, 16000)
+                impactBurst(strikeTarget, 14, 26000)
             end
         elseif strikeState == "drill" then
             if age >= STRIKE_DRILL then
@@ -4845,7 +4861,8 @@ if false and stickMagnetActive then
                 strikeStart = tick()
             elseif age - strikePulse >= 0.28 then
                 strikePulse = age
-                impactBurst(strikeTarget, 24, 6400)
+                impactBurst(strikeTarget, 14, 26000)
+                impactBurst(strikeTarget, 24, 16000)
             end
         elseif strikeState == "return" and age >= STRIKE_RETURN then
             strikeState = "idle"
