@@ -138,6 +138,15 @@ end
 local function fixCanQueryForRaycast()
     local function processPart(part)
         if not part:IsA("BasePart") then return end
+        if part.Name == "HLProxy" then
+            pcall(function() part.CanQuery = false end) -- this annoys me
+            return
+        end
+        local proxModel = part:FindFirstAncestorOfClass("Model")
+        if proxModel and proxModel.Name == "CatalystSelectionProxy" then
+            pcall(function() part.CanQuery = false end)
+            return
+        end
         local char = part:FindFirstAncestorOfClass("Model")
         if char then
             local player = Players:GetPlayerFromCharacter(char)
@@ -155,6 +164,16 @@ local function fixCanQueryForRaycast()
                     else
                         pcall(function() part.CanQuery = true end)
                     end
+                end)
+            end
+            return
+        end
+        if not part.Anchored and part.AssemblyMass ~= math.huge then
+            pcall(function() part.CanQuery = true end)
+            if not part:GetAttribute("_cat_canquery_hooked") then
+                part:SetAttribute("_cat_canquery_hooked", true)
+                part:GetPropertyChangedSignal("Transparency"):Connect(function()
+                    pcall(function() part.CanQuery = true end)
                 end)
             end
             return
@@ -193,6 +212,31 @@ local function fixCanQueryForRaycast()
 end
 
 fixCanQueryForRaycast()
+task.defer(function()
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d.Name == "HLProxy" or (d.Parent and d.Parent.Name == "CatalystSelectionProxy") then
+            pcall(function() d.CanQuery = false end)
+        end
+    end
+end)
+if not _G._hlProxyFix then
+    _G._hlProxyFix = true
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d.Name == "HLProxy" then
+                    if d.CanQuery then pcall(function() d.CanQuery = false end) end
+                end
+            end
+            if selectionProxyModel then
+                for _, pr in pairs(selectionProxyParts) do
+                    if pr.CanQuery then pcall(function() pr.CanQuery = false end) end
+                end
+            end
+        end
+    end)
+end
 
 
 local networkPaused
@@ -339,7 +383,8 @@ frozenTargets   = {}
 individuallyFrozen = {}
 unfreezeBoost     = {}
 rotDrag           = { active=false, part=nil, axis="X", pending=0 }
-globalOwnership = false
+globalOwnership = globalOwnership or false
+if type(getgenv) == "function" then pcall(function() if getgenv()._atomizerGlobalOwnership ~= nil then globalOwnership = getgenv()._atomizerGlobalOwnership end end) end
 clickSelActive  = false
 attracting      = false
 attractTimer    = 0
@@ -793,7 +838,7 @@ CONFIG_KEYS = {
     "autoSelRange", "ownerRadius", "killAuraRange", "sitAuraRange", "jumpAuraRange",
     "followAuraRange", "freezeAuraRange", "useLimits", "partLimit",
     "formationType", "useESP", "espStyle", "activeMode",
-    "espColor", "highlightFillColor", "highlightOutlineColor", "espFillTransparency", "espOutlineTransparency", "globalOwnership", "fakeCollisions",
+    "espColor", "highlightFillColor", "highlightOutlineColor", "espFillTransparency", "espOutlineTransparency", "fakeCollisions",
     "strengthenParts", "strengthenDensity",
 }
 
@@ -836,11 +881,7 @@ end
 
 local function readConfigFile()
     local data
-    if pcall(function() data = readfile("atomizer_saves.txt") end) and data and data ~= "" then
-        pcall(function() writefile(CONFIG_FILE, data) end)
-        return data
-    end
-    if pcall(function() data = readfile(CONFIG_FILE) end) and data and data ~= "" then -- i put shi in pcall because theres no ppcall to call with my pp twin
+    if pcall(function() data = readfile(CONFIG_FILE) end) and data and data ~= "" then
         return data
     end
     return nil
@@ -1731,6 +1772,11 @@ local function addHL(part)
             proxy.CanCollide = false
             proxy.CanTouch = false
             proxy.CanQuery = false
+            proxy:GetPropertyChangedSignal("CanQuery"):Connect(function()
+                if proxy.CanQuery then
+                    pcall(function() proxy.CanQuery = false end)
+                end
+            end)
             proxy.CastShadow = false
             proxy.Locked = true
             proxy.Massless = true
@@ -2430,6 +2476,8 @@ end
 
 
 local currentMouseHit = Vector3.zero
+local _lastValidMouseHit = Vector3.zero
+local _lastValidHitTick = 0
 
 local RAY = { mouse = RaycastParams.new(), ground = RaycastParams.new() }
 RAY.mouse.FilterType  = Enum.RaycastFilterType.Exclude
@@ -2447,15 +2495,13 @@ local function getMouseExcludeList()
     end
     for _, part in ipairs(selectedParts) do
         add(part)
-        local parent = part.Parent
-        if parent and (parent:IsA("Model") or parent:IsA("Folder")) then
-            add(parent)
-        end
     end
     if spcPart then add(spcPart) end
     local char = LP.Character
     if char then add(char) end
     for _, dot in ipairs(drawIndicators) do add(dot) end
+    if selectionProxyModel then add(selectionProxyModel) end
+    for _, proxy in pairs(selectionProxyParts) do add(proxy) end
     return list
 end
 
@@ -2482,6 +2528,143 @@ local function getGroundYAt(x, z, defaultY, ignorePart)
         hit = workspace:Raycast(Vector3.new(x, castOriginY, z), Vector3.new(0, -4000, 0), fallback)
     end
     return hit and hit.Position.Y or nil
+end
+local function getClosestSelectablePartFromRay(origin, dir, maxDist, tolerance)
+    tolerance = tolerance or 7
+    local firstHitDist = math.huge
+    do
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local exclSel = {LP.Character}
+        if selectionProxyModel then table.insert(exclSel, selectionProxyModel) end
+        params.FilterDescendantsInstances = exclSel
+        params.IgnoreWater = true
+        local hit = workspace:Raycast(origin, dir * maxDist, params)
+        if hit then
+            firstHitDist = (hit.Position - origin).Magnitude
+            if hit.Instance and hit.Instance:IsA("BasePart") and not hit.Instance.Anchored then
+                local p = hit.Instance
+                for _, s in ipairs(selectedParts) do if s == p then return p end end
+                if frozenTargets[p] then return p end
+                if individuallyFrozen[p] then return p end
+            end
+        end
+    end
+    do
+        local mp = UserInputService:GetMouseLocation()
+        local ins = GuiService:GetGuiInset()
+        local baseX = mp.X
+        local baseY = mp.Y - ins.Y
+        local paramsOff = RaycastParams.new()
+        paramsOff.FilterType = Enum.RaycastFilterType.Exclude
+        local exclOffSel = {LP.Character}
+        if selectionProxyModel then table.insert(exclOffSel, selectionProxyModel) end
+        paramsOff.FilterDescendantsInstances = exclOffSel
+        paramsOff.IgnoreWater = true
+        local bestOff, bestOffDist = nil, math.huge
+        for _, off in ipairs({Vector2.new(2,0), Vector2.new(-2,0), Vector2.new(0,2), Vector2.new(0,-2), Vector2.new(2,2), Vector2.new(-2,2), Vector2.new(2,-2), Vector2.new(-2,-2)}) do
+            local rayOff = Camera:ScreenPointToRay(baseX + off.X, baseY + off.Y)
+            local hitOff = workspace:Raycast(rayOff.Origin, rayOff.Direction * maxDist, paramsOff)
+            if hitOff and hitOff.Instance and hitOff.Instance:IsA("BasePart") and not hitOff.Instance.Anchored then
+                local p2 = hitOff.Instance
+                local isCand = false
+                for _, s in ipairs(selectedParts) do if s==p2 then isCand=true; break end end
+                if not isCand and frozenTargets[p2] then isCand=true end
+                if not isCand and individuallyFrozen[p2] then isCand=true end
+                if isCand then
+                    local distOff = (hitOff.Position - origin).Magnitude
+                    if distOff < bestOffDist then bestOffDist=distOff; bestOff=p2 end
+                end
+            end
+        end
+        if bestOff then return bestOff end
+    end
+    -- 1c) Spherecast for thin/wedge edge-on (still respects first hit)
+    do
+        local paramsS = RaycastParams.new()
+        paramsS.FilterType = Enum.RaycastFilterType.Exclude
+        local exclS = {LP.Character}
+        if selectionProxyModel then table.insert(exclS, selectionProxyModel) end
+        paramsS.FilterDescendantsInstances = exclS
+        paramsS.IgnoreWater = true
+        local sDist = math.min(maxDist, 1000)
+        local sHit = workspace:Spherecast(origin, 1.2, dir * sDist, paramsS)
+        if sHit and sHit.Instance and sHit.Instance:IsA("BasePart") and not sHit.Instance.Anchored then
+            local p = sHit.Instance
+            for _, s in ipairs(selectedParts) do if s == p then return p end end
+            if frozenTargets[p] then return p end
+            if individuallyFrozen[p] then return p end
+        end
+    end
+    return nil
+end
+
+local function getClosestUnselectedPartFromRay(origin, dir, maxDist, tolerance)
+    tolerance = tolerance or 7
+    local firstHitDist = math.huge
+    do
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local exclU = {LP.Character}
+        if selectionProxyModel then table.insert(exclU, selectionProxyModel) end
+        for _, s in ipairs(selectedParts) do table.insert(exclU, s) end
+        params.FilterDescendantsInstances = exclU
+        params.IgnoreWater = true
+        local hit = workspace:Raycast(origin, dir * maxDist, params)
+        if hit then
+            firstHitDist = (hit.Position - origin).Magnitude
+            if hit.Instance and hit.Instance:IsA("BasePart") then
+                local p = hit.Instance
+                if not p.Anchored and not isSelected(p) and not isLocalPlayerPart(p) and p ~= workspace.Terrain then
+                    return p
+                end
+            end
+        end
+    end
+    do
+        local mp = UserInputService:GetMouseLocation()
+        local ins = GuiService:GetGuiInset()
+        local baseX = mp.X
+        local baseY = mp.Y - ins.Y
+        local paramsOff = RaycastParams.new()
+        paramsOff.FilterType = Enum.RaycastFilterType.Exclude
+        local exclOffU = {LP.Character}
+        if selectionProxyModel then table.insert(exclOffU, selectionProxyModel) end
+        for _, s in ipairs(selectedParts) do table.insert(exclOffU, s) end
+        paramsOff.FilterDescendantsInstances = exclOffU
+        paramsOff.IgnoreWater = true
+        local bestOff, bestOffDist = nil, math.huge
+        for _, off in ipairs({Vector2.new(2,0), Vector2.new(-2,0), Vector2.new(0,2), Vector2.new(0,-2), Vector2.new(2,2), Vector2.new(-2,2), Vector2.new(2,-2), Vector2.new(-2,-2)}) do
+            local rayOff = Camera:ScreenPointToRay(baseX + off.X, baseY + off.Y)
+            local hitOff = workspace:Raycast(rayOff.Origin, rayOff.Direction * maxDist, paramsOff)
+            if hitOff and hitOff.Instance and hitOff.Instance:IsA("BasePart") then
+                local p2 = hitOff.Instance
+                if not p2.Anchored and not isSelected(p2) and not isLocalPlayerPart(p2) and p2 ~= workspace.Terrain then
+                    local distOff = (hitOff.Position - origin).Magnitude
+                    if distOff < bestOffDist then bestOffDist=distOff; bestOff=p2 end
+                end
+            end
+        end
+        if bestOff then return bestOff end
+    end
+    do
+        local paramsS = RaycastParams.new()
+        paramsS.FilterType = Enum.RaycastFilterType.Exclude
+        local exclSU = {LP.Character}
+        if selectionProxyModel then table.insert(exclSU, selectionProxyModel) end
+        for _, s in ipairs(selectedParts) do table.insert(exclSU, s) end
+        paramsS.FilterDescendantsInstances = exclSU
+        paramsS.IgnoreWater = true
+        local sDist = math.min(maxDist, 1000)
+        local sHit = workspace:Spherecast(origin, 1.2, dir * sDist, paramsS)
+        if sHit and sHit.Instance and sHit.Instance:IsA("BasePart") then
+            local p = sHit.Instance
+            if not p.Anchored and not isSelected(p) and not isLocalPlayerPart(p) and p ~= workspace.Terrain then
+                return p
+            end
+        end
+    end
+    return nil
 end
 
 local _blockerRayParams = RaycastParams.new()
@@ -2514,14 +2697,36 @@ local function updateMouseHit()
     if not hit then
         local fallback = RaycastParams.new()
         fallback.FilterType = Enum.RaycastFilterType.Exclude
-        fallback.FilterDescendantsInstances = {LP.Character}
+        fallback.FilterDescendantsInstances = getMouseExcludeList()
         fallback.IgnoreWater = true
         hit = workspace:Raycast(ray.Origin, ray.Direction * 5000, fallback)
     end
     if hit then
         currentMouseHit = hit.Position
+        _lastValidMouseHit = hit.Position
+        _lastValidHitTick = tick()
     else
-        currentMouseHit = ray.Origin + ray.Direction * 1000
+        if tick() - _lastValidHitTick < 0.25 and _lastValidMouseHit ~= Vector3.zero then
+            currentMouseHit = _lastValidMouseHit
+        else
+            local groundY = getGroundYAt(ray.Origin.X + ray.Direction.X * 150, ray.Origin.Z + ray.Direction.Z * 150, ray.Origin.Y, nil)
+            if groundY then
+                local dirXZ = Vector3.new(ray.Direction.X, 0, ray.Direction.Z)
+                local dist = 0
+                if math.abs(ray.Direction.Y) > 0.001 then
+                    dist = (groundY - ray.Origin.Y) / ray.Direction.Y
+                end
+                if dist > 0 and dist < 3000 then
+                    currentMouseHit = ray.Origin + ray.Direction * dist
+                    _lastValidMouseHit = currentMouseHit
+                    _lastValidHitTick = tick()
+                else
+                    currentMouseHit = ray.Origin + ray.Direction * 600
+                end
+            else
+                currentMouseHit = ray.Origin + ray.Direction * 600
+            end
+        end
     end
 end
 
@@ -3346,7 +3551,8 @@ local function getTarget(index, total, part, t)
                 end
             elseif isLeft == stickArmIsLeft then
                 if stickGrabActive then
-                    local gd    = blockedMouse - shW
+                    local grabTarget = currentMouseHit
+                    local gd    = grabTarget - shW
                     local reach = gd.Magnitude
                     if reach > 0.01 then
                         delta = gd.Unit * (reach * k)
@@ -4691,9 +4897,10 @@ if false and stickMagnetActive then
             removeHL(part); table.remove(selectedParts,i); frozenTargets[part]=nil; partTargets[part]=nil
         else
             local tgt
-            if frozenTargets[part] then
+            local stickGrabOverride = (activeMode == "Stickman" and stickGrabActive)
+            if frozenTargets[part] and not stickGrabOverride then
                 tgt = frozenTargets[part]
-            elseif frozen then
+            elseif frozen and not stickGrabOverride then
                 if not frozenTargets[part] then frozenTargets[part] = part.Position end
                 tgt = frozenTargets[part]
             else
@@ -4999,6 +5206,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                     local upDir = Vector3.new(0,1,0)
                     local ang = textPartAngles[part] or 0
                     targetRotation = CFrame.lookAt(tgt, tgt + lookDir, upDir) * CFrame.Angles(0, 0, math.rad(ang))
+                    responsiveness = getMoveResponsiveness(3.8)
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.zero
                         if not partTargets[part] then partTargets[part]={} end
@@ -5006,6 +5214,11 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         partTargets[part].rotation = targetRotation
                         partTargets[part].responsiveness = responsiveness
                         syncAlignTarget(part, partTargets[part])
+                        local ap = getNetAP(part)
+                        if ap then ap.MaxForce = math.huge; ap.MaxVelocity = math.huge; ap.Responsiveness = 420; ap.Enabled=true end
+                        local ao = getNetAO(part)
+                        if ao then ao.MaxTorque = math.huge; ao.MaxAngularVelocity = math.huge; ao.Responsiveness = 260; ao.Enabled=true end
+                        part.AssemblyLinearVelocity = Vector3.new(15,15,15)
                     end)
                 else
                     pcall(function()
@@ -5418,7 +5631,6 @@ do function unloadScript()
 
     autoSelectAll = false
     autoSelectNear = false
-    globalOwnership = false
     attracting = false
     frozen = false
     spcActive = false
@@ -6049,9 +6261,10 @@ function buildPartsPanel(Cont, mPanels)
             Text="Global Ownership: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=14},selP)
         gOwnBtn.MouseButton1Click:Connect(function()
             globalOwnership=not globalOwnership
+            if type(getgenv)=="function" then pcall(function() getgenv()._atomizerGlobalOwnership = globalOwnership end) end
             gOwnBtn.BackgroundColor3=globalOwnership and Color3.fromRGB(22,38,75) or PAL.B_DEF
             gOwnBtn.TextColor3=globalOwnership and Color3.fromRGB(130,175,255) or PAL.T1
-            gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON" or "OFF")
+            gOwnBtn.Text="Global Ownership: "..(globalOwnership and "ON ✓" or "OFF")
         end)
         gOwnBtn.BackgroundColor3=globalOwnership and Color3.fromRGB(22,38,75) or PAL.B_DEF
         gOwnBtn.TextColor3=globalOwnership and Color3.fromRGB(130,175,255) or PAL.T1
@@ -6110,8 +6323,8 @@ function buildPartsPanel(Cont, mPanels)
         end)
 
         local MODE_CAT = { -- i love cats i swear
-            Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="blue",
-            Drone="red", DroneV2="red", Shield="green", Comet="blue", Wall="green",
+            Tornado="red", Ring="blue", Orbit="blue", Spiral="blue", Wave="blue", Halo="green",
+            Drone="blue", DroneV2="red", Shield="green", Comet="blue", Wall="green",
             Draw="blue", Beam="blue", Sphere="blue", Vortex="red", DNA="yellow", Pulse="blue", Grid="blue", Cube="green",
             Scatter="blue", Star="yellow", Pendulum="yellow", Rain="blue", Galaxy="yellow", Blackhole="red", Lemniscate="yellow", Blender="red",
             Crown="green", Swarm="blue", Minigun="red", Satellite="red",
@@ -7482,12 +7695,6 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
 
         local guiParents = {}
         if UI and UI.ScreenGui then table.insert(guiParents, UI.ScreenGui) end
-        if ScreenGui then table.insert(guiParents, ScreenGui) end -- table.insert(plate + math.huge of fried chicken) do bacon.head.mouth.eat(50 fried chickens) then do bacon.torso.digest(true) else bacon.torso.vomit(true) if bacon.torso.vomit(false) then bacon.torso.stomach(full)
-        if gethui then
-            local ok, hui = pcall(gethui)
-            if ok and hui then table.insert(guiParents, hui) end
-        end
-        
         for _, guiParent in ipairs(guiParents) do
             for _, btn in ipairs(guiParent:GetDescendants()) do
                 if btn:IsA("TextButton") and btn.Visible and not btn:GetAttribute("NoKeybind") then
@@ -7611,6 +7818,37 @@ reg(Mouse.Button1Down:Connect(function()
         return
     end
     local clickTarget = Mouse.Target
+    if not clickTarget or not clickTarget:IsA("BasePart") or isLocalPlayerPart(clickTarget) or isVelImmune(clickTarget) then
+        local mPos = UserInputService:GetMouseLocation()
+        local inset2 = GuiService:GetGuiInset()
+        local ray2 = Camera:ScreenPointToRay(mPos.X, mPos.Y - inset2.Y)
+        local paramsC = RaycastParams.new()
+        paramsC.FilterType = Enum.RaycastFilterType.Exclude
+        paramsC.FilterDescendantsInstances = {LP.Character}
+        paramsC.IgnoreWater = true
+        local hit2 = workspace:Raycast(ray2.Origin, ray2.Direction * 5000, paramsC)
+        if hit2 and hit2.Instance and hit2.Instance:IsA("BasePart") and not isLocalPlayerPart(hit2.Instance) and not isVelImmune(hit2.Instance) then
+            clickTarget = hit2.Instance
+        else
+            if clickSelActive then
+                local sel = getClosestSelectablePartFromRay(ray2.Origin, ray2.Direction, 5000, 7)
+                if sel then
+                    clickTarget = sel
+                else
+                    local unsel = getClosestUnselectedPartFromRay(ray2.Origin, ray2.Direction, 5000, 7)
+                    if unsel then clickTarget = unsel end
+                end
+            else
+                local unsel = getClosestUnselectedPartFromRay(ray2.Origin, ray2.Direction, 5000, 7)
+                if unsel then
+                    clickTarget = unsel
+                elseif frozenTargets then
+                    local sel = getClosestSelectablePartFromRay(ray2.Origin, ray2.Direction, 5000, 7)
+                    if sel then clickTarget = sel end
+                end
+            end
+        end
+    end
     if activeMode=="Draw" then 
         isDrawing=true
         currentTrail = {}
@@ -8122,7 +8360,27 @@ reg(Mouse.Button1Down:Connect(function()
     end
 
     if clickSelActive and clickTarget then
-        if isSelected(clickTarget) then deselectPart(clickTarget) else selectPart(clickTarget) end
+        local actual = clickTarget
+        if isSelected(actual) then
+            local mPos = UserInputService:GetMouseLocation()
+            local inset3 = GuiService:GetGuiInset()
+            local ray3 = Camera:ScreenPointToRay(mPos.X, mPos.Y - inset3.Y)
+            local closestSel = getClosestSelectablePartFromRay(ray3.Origin, ray3.Direction, 5000, 7)
+            if closestSel and isSelected(closestSel) then
+                actual = closestSel
+            end
+            deselectPart(actual)
+        else
+            local mPos2 = UserInputService:GetMouseLocation()
+            local inset4 = GuiService:GetGuiInset()
+            local ray4 = Camera:ScreenPointToRay(mPos2.X, mPos2.Y - inset4.Y)
+            local closestUnsel = getClosestUnselectedPartFromRay(ray4.Origin, ray4.Direction, 5000, 7)
+            if closestUnsel then
+                selectPart(closestUnsel)
+            else
+                selectPart(actual)
+            end
+        end
     end
 
     if _G._getNPCPickActive and _G._getNPCPickActive() and clickTarget then
@@ -8290,11 +8548,56 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
         local y = mousePos.Y - inset.Y
 
         local ray = Camera:ScreenPointToRay(x, y)
-        local hit = workspace:Raycast(ray.Origin, ray.Direction * 5000)
-
-        if hit and hit.Instance and hit.Instance:IsA("BasePart") then
-            local target = hit.Instance
+        local target = getClosestSelectablePartFromRay(ray.Origin, ray.Direction, 5000, 8)
+        if not target then
+            local paramsF = RaycastParams.new()
+            paramsF.FilterType = Enum.RaycastFilterType.Exclude
+            paramsF.FilterDescendantsInstances = {LP.Character}
+            paramsF.IgnoreWater = true
+            local hit = workspace:Raycast(ray.Origin, ray.Direction * 5000, paramsF)
+            if hit and hit.Instance and hit.Instance:IsA("BasePart") and isSelected(hit.Instance) then
+                target = hit.Instance
+            end
+        end
+        if not target or not target:IsA("BasePart") then return end
+        if not isSelected(target) then return end
+        do
+            local _ = target
+        end
+        if true then
+            local hit = {Instance = target, Position = target.Position}
+            if hit and hit.Instance and hit.Instance:IsA("BasePart") then
+                local target2 = hit.Instance
+                if not isSelected(target2) then return end
+            end
+        end
+        do
+            local _ = target
+        end
+        if target and target:IsA("BasePart") then
+            local _ = target
+            local hit = {Instance = target, Position = target.Position}
+            if hit and hit.Instance and hit.Instance:IsA("BasePart") then
+                local target3 = hit.Instance
+                if not isSelected(target3) then return end
+            end
+        end
+        do
+            if not target then return end
+        end
+        if true then
             if not isSelected(target) then return end
+        end
+        do
+            local _ = target
+        end
+        if target and target:IsA("BasePart") then
+            local _ = target
+        end
+        local hit = {Instance = target, Position = target.Position}
+        if hit and hit.Instance and hit.Instance:IsA("BasePart") then
+            local target4 = hit.Instance
+            if not isSelected(target4) then return end
             if target.Anchored or target == workspace.Terrain then return end
             if LP.Character and target:IsDescendantOf(LP.Character) then return end
             if frozenTargets[target] then
@@ -8322,11 +8625,17 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
         local mousePos = UserInputService:GetMouseLocation()
         local inset = GuiService:GetGuiInset()
         local ray = Camera:ScreenPointToRay(mousePos.X, mousePos.Y - inset.Y)
-        local hit = workspace:Raycast(ray.Origin, ray.Direction * 5000)
-        if not hit or not hit.Instance or not hit.Instance:IsA("BasePart") then return end
-
-        local part = hit.Instance
-        if not frozenTargets[part] then return end
+        local hitPart = getClosestSelectablePartFromRay(ray.Origin, ray.Direction, 5000, 8)
+        local part = hitPart
+        if not part then
+            local hit = workspace:Raycast(ray.Origin, ray.Direction * 5000)
+            if hit and hit.Instance and hit.Instance:IsA("BasePart") then part = hit.Instance else return end
+        end
+        if not part or not frozenTargets[part] then
+            local hit2 = workspace:Raycast(ray.Origin, ray.Direction * 5000)
+            if hit2 and hit2.Instance and frozenTargets[hit2.Instance] then part = hit2.Instance end
+        end
+        if not part or not frozenTargets[part] then return end
 
         rotDrag.active = true
         rotDrag.part = part
