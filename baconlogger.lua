@@ -52,7 +52,27 @@ local Data = {
     
 }
 
+local function getUiParent()
+	if typeof(gethui) == "function" then
+		local ok, hui = pcall(gethui)
+		if ok and hui then
+			return hui
+		end
+	end
+	local ok, coreGui = pcall(function() return game:GetService("CoreGui") end)
+	if ok and coreGui then
+		return coreGui
+	end
+	return player:WaitForChild("PlayerGui")
+end
 local function cleanupOldUI()
+	if typeof(gethui) == "function" then
+		local ok, hui = pcall(gethui)
+		if ok and hui then
+			local existing = hui:FindFirstChild("BaconLoggerGui")
+			if existing then pcall(function() existing:Destroy() end) end
+		end
+	end
 	local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
 	if success and coreGui then
 		local existing = coreGui:FindFirstChild("BaconLoggerGui")
@@ -273,12 +293,7 @@ local UI = {
 UI.gui.Name = "BaconLoggerGui"
 UI.gui.ResetOnSpawn = false
 UI.gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
-if success and coreGui then
-	UI.gui.Parent = coreGui
-else
-	UI.gui.Parent = player:WaitForChild("PlayerGui")
-end
+UI.gui.Parent = getUiParent()
 table.insert(Data.connections, Services.UserInputService.InputBegan:Connect(function(input, processed)
 	if not processed and input.KeyCode == State.toggleKey then
 		UI.gui.Enabled = not UI.gui.Enabled
