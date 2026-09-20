@@ -362,11 +362,9 @@ if not _G._assemblyRootHammer then
             do
                 for _, part in ipairs(selectedParts) do
                     if part and part.Parent and not part.Anchored then
-                        -- NOTE: no RootPriority write here (see Stepped note).
                         local root = getAssemblyRoot(part)
                         if root ~= part and root.Parent and not root.Anchored then
                             pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
-                            -- Only probe the root when the assembly is unowned.
                             local ownedR = false
                             pcall(function() ownedR = ownedCached(root) end)
                             if not ownedR then
@@ -397,10 +395,6 @@ if not _G._assemblyExtrasHammer then
             do
                 for part in pairs(assemblyExtras) do
                     if part and part.Parent and not part.Anchored then
-                        -- FIX: extras share the assembly velocity with the
-                        -- selected root. Writing hold/flicker here overwrites
-                        -- the Align-driven velocity same frame -> stall and
-                        -- WAY off target. Wake only, never drive.
                         pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
                     end
                 end
@@ -473,8 +467,6 @@ if not _G._ownershipWatchdog then
             local seen = {}
             for _, part in ipairs(selectedParts) do
                 if part and part.Parent and not part.Anchored then
-                    -- FIX: reclaim selected part (has the Align) AND its
-                    -- current assembly root (owns the simulation).
                     pcall(reclaimAssembly, part)
                     local root = getAssemblyRoot(part)
                     if root and root ~= part and root.Parent and not root.Anchored and not seen[root] then
@@ -490,10 +482,6 @@ if not _G._ownershipWatchdog then
 end
 _catJitterSign = _catJitterSign or {}
 _catJitterAt = _catJitterAt or {}
-
--- Generation counter: every re-execute bumps it so stale loop threads from
--- previous runs exit instead of running old code forever. A re-executed
--- script can NOT otherwise replace already-running closures.
 _G._catGen = ((_G._catGen or 0) + 1)
 
 if not _G._catSimLoop then
@@ -518,8 +506,6 @@ if not _G._catSimLoop then
     end)
 end
 
--- Disconnect-replace (NOT boolean-guarded): a re-execute must swap in the
--- current code. Boolean guards froze loop code in time across re-executes.
 if _G._catSteppedRetainConn then
     pcall(function() _G._catSteppedRetainConn:Disconnect() end)
     _G._catSteppedRetainConn = nil
@@ -532,8 +518,6 @@ do
         for _, part in ipairs(selectedParts) do
             if part and part.Parent and not part.Anchored then
                 pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
-                -- FIX: only probe velocity when unowned. Owned heavies are
-                -- driven by rigid Align; flicker knocks them off target.
                 local ownedS = false
                 pcall(function() ownedS = ownedCached(part) end)
                 if not ownedS then
@@ -551,9 +535,6 @@ do
                     if now - (_catJitterAt[part] or 0) > 0.2 then
                         _catJitterAt[part] = now
                         _catJitterSign[part] = not _catJitterSign[part]
-                        -- FIX: CFrame teleport requires strict ReceiveAge==0.
-                        -- canDrivePart is looser (owner API) and fires while
-                        -- the server is still blending -> WAY off target.
                         local ageJ = nil
                         pcall(function()
                             if type(gethiddenproperty) == "function" then
@@ -571,13 +552,9 @@ do
                         end
                     end
                 end)
-                -- NOTE: no per-frame RootPriority here. It forces assembly
-                -- re-election -> ReceiveAge never settles -> ownership flap.
-                -- Claimed once on select + in reclaimAssembly when flipped.
                 pcall(function()
                     local bv = part:FindFirstChild("OwnershipBV")
                     if bv and bv:IsA("BodyVelocity") then
-                        -- FIX: yield to AlignPosition when it exists.
                         local hasAP = false
                         pcall(function()
                             local att = part:FindFirstChild("NetAttach")
@@ -608,7 +585,6 @@ do
                             local t = partTargets and partTargets[part]
                             if t then tgtRot = t.rotation end
                         end)
-                        -- FIX: yield to AlignOrientation when it exists.
                         if hasAO then
                             bg.MaxTorque = Vector3.zero
                             bg.Enabled = false
