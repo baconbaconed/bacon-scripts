@@ -841,6 +841,73 @@ riderShieldAt = {}
 anchoredNoted = {}
 anchorToastAt = 0
 rotDrag           = { active=false, part=nil, yaw=0, pitch=0, roll=0, highlight=nil, savedMouse=nil, savedCamRot=nil, savedCamOff=nil, savedCamType=nil, savedCamSubject=nil, selBox=nil, savedProxyLook=nil }
+dragGhost = dragGhost or {}
+local function ghostAssemblyForDrag(part)
+    pcall(function()
+        dragGhost = dragGhost or {}
+        if not (part and part.Parent and part:IsA("BasePart")) then return end
+        local root0 = part
+        pcall(function()
+            local rr = getAssemblyRoot(part)
+            if rr and rr.Parent then root0 = rr end
+        end)
+        local seenG = {}
+        local function ghostOne(m)
+            if not (m and m.Parent and m:IsA("BasePart")) then return end
+            if seenG[m] then return end
+            seenG[m] = true
+            if dragGhost[m] ~= nil then return end
+            local rec = {}
+            local need = false
+            local cur = nil
+            pcall(function() cur = m.CanCollide end)
+            if cur then
+                local sv = true
+                pcall(function() sv = (m.CanCollide ~= false) end)
+                rec.c = sv
+                if partCollisionState[m] == nil then
+                    partCollisionState[m] = sv
+                end
+                pcall(function() m.CanCollide = false end)
+                need = true
+            end
+            if m ~= root0 then
+                local mv = nil
+                pcall(function() mv = m.Massless end)
+                if mv == false then
+                    rec.m = false
+                    pcall(function() m.Massless = true end)
+                    need = true
+                end
+            end
+            if need then dragGhost[m] = rec end
+        end
+        ghostOne(part)
+        ghostOne(root0)
+        local okM, mates = pcall(function() return root0:GetConnectedParts(true) end)
+        if okM and type(mates) == "table" then
+            for _, m in ipairs(mates) do ghostOne(m) end
+        end
+    end)
+end
+local function restoreDragGhost()
+    pcall(function()
+        if not dragGhost then return end
+        for m, rec in pairs(dragGhost) do
+            dragGhost[m] = nil
+            pcall(function()
+                if m and m.Parent and m:IsA("BasePart") then
+                    if type(rec) == "table" then
+                        if rec.c ~= nil then m.CanCollide = rec.c end
+                        if rec.m ~= nil then m.Massless = rec.m end
+                    elseif rec ~= nil then
+                        m.CanCollide = true
+                    end
+                end
+            end)
+        end
+    end)
+end
 
 local function rotLockFlag()
     if type(getgenv) == "function" then
@@ -870,6 +937,7 @@ local function healRotLock()
 end
 
 local function endRotDrag()
+    pcall(restoreDragGhost)
     if rotDrag.highlight then pcall(function() rotDrag.highlight:Destroy() end) end
     rotDrag.highlight = nil
     if rotDrag.selBox then pcall(function() rotDrag.selBox:Destroy() end) end
@@ -962,6 +1030,7 @@ local function beginRotDrag(part)
             pp.Transparency = 0
         end)
     end
+    pcall(ghostAssemblyForDrag, part)
 end
 
 if rotLockFlag() then
@@ -4497,6 +4566,7 @@ end
 
 local function cleanupPartState(part, destroyPart)
     if not part then return end
+    pcall(restoreDragGhost)
     selectedSetCache[part] = nil
     ownVerdict[part] = nil
     ownVerdictAt[part] = nil
@@ -12959,6 +13029,9 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                     local okD, ownedD = pcall(canDrivePart, part)
                     if okD and ownedD then
                         part.CFrame = wantCF
+                    else
+                        rotDrag.wantRot = (part.CFrame - pos)
+                        wantCF = part.CFrame
                     end
                 end
                 part.AssemblyAngularVelocity = Vector3.zero
@@ -13125,4 +13198,3 @@ wait(2)
 print("catalyst: salami edition")
 wait(1)
 warn("CATALYST ON TOP!!!!")
--- i am the scary lion
