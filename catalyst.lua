@@ -51,8 +51,8 @@ do
         end
     end)
     if isMobile then
-        pcall(function() LP:Kick("Catalyst is not built for mobile, and never will be, i apologize") end)
-        return
+       -- pcall(function() LP:Kick("Catalyst is not built for mobile, and never will be, i apologize") end)
+       -- return
     end
 end
 
@@ -362,11 +362,9 @@ if not _G._assemblyRootHammer then
             do
                 for _, part in ipairs(selectedParts) do
                     if part and part.Parent and not part.Anchored then
-                        -- NOTE: no RootPriority write here (see Stepped note).
                         local root = getAssemblyRoot(part)
                         if root ~= part and root.Parent and not root.Anchored then
                             pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
-                            -- Only probe the root when the assembly is unowned.
                             local ownedR = false
                             pcall(function() ownedR = ownedCached(root) end)
                             if not ownedR then
@@ -397,10 +395,6 @@ if not _G._assemblyExtrasHammer then
             do
                 for part in pairs(assemblyExtras) do
                     if part and part.Parent and not part.Anchored then
-                        -- FIX: extras share the assembly velocity with the
-                        -- selected root. Writing hold/flicker here overwrites
-                        -- the Align-driven velocity same frame -> stall and
-                        -- WAY off target. Wake only, never drive.
                         pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
                     end
                 end
@@ -473,8 +467,6 @@ if not _G._ownershipWatchdog then
             local seen = {}
             for _, part in ipairs(selectedParts) do
                 if part and part.Parent and not part.Anchored then
-                    -- FIX: reclaim selected part (has the Align) AND its
-                    -- current assembly root (owns the simulation).
                     pcall(reclaimAssembly, part)
                     local root = getAssemblyRoot(part)
                     if root and root ~= part and root.Parent and not root.Anchored and not seen[root] then
@@ -490,10 +482,6 @@ if not _G._ownershipWatchdog then
 end
 _catJitterSign = _catJitterSign or {}
 _catJitterAt = _catJitterAt or {}
-
--- Generation counter: every re-execute bumps it so stale loop threads from
--- previous runs exit instead of running old code forever. A re-executed
--- script can NOT otherwise replace already-running closures.
 _G._catGen = ((_G._catGen or 0) + 1)
 
 if not _G._catSimLoop then
@@ -517,9 +505,6 @@ if not _G._catSimLoop then
         end
     end)
 end
-
--- Disconnect-replace (NOT boolean-guarded): a re-execute must swap in the
--- current code. Boolean guards froze loop code in time across re-executes.
 if _G._catSteppedRetainConn then
     pcall(function() _G._catSteppedRetainConn:Disconnect() end)
     _G._catSteppedRetainConn = nil
@@ -532,8 +517,6 @@ do
         for _, part in ipairs(selectedParts) do
             if part and part.Parent and not part.Anchored then
                 pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
-                -- FIX: only probe velocity when unowned. Owned heavies are
-                -- driven by rigid Align; flicker knocks them off target.
                 local ownedS = false
                 pcall(function() ownedS = ownedCached(part) end)
                 if not ownedS then
@@ -551,9 +534,6 @@ do
                     if now - (_catJitterAt[part] or 0) > 0.2 then
                         _catJitterAt[part] = now
                         _catJitterSign[part] = not _catJitterSign[part]
-                        -- FIX: CFrame teleport requires strict ReceiveAge==0.
-                        -- canDrivePart is looser (owner API) and fires while
-                        -- the server is still blending -> WAY off target.
                         local ageJ = nil
                         pcall(function()
                             if type(gethiddenproperty) == "function" then
@@ -571,13 +551,9 @@ do
                         end
                     end
                 end)
-                -- NOTE: no per-frame RootPriority here. It forces assembly
-                -- re-election -> ReceiveAge never settles -> ownership flap.
-                -- Claimed once on select + in reclaimAssembly when flipped.
                 pcall(function()
                     local bv = part:FindFirstChild("OwnershipBV")
                     if bv and bv:IsA("BodyVelocity") then
-                        -- FIX: yield to AlignPosition when it exists.
                         local hasAP = false
                         pcall(function()
                             local att = part:FindFirstChild("NetAttach")
@@ -608,7 +584,6 @@ do
                             local t = partTargets and partTargets[part]
                             if t then tgtRot = t.rotation end
                         end)
-                        -- FIX: yield to AlignOrientation when it exists.
                         if hasAO then
                             bg.MaxTorque = Vector3.zero
                             bg.Enabled = false
@@ -1532,6 +1507,7 @@ flyUpConn = nil
 flyFallConn = nil
 clipOn = false
 clipConn = nil
+clipSaved = {}
 function flyCleanupPart()
     pcall(function() if flyBG then flyBG:Destroy() end end)
     pcall(function() if flyBV then flyBV:Destroy() end end)
@@ -1666,13 +1642,19 @@ function setClip(on)
     clipOn = on and true or false
     if clipConn then pcall(function() clipConn:Disconnect() end) clipConn = nil end
     if clipOn then
+        clipSaved = {}
         clipConn = RunService.Stepped:Connect(function()
             if not clipOn then return end
             local ch = LP.Character
             if ch then
                 for _, d in ipairs(ch:GetDescendants()) do
-                    if d:IsA("BasePart") and d.CanCollide then
-                        pcall(function() d.CanCollide = false end)
+                    if d:IsA("BasePart") then
+                        if clipSaved[d] == nil then
+                            pcall(function() clipSaved[d] = d.CanCollide end)
+                        end
+                        if d.CanCollide then
+                            pcall(function() d.CanCollide = false end)
+                        end
                     end
                 end
             end
@@ -1683,12 +1665,16 @@ function setClip(on)
             local ch = LP.Character
             if ch then
                 for _, d in ipairs(ch:GetDescendants()) do
-                    if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
-                        d.CanCollide = true
+                    if d:IsA("BasePart") then
+                        local sv = clipSaved and clipSaved[d]
+                        if sv ~= nil then
+                            pcall(function() d.CanCollide = sv end)
+                        end
                     end
                 end
             end
         end)
+        clipSaved = {}
     end
 end
 reg(LP.CharacterAdded:Connect(function()
@@ -9521,9 +9507,34 @@ function mkB(props,parent)
     for k,v in pairs(props) do b[k]=v end
     if props.BackgroundTransparency == nil then b.BackgroundTransparency = 0.12 end
     stampGui(b); b.Parent=parent; corner(b,4)
-    local base=b.BackgroundColor3
-    b.MouseEnter:Connect(function() b.BackgroundColor3=base:Lerp(Color3.new(1,1,1),.09) end)
-    b.MouseLeave:Connect(function() b.BackgroundColor3=base end)
+    local hovBase=b.BackgroundColor3
+    local hovIn=false
+    local hovLock=false
+    b.MouseEnter:Connect(function()
+        if hovIn then return end
+        hovIn=true
+        hovBase=b.BackgroundColor3
+        hovLock=true
+        b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
+        hovLock=false
+    end)
+    b.MouseLeave:Connect(function()
+        hovIn=false
+        hovLock=true
+        b.BackgroundColor3=hovBase
+        hovLock=false
+    end)
+    b:GetPropertyChangedSignal("BackgroundColor3"):Connect(function()
+        if hovLock then return end
+        if hovIn then
+            hovBase=b.BackgroundColor3
+            hovLock=true
+            b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
+            hovLock=false
+        else
+            hovBase=b.BackgroundColor3
+        end
+    end)
     local sc=Instance.new("UIScale"); sc.Scale=1; sc.Parent=b
     b.MouseButton1Down:Connect(function() sc.Scale=0.96 end)
     b.MouseButton1Up:Connect(function() sc.Scale=1 end)
@@ -9570,9 +9581,34 @@ function mkTab(props,parent)
     if props.BackgroundTransparency == nil then b.BackgroundTransparency = 0.12 end
     b:SetAttribute("NoKeybind", true)
     stampGui(b); b.Parent=parent; corner(b,4)
-    local base=b.BackgroundColor3
-    b.MouseEnter:Connect(function() b.BackgroundColor3=base:Lerp(Color3.new(1,1,1),.09) end)
-    b.MouseLeave:Connect(function() b.BackgroundColor3=base end)
+    local hovBase=b.BackgroundColor3
+    local hovIn=false
+    local hovLock=false
+    b.MouseEnter:Connect(function()
+        if hovIn then return end
+        hovIn=true
+        hovBase=b.BackgroundColor3
+        hovLock=true
+        b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
+        hovLock=false
+    end)
+    b.MouseLeave:Connect(function()
+        hovIn=false
+        hovLock=true
+        b.BackgroundColor3=hovBase
+        hovLock=false
+    end)
+    b:GetPropertyChangedSignal("BackgroundColor3"):Connect(function()
+        if hovLock then return end
+        if hovIn then
+            hovBase=b.BackgroundColor3
+            hovLock=true
+            b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
+            hovLock=false
+        else
+            hovBase=b.BackgroundColor3
+        end
+    end)
     local sc=Instance.new("UIScale"); sc.Scale=1; sc.Parent=b
     b.MouseButton1Down:Connect(function() sc.Scale=0.96 end)
     b.MouseButton1Up:Connect(function() sc.Scale=1 end)
@@ -9701,19 +9737,19 @@ function mkSlider(parent,ltext,lo,hi,def,order,onChange,step)
         valBox.Text=formatValue(lastValue)
     end)
     thumb.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
             sl=true
             lastMouseX=i.Position.X
         end
     end)
     reg(UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
             sl=false
             lastMouseX=nil
         end
     end))
     reg(UserInputService.InputChanged:Connect(function(i)
-        if not sl or i.UserInputType~=Enum.UserInputType.MouseMovement then return end
+        if not sl or (i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch) then return end
         local ap=track.AbsolutePosition; local as=track.AbsoluteSize
         local r=math.clamp((i.Position.X-ap.X)/as.X,0,1)
         local raw=lo+(hi-lo)*r
@@ -9890,7 +9926,7 @@ function setActiveMode(name)    if not name or activeMode == name then return en
             local cat = (_G.MODE_CAT and _G.MODE_CAT[nm] or "blue")
             local col = (_G.CAT_COL and _G.CAT_COL[cat] or {bg=Color3.fromRGB(16,24,50), bgOn=Color3.fromRGB(38,70,148), tx=Color3.fromRGB(110,145,235)})
             mb.BackgroundColor3 = on and col.bgOn or col.bg
-            mb.TextColor3 = on and Color3.fromRGB(8,8,12) or col.tx
+            mb.TextColor3 = col.tx
             if buttonKeybinds[mb] and buttonKeybinds[mb].originalText then
                 mb.Text = buttonKeybinds[mb].originalText .. " [" .. buttonKeybinds[mb].key.Name .. "]"
             end
@@ -9949,21 +9985,20 @@ end
 function setupDrag(Main, TBar)
     local dragging,dStart,dOrigin=false,nil,nil
     reg(TBar.InputBegan:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
             dragging=true; dStart=inp.Position; dOrigin=Main.Position
         end
     end))
     reg(UserInputService.InputChanged:Connect(function(inp)
-        if dragging and inp.UserInputType==Enum.UserInputType.MouseMovement then
+        if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
             local d=inp.Position-dStart
             Main.Position=UDim2.new(dOrigin.X.Scale,dOrigin.X.Offset+d.X,dOrigin.Y.Scale,dOrigin.Y.Offset+d.Y)
         end
     end))
     reg(UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then dragging=false end
     end))
 end
-
 
 function buildBody(Main, MinBtn, W, H, MINI, ResizeHandle)
     local Body=mkF({Size=UDim2.new(1,0,1,-MINI-20),Position=UDim2.new(0,0,0,MINI),BackgroundTransparency=1},Main)
@@ -10047,6 +10082,19 @@ function buildMainFrame()
         Position=UDim2.new(0.5,-W/2,0.5,-H/2),BackgroundColor3=PAL.BG,BackgroundTransparency=0.12,ZIndex=GUI.Z},ScreenGui)
     corner(Main,8)
 
+    local isMob = false
+    pcall(function()
+        local uis = game:GetService("UserInputService")
+        if uis.TouchEnabled and not uis.KeyboardEnabled and not uis.MouseEnabled then isMob = true end
+        if uis:GetPlatform() == Enum.Platform.IOS or uis:GetPlatform() == Enum.Platform.Android then isMob = true end
+    end)
+    if isMob then
+        Main.AnchorPoint = Vector2.new(0.5, 0.5)
+        Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+        local uiScale = Instance.new("UIScale")
+        uiScale.Scale = 0.65 -- Adjust this number (e.g. 0.5 to 0.8) to make it smaller or larger on mobile
+        uiScale.Parent = Main
+    end
     local shdw=mkF({Size=UDim2.new(1,10,1,10),Position=UDim2.new(0,-5,0,5),
         BackgroundColor3=Color3.new(0,0,0),BackgroundTransparency=0.58,ZIndex=GUI.Z-1},Main)
     corner(shdw,11)
@@ -10132,7 +10180,7 @@ function buildMainFrame()
     local startSize = Vector2.new(W, H)
 
     ResizeHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             resizing = true
             resizeStart = Vector2.new(input.Position.X, input.Position.Y)
             startSize = Vector2.new(Main.AbsoluteSize.X, Main.AbsoluteSize.Y)
@@ -10140,7 +10188,7 @@ function buildMainFrame()
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local currentPos = Vector2.new(input.Position.X, input.Position.Y)
             local delta = currentPos - resizeStart
             local newSize = startSize + delta
@@ -10151,10 +10199,11 @@ function buildMainFrame()
     end)
 
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             resizing = false
         end
     end)
+
 
     MinBtn.MouseButton1Click:Connect(function()
         ResizeHandle.Visible = Body.Visible
@@ -10645,7 +10694,7 @@ function buildPartsPanel(Cont, mPanels)
                 local cat = MODE_CAT[name] or "blue"
                 local col = CAT_COL[cat]
                 mb.BackgroundColor3=on and col.bgOn or col.bg
-                mb.TextColor3=on and Color3.fromRGB(8,8,12) or col.tx
+                mb.TextColor3=col.tx
                 if buttonKeybinds[mb] and buttonKeybinds[mb].originalText then
                     local keyName = buttonKeybinds[mb].key.Name
                     local originalText = buttonKeybinds[mb].originalText
