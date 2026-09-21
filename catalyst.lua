@@ -9507,32 +9507,20 @@ function mkB(props,parent)
     for k,v in pairs(props) do b[k]=v end
     if props.BackgroundTransparency == nil then b.BackgroundTransparency = 0.12 end
     stampGui(b); b.Parent=parent; corner(b,4)
-    local hovBase=b.BackgroundColor3
-    local hovIn=false
-    local hovLock=false
     b.MouseEnter:Connect(function()
-        if hovIn then return end
-        hovIn=true
-        hovBase=b.BackgroundColor3
-        hovLock=true
-        b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
-        hovLock=false
+        if b:GetAttribute("hovOn") then return end
+        b:SetAttribute("hovOn", true)
+        b:SetAttribute("hovPrev", b.BackgroundColor3)
+        b.BackgroundColor3 = b.BackgroundColor3:Lerp(Color3.new(1,1,1),.09)
     end)
     b.MouseLeave:Connect(function()
-        hovIn=false
-        hovLock=true
-        b.BackgroundColor3=hovBase
-        hovLock=false
-    end)
-    b:GetPropertyChangedSignal("BackgroundColor3"):Connect(function()
-        if hovLock then return end
-        if hovIn then
-            hovBase=b.BackgroundColor3
-            hovLock=true
-            b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
-            hovLock=false
-        else
-            hovBase=b.BackgroundColor3
+        b:SetAttribute("hovOn", nil)
+        local prev = b:GetAttribute("hovPrev")
+        b:SetAttribute("hovPrev", nil)
+        if typeof(prev) == "Color3" then
+            if b.BackgroundColor3 == prev:Lerp(Color3.new(1,1,1),.09) then
+                b.BackgroundColor3 = prev
+            end
         end
     end)
     local sc=Instance.new("UIScale"); sc.Scale=1; sc.Parent=b
@@ -9581,32 +9569,20 @@ function mkTab(props,parent)
     if props.BackgroundTransparency == nil then b.BackgroundTransparency = 0.12 end
     b:SetAttribute("NoKeybind", true)
     stampGui(b); b.Parent=parent; corner(b,4)
-    local hovBase=b.BackgroundColor3
-    local hovIn=false
-    local hovLock=false
     b.MouseEnter:Connect(function()
-        if hovIn then return end
-        hovIn=true
-        hovBase=b.BackgroundColor3
-        hovLock=true
-        b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
-        hovLock=false
+        if b:GetAttribute("hovOn") then return end
+        b:SetAttribute("hovOn", true)
+        b:SetAttribute("hovPrev", b.BackgroundColor3)
+        b.BackgroundColor3 = b.BackgroundColor3:Lerp(Color3.new(1,1,1),.09)
     end)
     b.MouseLeave:Connect(function()
-        hovIn=false
-        hovLock=true
-        b.BackgroundColor3=hovBase
-        hovLock=false
-    end)
-    b:GetPropertyChangedSignal("BackgroundColor3"):Connect(function()
-        if hovLock then return end
-        if hovIn then
-            hovBase=b.BackgroundColor3
-            hovLock=true
-            b.BackgroundColor3=hovBase:Lerp(Color3.new(1,1,1),.09)
-            hovLock=false
-        else
-            hovBase=b.BackgroundColor3
+        b:SetAttribute("hovOn", nil)
+        local prev = b:GetAttribute("hovPrev")
+        b:SetAttribute("hovPrev", nil)
+        if typeof(prev) == "Color3" then
+            if b.BackgroundColor3 == prev:Lerp(Color3.new(1,1,1),.09) then
+                b.BackgroundColor3 = prev
+            end
         end
     end)
     local sc=Instance.new("UIScale"); sc.Scale=1; sc.Parent=b
@@ -13625,3 +13601,4 @@ wait(2)
 print("catalyst: salami edition")
 wait(1)
 warn("CATALYST ON TOP!!!!")
+--i am the scary lion
