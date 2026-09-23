@@ -362,8 +362,8 @@ if not _G._assemblyRootHammer then
             do
                 for _, part in ipairs(selectedParts) do
                     if part and part.Parent and not part.Anchored then
-                        local root = getAssemblyRoot(part)
-                        if root ~= part and root.Parent and not root.Anchored then
+                        local root = snapRoot(part)
+                        if root and root ~= part and root.Parent and not root.Anchored then
                             pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
                             local ownedR = false
                             pcall(function() ownedR = ownedCached(root) end)
@@ -468,7 +468,7 @@ if not _G._ownershipWatchdog then
             for _, part in ipairs(selectedParts) do
                 if part and part.Parent and not part.Anchored then
                     pcall(reclaimAssembly, part)
-                    local root = getAssemblyRoot(part)
+                    local root = snapRoot(part)
                     if root and root ~= part and root.Parent and not root.Anchored and not seen[root] then
                         seen[root] = true
                         reclaimAssembly(root)
@@ -684,11 +684,40 @@ pcall(function()
         end)
     end
 end)
+pcall(function()
+    local ok, descendants = pcall(function() return workspace:GetDescendants() end)
+    if ok and type(descendants) == "table" then
+        for _, inst in ipairs(descendants) do
+            local strip = false
+            pcall(function()
+                if inst:IsA("BasePart") then
+                    if inst:FindFirstChild("NetAttach") or inst:FindFirstChild("OwnershipBV") or inst:FindFirstChild("OwnershipBG") or inst:FindFirstChild("OwnershipBAV") or inst:FindFirstChild("ServerResponse") or inst:FindFirstChild("NetBP") or inst:FindFirstChild("NetBG") then
+                        strip = true
+                    end
+                end
+            end)
+            if strip then
+                pcall(function()
+                    for _, nm in ipairs({"NetAttach", "OwnershipBV", "OwnershipBG", "OwnershipBAV", "ServerResponse", "ServerResponse2", "NetBP", "NetBG", "NetAP", "NetAO", "NetAttachment"}) do
+                        local o = inst:FindFirstChild(nm)
+                        if o then o:Destroy() end
+                    end
+                end)
+            end
+        end
+    end
+    for _, o in ipairs(workspace:GetChildren()) do
+        pcall(function()
+            if o.Name == "CatalystSelectionProxy" then o:Destroy() end
+        end)
+    end
+end)
 selectedParts = {}
 partMissingSince = {}
 partTrulyGone = {}
 partDestroyingConns = {}
-partSpinSaved = {}
+partSpinSaved = _G._catSpinSaved or setmetatable({}, {__mode = "k"})
+_G._catSpinSaved = partSpinSaved
 partOffsets   = {}
 partOffsetScale = {}
 unfreezeFrom = {}
@@ -712,7 +741,8 @@ spcHighlight  = nil
 selectionProxyModel     = nil
 selectionProxyHighlight = nil
 selectionProxyParts     = {}
-partPhysProperties      = {}
+partPhysProperties      = _G._catPhysProps or setmetatable({}, {__mode = "k"})
+_G._catPhysProps = partPhysProperties
 
 
 EspScreenGui = Instance.new("ScreenGui")
@@ -1055,6 +1085,14 @@ lightningBoomed     = false
 LIGHTNING_TRAVEL    = 0.35
 LIGHTNING_HOLD      = 1.1
 lightningTouchConns = {}
+gunFlying          = {}
+gunFlyTgt          = {}
+gunFlyFrom         = {}
+gunFlyT0           = {}
+gunFlyTravel       = {}
+gunBoomed          = {}
+gunTouchConns      = {}
+GUN_TTL            = 2.4
 railgunBoomed       = false
 strikeState      = "idle"
 strikeTarget     = Vector3.zero
@@ -1099,6 +1137,8 @@ stickSlapUntil   = 0
 stickSlapConns   = {}
 stickBeamActive    = false
 stickBeamConns     = {}
+stickGunActive     = false
+stickGunCool       = 0
 stickMagnetActive = false
 stickMagnetTick   = 0
 stickWaveUntil   = 0
@@ -1508,6 +1548,26 @@ flyFallConn = nil
 clipOn = false
 clipConn = nil
 clipSaved = {}
+clipParts = {}
+clipChar = nil
+clipAddConn = nil
+function clipRebuild()
+    clipParts = {}
+    local ch = LP.Character
+    clipChar = ch
+    if clipAddConn then pcall(function() clipAddConn:Disconnect() end) clipAddConn = nil end
+    if ch then
+        for _, d in ipairs(ch:GetDescendants()) do
+            if d:IsA("BasePart") then clipParts[#clipParts + 1] = d end
+        end
+        clipAddConn = ch.DescendantAdded:Connect(function(d)
+            if not clipOn then return end
+            if ch ~= LP.Character then return end
+            if d and d:IsA("BasePart") then clipParts[#clipParts + 1] = d end
+        end)
+        reg(clipAddConn)
+    end
+end
 function flyCleanupPart()
     pcall(function() if flyBG then flyBG:Destroy() end end)
     pcall(function() if flyBV then flyBV:Destroy() end end)
@@ -1641,14 +1701,17 @@ end
 function setClip(on)
     clipOn = on and true or false
     if clipConn then pcall(function() clipConn:Disconnect() end) clipConn = nil end
+    if clipAddConn then pcall(function() clipAddConn:Disconnect() end) clipAddConn = nil end
     if clipOn then
         clipSaved = {}
+        pcall(clipRebuild)
         clipConn = RunService.Stepped:Connect(function()
             if not clipOn then return end
             local ch = LP.Character
+            if ch ~= clipChar then pcall(clipRebuild) end
             if ch then
-                for _, d in ipairs(ch:GetDescendants()) do
-                    if d:IsA("BasePart") then
+                for _, d in ipairs(clipParts) do
+                    if d and d.Parent and d:IsA("BasePart") then
                         if clipSaved[d] == nil then
                             pcall(function() clipSaved[d] = d.CanCollide end)
                         end
@@ -1675,6 +1738,8 @@ function setClip(on)
             end
         end)
         clipSaved = {}
+        clipParts = {}
+        clipChar = nil
     end
 end
 reg(LP.CharacterAdded:Connect(function()
@@ -2535,7 +2600,7 @@ local function disableSelectedCollision(part)
         part.CanCollide = false
         if not partCollisionConns[part] then
             partCollisionConns[part] = part:GetPropertyChangedSignal("CanCollide"):Connect(function()
-                if part and part.Parent and fakeCollisions then
+                if part and part.Parent and fakeCollisions and selectedSetCache[part] then
                     part.CanCollide = false
                 end
             end)
@@ -2564,11 +2629,13 @@ end
 
 local function reclaimOnTouch(part, hit)
     if not part or not part.Parent then return end
+    if not (selectedSetCache and selectedSetCache[part]) then return end
     local lastT = reclaimTouchAt[part] or 0
     if tick() - lastT < 0.1 then return end
     reclaimTouchAt[part] = tick()
 
     local isVelMode = activeMode == "DroneV2"
+    local _dragRot = (rotDrag and rotDrag.active and rotDrag.part == part)
 
 pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     pcall(function()
@@ -2578,13 +2645,14 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     end)
     local target = partTargets[part]
     local _homingFly = (activeMode == "Homing" and homingTarget and homingTarget.Parent and tick() < homingEndTime)
+    local _gunFly = (gunFlying and gunFlying[part]) and true or false
     pcall(function()
 
         local AP = getNetAP(part)
         if AP then
             AP.MaxForce    = alignForceFor(part)
             AP.MaxVelocity = math.huge
-            if not _homingFly then
+            if not _homingFly and not _gunFly then
                 AP.Enabled     = true
                 AP.Position    = (target and target.position) or part.Position
             end
@@ -2595,7 +2663,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
             AO.MaxAngularVelocity = math.huge
             local _dv2Spin = (activeMode == "DroneV2" and dv2Target and dv2Target.Parent)
             local _dragRot = (rotDrag and rotDrag.active and rotDrag.part == part)
-            if not _dv2Spin and not _homingFly and not _dragRot then
+            if not _dv2Spin and not _homingFly and not _gunFly and not _dragRot then
                 AO.Enabled            = true
                 AO.CFrame             = (target and target.rotation) or part.CFrame
             end
@@ -2605,14 +2673,14 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
         pcall(function() if part.RootPriority ~= 127 then part.RootPriority = 127 end end)
         pcall(ensureLegacyMovers, part)
         local _dv2Hover = (activeMode == "DroneV2" and dv2Target and dv2Target.Parent)
-        if not _dv2Hover and not _homingFly then
+        if not _dv2Hover and not _homingFly and not _gunFly and not _dragRot then
             part.AssemblyLinearVelocity = netHoldVelocity()
         end
         do
             local _dv2Spin2 = (activeMode == "DroneV2" and dv2Target and dv2Target.Parent)
-            if not _dv2Spin2 and not _homingFly then
+            if not _dv2Spin2 and not _homingFly and not _gunFly and not _dragRot then
                 part.AssemblyAngularVelocity = Vector3.zero
-            else
+            elseif not _dragRot then
                 pcall(function()
                     local oa = part.AssemblyAngularVelocity
                     part.AssemblyAngularVelocity = Vector3.new(500, 500, 500)
@@ -2623,11 +2691,13 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
         if hit and hit.Parent then
             local m = hit:FindFirstAncestorOfClass("Model")
             if m and (Players:GetPlayerFromCharacter(m) or m:FindFirstChildOfClass("Humanoid")) then
-                pcall(function()
-                    local ov = part.AssemblyLinearVelocity
-                    part.AssemblyLinearVelocity = Vector3.new(50000, 50000, 50000)
-                    part.AssemblyLinearVelocity = ov
-                end)
+                if not _dragRot then
+                    pcall(function()
+                        local ov = part.AssemblyLinearVelocity
+                        part.AssemblyLinearVelocity = Vector3.new(50000, 50000, 50000)
+                        part.AssemblyLinearVelocity = ov
+                    end)
+                end
                 pcall(function()
                     local rr = getAssemblyRoot(part)
                     if rr and rr.Parent and not rr.Anchored then
@@ -2799,6 +2869,21 @@ function ownedCached(part)
     end
     return v
 end
+snapGen = 0
+snapRootV = setmetatable({}, {__mode = "k"})
+snapRootG = setmetatable({}, {__mode = "k"})
+function snapRoot(part)
+    if part and snapRootG[part] == snapGen then return snapRootV[part] end
+    local r = nil
+    pcall(function() r = getAssemblyRoot(part) end)
+    if part then
+        snapRootV[part] = r
+        snapRootG[part] = snapGen
+    end
+    return r
+end
+snapBeatConn = RunService.Heartbeat:Connect(function() snapGen = (snapGen or 0) + 1 end)
+reg(snapBeatConn)
 
 function rebuildAssemblyCache(includeExtras)
     selectedSetCache = {}
@@ -3038,6 +3123,15 @@ end
 function ensureLegacyMovers(part)
     if not (part and part.Parent and part:IsA("BasePart")) then return end
     if part.Anchored then return end
+    if not (selectedSetCache and selectedSetCache[part]) then
+        pcall(function()
+            local bv = part:FindFirstChild("OwnershipBV")
+            if bv then bv:Destroy() end
+            local bg = part:FindFirstChild("OwnershipBG")
+            if bg then bg:Destroy() end
+        end)
+        return
+    end
     local hasAP, hasAO = false, false
     pcall(function()
         local att = part:FindFirstChild("NetAttach")
@@ -3097,7 +3191,7 @@ end
 function shouldSkipAssemblyDrive(part)
     if frozenTargets[part] then return false end
     if passengerSet[part] then return true end
-    local root = getAssemblyRoot(part)
+    local root = snapRoot(part)
     if root ~= part then
         local okr, ra = pcall(function() return root.Anchored end)
         if okr and ra then return true end
@@ -3207,7 +3301,7 @@ function reclaimAssembly(part)
     pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
     pcall(function() if part.RootPriority ~= 127 then part.RootPriority = 127 end end)
     local root = nil
-    pcall(function() root = getAssemblyRoot(part) end)
+    pcall(function() root = snapRoot(part) end)
     if root and root ~= part and root.Parent and not root.Anchored then
         pcall(function() if root.RootPriority ~= 127 then root.RootPriority = 127 end end)
         pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
@@ -3284,14 +3378,15 @@ local function doUnfreeze(part, keepProps)
     if keepProps then return end
     pcall(function()
         if strengthenParts then
-            rampDensity(part, strengthenDensity, 0.3, 0.5, 3)
+            rampDensity(part, strengthenDensity, 0.3, 0.5, 6)
         else
-            rampDensity(part, 0.001, 0, 0, 3)
+            rampDensity(part, 0.001, 0, 0, 6)
         end
     end)
 end
 function beginUnfreezeHold(part)
     if not (part and part.Parent) then return end
+    pcall(stopDensityRamp, part)
     pcall(function() unfreezeFrom[part] = part.Position end)
     unfreezeBoost[part] = 0
     unfreezeBoostStart[part] = nil
@@ -3439,6 +3534,9 @@ local function clearModeState(prevMode, nextMode)
         stickMagnetActive = false
         stickTPose = false
         stickBeamActive = false
+        stickGunActive = false
+        for p in pairs(gunFlying) do stickGunLand(p, true) end
+        gunTouchConns = {}
     end
     if nextMode == "Stickman" then pcall(refreshStickFaceSet) end
     if prevMode == "Minigun" and nextMode ~= "Minigun" then
@@ -4415,6 +4513,11 @@ local function neutralizeSpinDrivers(part)
             end
             return
         end
+        local okL, lv = pcall(function() return obj.LimitsEnabled end)
+        if okL and type(lv) == "boolean" then
+            table.insert(saved, { obj = obj, vals = { LimitsEnabled = lv } })
+            found += 1
+        end
         local props = spinDriveProps(obj)
         if props == nil then return end
         local entry = { obj = obj, vals = {} }
@@ -4492,6 +4595,8 @@ local function neutralizeSpinDrivers(part)
             for pr, _ in pairs(entry.vals) do
                 if pr == "Enabled" then
                     pcall(function() obj.Enabled = false end)
+                elseif pr == "LimitsEnabled" then
+                    pcall(function() obj.LimitsEnabled = false end)
                 elseif pr == "Disabled" then
                     pcall(function() obj.Disabled = true end)
                 elseif pr == "Responsiveness" then
@@ -4785,7 +4890,7 @@ local function cleanupPartState(part, destroyPart)
     selectedSetCache[part] = nil
     ownVerdict[part] = nil
     ownVerdictAt[part] = nil
-    unlinkNoCollide(part)
+    pcall(unlinkNoCollide, part)
     releasedSet[part] = true
     anchoredNoted[part] = nil
     reclaimTouchAt[part] = nil
@@ -4795,7 +4900,7 @@ local function cleanupPartState(part, destroyPart)
         riderNCCs[part] = nil
     end
     riderShieldAt[part] = nil
-    mouseExcludeRemove(part)
+    pcall(mouseExcludeRemove, part)
     partMissingSince[part] = nil
     partTrulyGone[part] = nil
     if partDestroyingConns[part] then pcall(function() partDestroyingConns[part]:Disconnect() end) partDestroyingConns[part] = nil end
@@ -4804,7 +4909,7 @@ local function cleanupPartState(part, destroyPart)
     networkRuleApplied[part] = nil
     partOffsets[part] = nil
     partOffsetScale[part] = nil
-    doUnfreeze(part, true)
+    pcall(doUnfreeze, part, true)
     unfreezeBoost[part] = nil
     unfreezeT0[part] = nil
     partRideRad[part] = nil
@@ -4864,7 +4969,7 @@ local function cleanupPartState(part, destroyPart)
         end
     end)
 
-    removeHL(part)
+    pcall(removeHL, part)
 
     pcall(stopDensityRamp, part)
     if partPhysProperties[part] then
@@ -4933,7 +5038,7 @@ local function cleanupPartState(part, destroyPart)
     if minigunFlying[part] then minigunLand(part, true) end
     bridgeSlots[part] = nil
 
-    restoreSelectedCollision(part)
+    pcall(restoreSelectedCollision, part)
     pcall(restoreSpinDrivers, part)
     pcall(function() restoreAssemblyCollision(part) end)
     pcall(restoreLightenedMass, part)
@@ -5018,7 +5123,8 @@ local function resetSelectionState()
     colAsmCache = {}
     rebuildMouseExclude()
     pcall(restoreLightenedMass, nil)
-    partPhysProperties = {}
+    partPhysProperties = setmetatable({}, {__mode = "k"})
+    _G._catPhysProps = partPhysProperties
     partOffsets = {}
     partOffsetScale = {}
     frozenTargets = {}
@@ -6054,7 +6160,7 @@ local function getTarget(index, total, part, t)
             local layer = math.floor((index - 1) / ringSlots)
             local slot  = (index - 1) % ringSlots
             local a     = (slot / ringSlots) * math.pi * 2 + t * 0.4
-            local r     = math.max(3.5 * scX, 3.5 * scZ)
+            local r     = math.max(3.5 * scX, 3.5 * scZ, 2)
             local y     = rp.Y + high + layer * (2.1 * scY)
             return Vector3.new(
                 rp.X + math.cos(a) * r,
@@ -6066,10 +6172,12 @@ local function getTarget(index, total, part, t)
             local hn = math.max(total - clusterN, 1)
             local a  = (hi - 1) / hn * math.pi * 2 + t * 0.56
             local r  = formRadius * math.max(scX, scZ)
+            local ax = math.max(r * scX, 2)
+            local az = math.max(r * scZ, 2)
             return Vector3.new(
-                rp.X + math.cos(a) * r * scX,
+                rp.X + math.cos(a) * ax,
                 rp.Y + high,
-                rp.Z + math.sin(a) * r * scZ)
+                rp.Z + math.sin(a) * az)
         end
 
     elseif activeMode=="Minigun" then
@@ -6117,13 +6225,12 @@ local function getTarget(index, total, part, t)
             end
         end
         if stickBeamActive then
-            local uu = index / math.max(total, 1)
-            local inArm = uu >= 0.37 and uu < 0.73
-            local armMatch = stickArmIsLeft and uu < 0.55 or (not stickArmIsLeft and uu >= 0.55)
-            if inArm and armMatch then
+            local inArm = u >= 0.37 and u < 0.73
+            local armMatch = stickArmIsLeft and u < 0.55 or (not stickArmIsLeft and u >= 0.55)
+            if inArm and armMatch and not stickFaceSet[part] then
                 local lo, hi = 0.37, 0.73
                 if stickArmIsLeft then hi = 0.55 else lo = 0.55 end
-                local k = math.clamp((uu - lo) / math.max(hi - lo, 0.001), 0, 1)
+                local k = math.clamp((u - lo) / math.max(hi - lo, 0.001), 0, 1)
                 local shYb = H * 0.76
                 local beamOrigin = originS
                     + rightD * ((stickArmIsLeft and -2.5 or 2.5) * scR)
@@ -6136,6 +6243,19 @@ local function getTarget(index, total, part, t)
                 )
                 return beamOrigin:Lerp(beamTarget, k) + jitter
             end
+        end
+        if gunFlying[part] then
+            local gfrom = gunFlyFrom[part] or originS
+            local gft = gunFlyTgt[part]
+            if not gft then gft = currentMouseHit end
+            local gt0 = gunFlyT0[part] or t
+            local gtravel = gunFlyTravel[part] or 0.3
+            local gage = t - gt0
+            if gage < gtravel then
+                local gp = math.clamp(gage / math.max(gtravel, 0.01), 0, 1)
+                return gfrom:Lerp(gft, gp * gp)
+            end
+            return gft + Vector3.new(math.cos(t * 18 + index * 1.7) * 1.2, math.sin(t * 23 + index * 2.3) * 0.8, math.sin(t * 18 + index * 1.7) * 1.2)
         end
         local groundY = isSitting and (0.2 * scY) or (-2.8 * scY)
 
@@ -6159,9 +6279,7 @@ local function getTarget(index, total, part, t)
             if stickFaceMode == 4 then isBlink = false end
             local curHeadY = headC
             local curHeadFwd = 0
-            if stickDanceActive then curHeadY = headC end
             local fYAdd = 0
-            if stickDanceActive then fYAdd = math.sin(t * 1.7 * 1.15) * 0.16 * 0.85 end
             local headWPos = originS + Vector3.new(0, curHeadY + 2.5 * scY, 0) + lookD * curHeadFwd
             local htm = currentMouseHit - headWPos
             local tiltRight = htm:Dot(rightD) / math.max(htm.Magnitude, 1)
@@ -6264,100 +6382,57 @@ local function getTarget(index, total, part, t)
                 pz = mouthZBase + tiltFZ * 0.7
             end
         elseif stickCrawlActive then
-            local crawlHipY  = H * 0.10
-            local crawlShY   = H * 0.20
-            local crawlHeadY = H * 0.28
-            local cPh = ph * 2.9
-            local crawlAmp = 1.15
-            local scaryJitter = math.sin(t * 18 + u * 9) * 0.07 + math.cos(t * 23 + u * 7) * 0.05
-            if u < 0.22 then
-                local k = (u - 0.10) / 0.12
-                local a = k * math.pi * 2 + t * 0.8
-                local twitchA = math.sin(t * 14 + k * 8) * 0.08
-                local headFwd = lookD * (0.42 * scZ)
-                local headW = originS + Vector3.new(0, crawlHeadY + 2.5 * scY, 0) + headFwd
-                local htm = currentMouseHit - headW
-                local tiltRight = htm:Dot(rightD) / math.max(htm.Magnitude, 1)
-                local tiltUp    = htm.Y / math.max(htm.Magnitude, 1)
-                px = math.cos(a + twitchA) * headRW / math.max(scX, 0.001) ^ 0.75 + tiltRight * headRW * 0.10 + scaryJitter * 0.3
-                py = crawlHeadY + math.sin(a + twitchA) * headRH * 0.38 + math.sin(cPh) * 0.03 + twitchA * 0.12 + scaryJitter * 0.15
-                pz = math.sin(a) * headRW * 0.14
-                    + (-math.cos(a) * tiltRight - math.sin(a) * tiltUp) * headRW * 0.26
-                    + 0.42 * scZ + math.sin(t * 11 + k * 5) * 0.07
-            elseif u < 0.37 then
-                local tk = (u - 0.22) / 0.15
-                local arch = math.sin(cPh * 1.3 + tk * 4) * 0.08
-                py = crawlShY - tk * (crawlShY - crawlHipY) + arch + scaryJitter * 0.08
-                px = scaryJitter * 0.15
-                pz = (0.45 + tk * 0.30) * scZ + arch * 0.05
-            elseif u < 0.73 then
-                local isLeft = u < 0.55
-                local k = isLeft and ((u - 0.37) / 0.18) or ((u - 0.55) / 0.18)
-                local th = math.sin(cPh + (isLeft and 0 or math.pi)) * crawlAmp
-                local fwd = math.sin(th) * k * (legLen * 0.62)
-                local splay = (isLeft and -1 or 1) * W * 0.68 * k + math.cos(th * 1.4) * k * 0.38
-                local down = -math.abs(math.cos(th)) * k * (crawlShY - groundY) * 0.88 + math.sin(t * 16 + k * 6) * 0.06
-                px = (fwd * lookD:Dot(rightD) + splay) / math.max(scX, 0.001) + scaryJitter * 0.4
-                py = crawlShY + down + scaryJitter * 0.2
-                pz = fwd * lookD:Dot(lookD) + math.sin(cPh * 0.9 + k) * 0.16 + scaryJitter
+            local spyBody = 2.0
+            if stickFaceSet[part] then
+                local fi = index or 0
+                px = (((fi % 7) - 3) * 0.35) / math.max(scX, 0.001)
+                py = spyBody + (((fi % 3) - 1) * 0.3)
+                pz = (((fi % 5) - 2) * 0.3)
             else
-                local isLeft = u < 0.87
-                local k = isLeft and ((u - 0.73) / 0.15) or ((u - 0.87) / 0.13)
-                local th = math.sin(cPh + math.pi + (isLeft and 0 or math.pi)) * crawlAmp
-                local fwd = math.sin(th) * k * (legLen * 0.58)
-                local side = (isLeft and -1 or 1) * W * 0.58 * k + math.sin(th * 1.2) * k * 0.22
-                local down = -math.cos(th) * k * (crawlHipY - groundY) * 0.94
-                if down > 0 then down = down * 0.12 end
-                down += math.cos(t * 17 + k * 8) * 0.05
-                px = (fwd * lookD:Dot(rightD) + side) / math.max(scX, 0.001) + scaryJitter * 0.4
-                py = crawlHipY + down + scaryJitter * 0.15
-                pz = fwd * lookD:Dot(lookD) - 0.42 * scZ + math.sin(cPh * 1.0 + k) * 0.13
+                local lu = u * 8
+                local leg = math.floor(lu) % 8
+                local seg = lu - math.floor(lu)
+                local side = leg < 4 and -1 or 1
+                local slot = leg % 4
+                local fan = (1.5 - slot) * 0.55
+                local legD = rightD * side + lookD * fan
+                if legD.Magnitude < 0.01 then legD = rightD * side else legD = legD.Unit end
+                local hipW = originS + Vector3.new(0, spyBody + 2.5 * scY, 0)
+                local spreadBase = math.max(4, formRadius) * scR
+                local footXZ = originS + legD * spreadBase
+                local footGY = getGroundYAt(footXZ.X, footXZ.Z, originS.Y, part)
+                if footGY == nil then footGY = originS.Y - 3 end
+                local spreadR = spreadBase + math.max(0, hipW.Y - footGY) * 0.35
+                footXZ = originS + legD * spreadR
+                local footW = Vector3.new(footXZ.X, footGY + 0.3, footXZ.Z)
+                local kneeW = hipW:Lerp(footW, 0.5) + Vector3.new(0, spreadR * 0.3 + 1.5, 0)
+                local stepPh = t * 9 + leg * math.pi
+                local stepAmp = math.clamp((walkF - 0.05) / 0.95, 0, 1)
+                local stride = spreadR * 0.18 * stepAmp
+                local liftAmp = (spreadR * 0.12 + 0.6) * stepAmp
+                footW = footW + legD * (math.sin(stepPh) * stride) + Vector3.new(0, math.max(0, math.sin(stepPh + math.pi * 0.5)) ^ 1.5 * liftAmp, 0)
+                local posW = nil
+                if seg < 0.5 then
+                    posW = hipW:Lerp(kneeW, seg * 2)
+                else
+                    posW = kneeW:Lerp(footW, (seg - 0.5) * 2)
+                end
+                local pw = posW - originS
+                px = pw:Dot(rightD) / math.max(scX, 0.001)
+                py = pw.Y - 2.5 * scY
+                pz = pw:Dot(lookD)
             end
-        elseif stickDanceActive then
-            local dT = t * 1.7
-            local bob = math.sin(dT * 1.15) * 0.16
-            if u < 0.22 then
-                local k = (u - 0.10) / 0.12
-                local a = k * math.pi * 2 + t * 0.8
-                local headW = originS + Vector3.new(0, headC + 2.5 * scY, 0)
-                local htm = currentMouseHit - headW
-                local tiltRight = htm:Dot(rightD) / math.max(htm.Magnitude, 1)
-                local tiltUp    = htm.Y / math.max(htm.Magnitude, 1)
-                px = math.cos(a) * headRW / math.max(scX, 0.001) ^ 0.75
-                py = headC + math.sin(a) * headRH * 0.55 + bob * 0.95
-                pz = math.sin(a) * headRW * 0.22
-                    + (-math.cos(a) * tiltRight - math.sin(a) * tiltUp) * headRW * 0.32
-                    + math.sin(dT * 0.9 + k * 2) * 0.06
-            elseif u < 0.37 then
-                local tk = (u - 0.22) / 0.15
-                local sway = math.sin(dT + tk * 2) * 0.06 * widenF
-                py = (H * 0.80 - tk * (H * 0.80 - hipY)) + bob * 0.85
-                px = sway
-                pz = math.sin(dT * 0.7 + tk * 3) * 0.04 * scZ
-            elseif u < 0.73 then
-                local isLeft = u < 0.55
-                local k = isLeft and ((u - 0.37) / 0.18) or ((u - 0.55) / 0.18)
-                local swingT = dT + (isLeft and 0 or math.pi) + k * 0.6
-                local upH    = math.sin(swingT) * k * armLen * 0.52
-                local outH   = math.cos(swingT * 0.9) * k * armLen * 0.30
-                local sideBase = (isLeft and -1 or 1) * W * 0.50 * k
-                local shoulderOff = (isLeft and -2.5 or 2.5) * scR
-                px = (sideBase + outH + shoulderOff) / math.max(scX, 0.001)
-                py = shY + bob * 0.80 + upH
-                pz = math.sin(swingT * 0.6) * k * armLen * 0.24
-            else
-                local isLeft = u < 0.87
-                local k = isLeft and ((u - 0.73) / 0.15) or ((u - 0.87) / 0.13)
-                local stepT = dT + (isLeft and 0 or math.pi)
-                local thDance = math.sin(stepT) * 0.55
-                local sideSway = math.sin(stepT) * k * W * 0.14
-                local fwdSwing = lookD * (math.sin(thDance) * k * legLen * 0.14)
-                local tapLift  = math.max(0, math.sin(stepT * 2.0)) * k * legLen * 0.22
-                local spread = (isLeft and -1 or 1) * W * 0.45 * k + sideSway
-                px = (fwdSwing:Dot(rightD) + spread) / math.max(scX, 0.001)
-                py = hipY - math.cos(thDance) * k * legLen * 0.95 + bob * 0.80 + tapLift
-                pz = fwdSwing:Dot(lookD) + math.sin(dT * 0.8 + k) * 0.04
-            end
+        elseif stickDanceActive and u >= 0.37 and u < 0.73 and not stickFaceSet[part] then
+            local isLeft = u < 0.55
+            local k = isLeft and ((u - 0.37) / 0.18) or ((u - 0.55) / 0.18)
+            local flailT = tick() * 8 + (isLeft and 0 or math.pi)
+            local wiggle = math.sin(k * 4 * math.pi - flailT) * armLen * 0.18 * k
+            local wiggleZ = math.cos(k * 4 * math.pi - flailT) * armLen * 0.10 * k
+            local baseSide = (isLeft and -1 or 1) * armLen * 1.8 * k
+            local shoulderOff = (isLeft and -2.5 or 2.5) * scR
+            px = (baseSide + shoulderOff) / math.max(scX, 0.001)
+            py = shY + armLen * 0.1 + wiggle
+            pz = wiggleZ
         elseif u < 0.22 then
             local k = (u - 0.10) / 0.12
             local a = k * math.pi * 2 + t * 0.8
@@ -6380,17 +6455,28 @@ local function getTarget(index, total, part, t)
             local armLen = H * 0.45
             local blockedMouse = stickmanBlocker(shW, currentMouseHit)
             local delta
-            if stickTPose then
+            if stickGunActive and isLeft == stickArmIsLeft then
+                local gd = blockedMouse - shW
+                local gdir = gd.Magnitude > 0.01 and gd.Unit or lookD
+                local gp1 = gdir:Cross(Vector3.yAxis)
+                if gp1.Magnitude < 0.01 then gp1 = rightD else gp1 = gp1.Unit end
+                local gp2 = gdir:Cross(gp1)
+                if gp2.Magnitude < 0.01 then gp2 = Vector3.yAxis else gp2 = gp2.Unit end
+                local gbase = shW + gdir * (k * armLen * 2.0)
+                local ga = k * 2.5 * math.pi * 2 + t * 10
+                local gr = (1 - k) * 1.5 * scR
+                delta = (gbase + gp1 * math.cos(ga) * gr + gp2 * math.sin(ga) * gr) - shW
+            elseif stickTPose then
                 delta = rightD * ((isLeft and -1 or 1) * armLen * 2.5 * k)
             elseif tick() < stickSlapUntil and isLeft == stickArmIsLeft then
                 local ad = blockedMouse - shW
-                if ad.Magnitude > 0.01 and walkF < 0.3 then
+                if ad.Magnitude > 0.01 then
                     local t = (tick() - (stickSlapUntil - 0.5)) / 0.5
                     local sweep = math.sin(t * math.pi) * armLen * 1.2
                     local perp = ad.Unit:Cross(Vector3.yAxis)
                     if perp.Magnitude < 0.01 then perp = rightD end
                     perp = perp.Unit
-                    delta = ad.Unit * (k * armLen * 1.5) + perp * sweep * k
+                    delta = ad * k + perp * sweep * k
                 else
                     delta = rightD * ((isLeft and -1 or 1) * armLen * 2.5 * k)
                 end
@@ -6428,7 +6514,7 @@ local function getTarget(index, total, part, t)
             if yEnd < minY and delta.Y < -0.001 then
                 delta = delta * ((minY - shY) / delta.Y)
             end
-            if not stickTPose and not (tick() < stickSlapUntil and isLeft == stickArmIsLeft) and not (tick() < stickWaveUntil and isLeft ~= stickArmIsLeft) then
+            if not stickTPose and not (tick() < stickSlapUntil and isLeft == stickArmIsLeft) and not (tick() < stickWaveUntil and isLeft ~= stickArmIsLeft) and not (stickGunActive and isLeft == stickArmIsLeft) then
                 if isLeft then
                     local swingTh = math.sin(ph) * amp * 0.75
                     local swingVec = lookD * (math.sin(swingTh) * k * armLen)
@@ -7066,12 +7152,14 @@ local function getTarget(index, total, part, t)
             local perS   = math.ceil((total - nucN) / shells)
             local tilt   = (shell / shells) * math.pi + math.sin(t * 0.7 + shell * 1.7) * 0.35
             local a      = (iis / math.max(perS, 1)) * math.pi * 2 + t * (1.8 + shell * 0.5)
-            local r      = (formRadius * 1.7 + shell * 2.6) * scR
+            local r      = math.max((formRadius * 1.7 + shell * 2.6) * scR, 2)
+            local sax = math.max(scX, 2 / r)
+            local saz = math.max(scZ, 2 / r)
             local lx = math.cos(a) * r
             local lz = math.sin(a) * r
             local ly = lz * math.sin(tilt)
             lz = lz * math.cos(tilt)
-            return baseC + Vector3.new(lx * scX, ly, lz * scZ)
+            return baseC + Vector3.new(lx * sax, ly, lz * saz)
         end
         if strikeState ~= "idle" and strikeTarget ~= Vector3.zero then
             local age  = t - strikeStart
@@ -7507,6 +7595,86 @@ function minigunLand(p, silent)
     end
 end
 
+function stickGunPickTips()
+    local cands = {}
+    for _, p in ipairs(selectedParts) do
+        if p and p.Parent and not p.Anchored and not gunFlying[p] and not stickFaceSet[p] then
+            local u = nil
+            if stickBodyCount > 1 then
+                u = ((stickBodyRank[p] or 1) - 1) / (stickBodyCount - 1)
+            elseif stickBodyCount == 1 then
+                u = 0
+            end
+            if u and u >= 0.37 and u < 0.73 then
+                local match = stickArmIsLeft and u < 0.55 or (not stickArmIsLeft and u >= 0.55)
+                if match then table.insert(cands, {p = p, u = u}) end
+            end
+        end
+    end
+    table.sort(cands, function(a, b) return a.u > b.u end)
+    local tips = {}
+    for i = 1, math.min(2, #cands) do tips[#tips + 1] = cands[i].p end
+    return tips
+end
+function stickGunFire(tgt)
+    if tick() - (stickGunCool or 0) < 0.5 then return end
+    local tips = stickGunPickTips()
+    if #tips == 0 then return end
+    stickGunCool = tick()
+    if not tgt or tgt == Vector3.zero then tgt = currentMouseHit end
+    for _, p in ipairs(tips) do
+        if gunTouchConns[p] then pcall(function() gunTouchConns[p]:Disconnect() end) end
+        gunTouchConns[p] = nil
+        gunFlying[p] = true
+        gunFlyTgt[p] = tgt
+        gunFlyFrom[p] = p.Position
+        gunFlyT0[p] = tick()
+        local gdist = (tgt - p.Position).Magnitude
+        if gdist ~= gdist then gdist = 0 end
+        gunFlyTravel[p] = math.clamp(gdist / 400, 0.15, 0.8)
+        gunBoomed[p] = nil
+        pcall(sethiddenproperty, p, "NetworkIsSleeping", false)
+        pcall(reclaimAssembly, p)
+        local fr = getAssemblyRoot(p)
+        if fr ~= p then pcall(reclaimAssembly, fr) end
+        gunTouchConns[p] = p.Touched:Connect(function(hit)
+            if activeMode ~= "Stickman" then return end
+            if not gunFlying[p] then return end
+            if not hit or not hit.Parent or hit.Anchored then return end
+            if isVelImmune(hit) then return end
+            if hit == workspace.Terrain or hit == p then return end
+            if isSelected(hit) then return end
+            if isLocalPlayerPart(hit) then return end
+            pcall(function()
+                local d = hit.Position - p.Position
+                d = d.Magnitude > 0.001 and d.Unit or Vector3.new(0, 1, 0)
+                hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + d * 2000000 + Vector3.new(0, 700000, 0) + Vector3.new((math.random() - 0.5) * 120000, 0, (math.random() - 0.5) * 120000)
+                hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random() - 0.5) * 300000, (math.random() - 0.5) * 300000, (math.random() - 0.5) * 300000)
+            end)
+            pcall(function()
+                local pd = hit.Position - p.Position
+                pd = pd.Magnitude > 0.001 and pd.Unit or Vector3.new(0, 1, 0)
+                p.AssemblyLinearVelocity = pd * 350000 + Vector3.new(0, 120000, 0)
+                p.AssemblyAngularVelocity = Vector3.new((math.random() - 0.5) * 9e9, (math.random() - 0.5) * 9e9, (math.random() - 0.5) * 9e9)
+            end)
+        end)
+    end
+end
+function stickGunLand(p, silent)
+    if gunTouchConns[p] then pcall(function() gunTouchConns[p]:Disconnect() end) end
+    gunTouchConns[p] = nil
+    gunFlying[p] = nil
+    gunFlyTgt[p] = nil
+    gunFlyFrom[p] = nil
+    gunFlyT0[p] = nil
+    gunFlyTravel[p] = nil
+    gunBoomed[p] = nil
+    if not silent and p and p.Parent then
+        pcall(reclaimAssembly, p)
+        pcall(sethiddenproperty, p, "NetworkIsSleeping", false)
+    end
+end
+
 function dv2TargetValid(tr)
     if not (tr and tr.Parent and tr:IsA("BasePart")) then return false end
     local okA, a = pcall(function() return tr.Anchored end)
@@ -7544,6 +7712,8 @@ function partBallistic(part)
     if activeMode == "Sniper" and sniperTargetPos ~= Vector3.zero and (tick() - sniperFireTime) <= SNIPER_CYCLE then return true end
     if scytheState == "swing" then return true end
     if activeMode == "Stickman" and stickBeamActive then return true end
+    if gunFlying and gunFlying[part] then return true end
+    if activeMode == "Stickman" and tick() < stickSlapUntil then return true end
     if activeMode == "DroneV2" and dv2Target and dv2Target.Parent then
         local okV, valid = pcall(dv2TargetValid, dv2Target)
         if okV and valid then return true end
@@ -7575,6 +7745,7 @@ local function tickParts()
                             or (strikeState == "descend" or strikeState == "drill")
                             or (dv2Target ~= nil and dv2Target.Parent ~= nil)
                             or (next(minigunFlying) ~= nil)
+                            or (gunFlying and next(gunFlying) ~= nil)
                             or barrageActive
                             or railgunFired
                             or chainedActive
@@ -7697,7 +7868,24 @@ local function tickParts()
             pcall(function() gy = getGroundYAt(cRoot.Position.X, cRoot.Position.Z, hy, cRoot) end)
             if not gy then
                 pcall(function()
-                    cRoot.CFrame = CFrame.new(cRoot.Position.X, -200, cRoot.Position.Z)
+                    local dest = nil
+                    if #selectedParts > 0 then
+                        local fc = getFormationCenterTarget()
+                        if fc and fc.Y > -250 then
+                            local fgy = getGroundYAt(fc.X, fc.Z, fc.Y, cRoot)
+                            if fgy then
+                                dest = Vector3.new(fc.X, fgy + 5, fc.Z)
+                            else
+                                dest = fc + Vector3.new(0, 8, 0)
+                            end
+                        end
+                    end
+                    if dest then
+                        local cf = cRoot.CFrame
+                        cRoot.CFrame = CFrame.new(dest) * (cf - cf.Position)
+                    else
+                        cRoot.CFrame = CFrame.new(cRoot.Position.X, -200, cRoot.Position.Z)
+                    end
                     cRoot.AssemblyLinearVelocity = Vector3.zero
                     cRoot.AssemblyAngularVelocity = Vector3.zero
                 end)
@@ -8068,6 +8256,26 @@ if false and stickMagnetActive then
         end
     end
 
+    if next(gunFlying) then
+        local nowG = tick()
+        for p in pairs(gunFlying) do
+            if p and p.Parent then
+                local gtravel = gunFlyTravel[p] or 0.3
+                local gage = nowG - (gunFlyT0[p] or nowG)
+                if not gunBoomed[p] and gage >= gtravel then
+                    gunBoomed[p] = true
+                    local gbt = gunFlyTgt[p]
+                    if gbt then impactBurst(gbt, 10, 150000) end
+                end
+                if gage >= gtravel + GUN_TTL then
+                    stickGunLand(p, false)
+                end
+            else
+                stickGunLand(p, true)
+            end
+        end
+    end
+
     if activeMode=="Sniper" then
         local age = tick() - sniperFireTime
         if sniperBoomStage < 1 and age >= 0.3 then
@@ -8115,7 +8323,7 @@ if false and stickMagnetActive then
             for _, p in ipairs(selectedParts) do
                 if p and p.Parent and not p.Anchored then
                     pcall(reclaimAssembly, p)
-                    local _sdr = getAssemblyRoot(p)
+                    local _sdr = snapRoot(p)
                     if _sdr ~= p then pcall(reclaimAssembly, _sdr) end
                     pcall(sethiddenproperty, p, "NetworkIsSleeping", false)
                     if not sniperFiringD then
@@ -8175,7 +8383,6 @@ if false and stickMagnetActive then
             end
         end
     end
-
     if activeMode=="Blackhole" then
         ensureBlackholeConns()
         local now = tick()
@@ -8223,7 +8430,14 @@ if false and stickMagnetActive then
         for bIdx, bp in ipairs(selectedParts) do
             if bp and bp.Parent and not bp.Anchored then
                 local bu = bIdx / math.max(bTotal, 1)
-                if bu >= 0.37 and bu < 0.73 and (stickArmIsLeft and bu < 0.55 or (not stickArmIsLeft and bu >= 0.55)) then
+                if not stickFaceSet[bp] then
+                    if stickBodyCount > 1 then
+                        bu = ((stickBodyRank[bp] or 1) - 1) / (stickBodyCount - 1)
+                    elseif stickBodyCount == 1 then
+                        bu = 0
+                    end
+                end
+                if not stickFaceSet[bp] and bu >= 0.37 and bu < 0.73 and (stickArmIsLeft and bu < 0.55 or (not stickArmIsLeft and bu >= 0.55)) then
                     pcall(function()
                         local s1 = (bIdx % 2 == 0) and 1 or -1
                         local s2 = (bIdx % 3 == 0) and -1 or 1
@@ -8331,7 +8545,7 @@ if false and stickMagnetActive then
                         unfreezeFrom[part] = part.Position
                         pcall(function() part.RootPriority = 127 end)
                         pcall(reclaimAssembly, part)
-                        local _ur = getAssemblyRoot(part)
+                        local _ur = snapRoot(part)
                         if _ur ~= part then pcall(reclaimAssembly, _ur) end
                         pcall(function()
                             part.AssemblyLinearVelocity = netHoldVelocity()
@@ -8367,7 +8581,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                                 part.AssemblyLinearVelocity = Vector3.new(50000, 50000, 50000)
                                 part.AssemblyLinearVelocity = ovb
                                 pcall(reclaimAssembly, part)
-                                local rrb = getAssemblyRoot(part)
+                                local rrb = snapRoot(part)
                                 if rrb ~= part then pcall(reclaimAssembly, rrb) end
                             else
                                 pcall(reclaimAssembly, part)
@@ -8403,7 +8617,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                             do
                                 if failing then
                                     pcall(reclaimAssembly, part)
-                                    local _rr = getAssemblyRoot(part)
+                                    local _rr = snapRoot(part)
                                     if _rr ~= part then pcall(reclaimAssembly, _rr) end
                                     pcall(function()
                                         local ov2 = part.AssemblyLinearVelocity
@@ -8422,9 +8636,9 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         unfreezeBoostStart[part] = nil
                         pcall(function()
                             if strengthenParts then
-                                rampDensity(part, strengthenDensity, 0.3, 0.5, 3)
+                                rampDensity(part, strengthenDensity, 0.3, 0.5, 6)
                             else
-                                rampDensity(part, 0.001, 0, 0, 3)
+                                rampDensity(part, 0.001, 0, 0, 6)
                             end
                         end)
                         unfreezeFrom[part] = nil
@@ -8599,7 +8813,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                             end)
                         end
                         pcall(reclaimAssembly, part)
-                        local _dv2r = getAssemblyRoot(part)
+                        local _dv2r = snapRoot(part)
                         if _dv2r ~= part then pcall(reclaimAssembly, _dv2r) end
                         local s1 = (i % 2 == 0) and 1 or -1
                         local s2 = (i % 3 == 0) and -1 or 1
@@ -8727,7 +8941,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                             pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
                         end
                         pcall(reclaimAssembly, part)
-                        local _sr = getAssemblyRoot(part)
+                        local _sr = snapRoot(part)
                         if _sr ~= part then pcall(reclaimAssembly, _sr) end
                     end)
                 elseif isCube then
@@ -8748,6 +8962,19 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         part.AssemblyLinearVelocity = ovC
                     end)
                 elseif isMG and minigunFlying[part] then
+                    pcall(function()
+                        local ap = getNetAP(part); if ap then ap.Enabled = true end
+                        local ao = getNetAO(part); if ao then ao.Enabled = false end
+                        if not partTargets[part] then partTargets[part] = {} end
+                        partTargets[part].position = tgt
+                        partTargets[part].responsiveness = getMoveResponsiveness(50)
+                        syncAlignTarget(part, partTargets[part])
+                        part.AssemblyAngularVelocity = Vector3.new(
+                            (math.random() - 0.5) * 1.5e6,
+                            (math.random() - 0.5) * 1.5e6,
+                            (math.random() - 0.5) * 1.5e6)
+                    end)
+                elseif gunFlying and gunFlying[part] then
                     pcall(function()
                         local ap = getNetAP(part); if ap then ap.Enabled = true end
                         local ao = getNetAO(part); if ao then ao.Enabled = false end
@@ -8908,7 +9135,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         if ao then ao.MaxTorque = alignForceFor(part); ao.MaxAngularVelocity = math.huge; ao.Responsiveness = math.huge; ao.Enabled=true end
                         part.AssemblyLinearVelocity = Vector3.new(17.5555555,17.5555555,17.5555555)
                         pcall(reclaimAssembly, part)
-                        local _rrg = getAssemblyRoot(part)
+                        local _rrg = snapRoot(part)
                         if _rrg ~= part then pcall(reclaimAssembly, _rrg) end
                         pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
                     end)
@@ -8937,7 +9164,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         end
                         pcall(linkNoCollide, part)
                         pcall(reclaimAssembly, part)
-                        local _rrb = getAssemblyRoot(part)
+                        local _rrb = snapRoot(part)
                         if _rrb ~= part then pcall(reclaimAssembly, _rrb) end
                         pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
                     end)
@@ -9382,6 +9609,9 @@ do function unloadScript()
 
     stickGrabActive = false
     stickBeamActive = false
+    stickGunActive = false
+    for p in pairs(gunFlying) do stickGunLand(p, true) end
+    gunTouchConns = {}
     stickMagnetActive = false
     stickDanceActive = false
     stickCrawlActive = false
@@ -9434,8 +9664,54 @@ do function unloadScript()
     _G._getNPCPickActive = nil
 
     pcall(function() releaseNPC() end)
+    pcall(dropSpcPart, false)
+    pcall(setFly, false)
+    pcall(setClip, false)
+    pcall(function()
+        if rotDrag and rotDrag.active then endRotDrag() end
+    end)
+    pcall(function() RunService:UnbindFromRenderStep("CatalystRotCam") end)
     pcall(function() clearDrawDots() end)
     pcall(function() clearSelection(false) end)
+    pcall(function()
+        local ok, descendants = pcall(function() return workspace:GetDescendants() end)
+        if ok and type(descendants) == "table" then
+            for _, inst in ipairs(descendants) do
+                local ours = false
+                pcall(function()
+                    if inst:IsA("BasePart") then
+                        local sel = selectedSetCache and selectedSetCache[inst]
+                        if not sel then
+                            for _, s in ipairs(selectedParts) do
+                                if s == inst then sel = true break end
+                            end
+                        end
+                        if not sel then
+                            if inst:FindFirstChild("NetAttach") or inst:FindFirstChild("OwnershipBV") or inst:FindFirstChild("OwnershipBG") or inst:FindFirstChild("OwnershipBAV") or inst:FindFirstChild("ServerResponse") or inst:FindFirstChild("NetBP") or inst:FindFirstChild("NetBG") then
+                                ours = true
+                            end
+                        end
+                    end
+                end)
+                if ours then
+                    pcall(cleanupPartState, inst, false)
+                    pcall(function()
+                        local ch = LP.Character
+                        for _, ncc in ipairs(inst:GetChildren()) do
+                            if ncc:IsA("NoCollisionConstraint") and ch and ncc.Part1 and ncc.Part1:IsDescendantOf(ch) then
+                                ncc:Destroy()
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+        for _, o in ipairs(workspace:GetChildren()) do
+            pcall(function()
+                if o.Name == "CatalystSelectionProxy" then o:Destroy() end
+            end)
+        end
+    end)
 
     for part, conn in pairs(partTouchConns) do
         pcall(function() conn:Disconnect() end)
@@ -9658,6 +9934,7 @@ function mkSlider(parent,ltext,lo,hi,def,order,onChange,step)
     local lbl=mkL({Size=UDim2.new(1,-64,0,16),Position=UDim2.new(0,8,0,3),
         Text=ltext,TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,
         TextXAlignment=Enum.TextXAlignment.Left},wrap)
+    lbl.Active = true
     local valBox=Instance.new("TextBox")
     valBox.Size=UDim2.new(0,56,0,16); valBox.Position=UDim2.new(1,-64,0,3)
     valBox.BackgroundTransparency=1; valBox.TextColor3=PAL.T1; valBox.TextSize=11
@@ -9741,6 +10018,18 @@ function mkSlider(parent,ltext,lo,hi,def,order,onChange,step)
         showVal(val, typing)
         lastMouseX=i.Position.X
     end))
+    local lastLblTap = 0
+    lbl.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            local now = tick()
+            if now - lastLblTap < 0.35 then
+                lastLblTap = 0
+                showVal(roundVal(def))
+            else
+                lastLblTap = now
+            end
+        end
+    end)
     return wrap
 end
 
@@ -10582,9 +10871,9 @@ function buildPartsPanel(Cont, mPanels)
             Crown="Crown\nTarget: Around Player (rp) - spiked ring + inner ring\nControls: Auto around you\nLook: parts form two rings above your head that slowly turn - an outer ring with every other part spiked outward, plus a smaller flat inner ring\nMath: isSpike=(idx%2==0) a=spoke*2pi+t*0.24 r=formRadius outer 2x inner 0.65 y 10*scY /7*scY",
             Swarm="Swarm\nTarget: Formation Target - wander + jitter\nControls: Move Target\nLook: parts drift in slow wandering loops around the Target with a fast angry buzz layered on top\nMath: wander sin*formRadius + jitter sin*18*0.7",
             Minigun="Minigun\nRotary barrels fire streams at Formation Target\nControls: Auto cycles barrels, MG Fire Rate shots/sec, MG Spread cone\nLook: parts arrange as spinning gun barrels on a ring that take turns spitting streams at the Target, feed lines trailing behind each muzzle\nMath: B=2-5 barrels on rotating ring, feed lines behind muzzle, 0.22s flights, touch 180k on contact",
-            Satellite="Satellite\nTarget: High orbit 14*scY around player, on click fire cluster to Formation Target\nControls: Click to set satTarget (mouse)\nLook: parts idle in a high ring far above you; on click a cluster detaches, flies to the Target and detonates, then comes home\nMath: idle ring 3.5*scX high 14*scY, fire vel 4000+ burst 350000, touch 25k, TTL 3s",
+            Satellite="Satellite\nTarget: High orbit 14*scY around player, on click fire cluster to Formation Target\nControls: Click to set satTarget (mouse)\nLook: parts idle in a high ring far above you; on click a cluster detaches, flies to the Target and detonates, then comes home\nMath: idle ring 3.5*scX min 2 high 14*scY, fire vel 4000+ burst 350000, touch 25k, TTL 3s",
             Seek="Seek\nTarget: Nearest NPC within 200 else Formation Target\nControls: Auto chase\nLook: parts pile onto the nearest NPC within 200 studs and ride it around; with no NPC nearby they cluster at the Target\nMath: getNearestNPC 200 if found -> npcRoot+offset*0.5 else Target+offset",
-            Stickman="Stickman/Billy\nFull stick figure with face, walk, arms, beam, dance, crawl\nTarget: Around Player\nControls:\n Move = walk (walkPhase+=dt*spd*0.35*sgn)\n J = switch arm\n T = TPose\n P = slap 0.5s burst\n C = beam hold\n Y = wave 1.9s\n U = dance toggle\n Z = crawl toggle\n Q = face mode 0-4\n Mouse = aim arm\nLook: parts assemble into a walking stick figure (head band, torso, arms, legs by index order) that strides with your movement, aims an arm at your mouse, and can T-pose, slap, beam, wave, dance, or crawl; C stretches the aimed arm into a spinning fling lance shoulder-to-mouse that detonates on contact\nMath:\n walkPhase+=dt*spd*0.35*sgn\n u head 0.10-0.22 torso 0.22-0.37 arms 0.37-0.73 legs 0.73-1\n head/face tilt to mouse, legs sin/cos walk, face 10 parts eyes/brows/mouth, beam k=(u-lo)/(hi-lo) lerp shoulder->target spin 9e9 touch 2M+self 350k",
+            Stickman="Stickman/Billy\nFull stick figure with face, walk, arms, beam, dance, crawl\nTarget: Around Player\nControls:\n Move = walk (walkPhase+=dt*spd*0.35*sgn)\n J = switch arm\n T = TPose\n P = slap 0.5s burst reaching mouse\n C = beam hold\n Y = wave 1.9s\n U = dance (arm flail)\n Z = spider toggle (head core, 8 legs)\n Q = face mode 0-4\n X hold = spiral aim, click = fast fire + 2.4s grind\n Mouse = aim arm\nLook: parts assemble into a walking stick figure (head band, torso, arms, legs by index order) that strides with your movement, aims an arm at your mouse, and can T-pose, slap, beam, wave, dance, or spider-crawl; C stretches the aimed arm into a spinning fling lance shoulder-to-mouse that detonates on contact\nMath:\n walkPhase+=dt*spd*0.35*sgn\n u head 0.10-0.22 torso 0.22-0.37 arms 0.37-0.73 legs 0.73-1\n head/face tilt to mouse, legs sin/cos walk, face 10 parts eyes/brows/mouth, beam k=(u-lo)/(hi-lo) lerp shoulder->target spin 9e9 touch 3M+self 500k",
             Slinky="Slinky\nTarget: Mouse trail history (like Comet but spaced by formRadius)\nControls: Move mouse to leave slinkyHistory\nLook: parts string out along your recent mouse trail like a slinky, spaced by formRadius - wiggle the mouse to see it snake\nMath: step=index*(formRadius*0.35+1.5) idx=#history-step pos=history[idx]+off*0.35",
             Fountain="Fountain\nTarget: Formation Target - parabolic jets up from Target\nControls: Move Target\nLook: parts loop endlessly upward in fountain jets from the Target, arcing over and falling back, staggered so the flow never gaps\nMath: jet=(t*4.4+ratio*1.8)%1 h=sin(jet*pi)*formRadius*2.8 +1.5*scY off*formRadius*0.35",
             Bounce="Bounce\nTarget: Lerp between Formation Target and player 7*scY\nControls: Auto\nLook: parts shuttle back and forth between the Target and a point above you, each on a delayed phase so they stream both ways\nMath: phase=t*2.8+idx*0.12 alpha=phase<1?phase:2-phase pos=Target:Lerp(rp+7*scY,alpha)",
@@ -10609,7 +10898,7 @@ function buildPartsPanel(Cont, mPanels)
             Lightning="Lightning\nTarget: Cloud 34 above player to Formation Target bolt\nControls: Click to set lightningTarget\nLook: parts gather as a crackling storm cloud high above you; on click a jagged bolt lances to the Target, then the blast ring expands\nMath: segs 8 bolt lerp cloud->target + rand*14 stagger ratio*0.08 prog=(age-stagger)/0.35 else explode ir=2+age*9",
             Sniper="Sniper\nTarget: Ring 8*scY in front of face, sequential fire to Formation Target\nControls: Click to set sniperTargetPos (hold to charge Railgun-style, but Sniper fires on click)\nLook: parts idle as a spinning crosshair + outer ring in front of your face; on click they converge onto the Target one after another, churning, then burst and fly home\nMath: ringR=5*scR ca=(idx/total)*2pi+t*2.4 slotP=center+right*cos+up*sin delay=idx/total*0.35 prog lerp slot->target 0.3 explode 1.2",
             Bridge="Bridge\nTarget: Formation Target ground - two-click bridge\nControls: Click A then B to build (arch), third click reset\nLook: click two ground points and parts lay themselves into an arched bridge between them (extra parts widen it side-by-side), third click starts over\nMath: dir=(B-A).Unit sideU=-dir.Z,0,dir.X arch=sin(u*pi)*min(D*0.08,3.5) y=g+arch+1.4 overflow fans across width",
-            Strike="Strike\nTarget: Idle atom around player (10% nucleus +4 shells), on click descend to Formation Target\nControls: Click to set strikeTarget\nLook: parts idle as a mini-atom above you; on click the whole thing plunges onto the Target, drills in spinning circles, then floats home\nMath: idle atom, descend lerp 70->0 prog^2 + spin rr 2.5*(1-prog) drill circle ir 0.8+rand*0.35 return lerp",
+            Strike="Strike\nTarget: Idle atom around player (10% nucleus +4 shells), on click descend to Formation Target\nControls: Click to set strikeTarget\nLook: parts idle as a mini-atom above you; on click the whole thing plunges onto the Target, drills in spinning circles, then floats home\nMath: idle atom shells min 2, descend lerp 70->0 prog^2 + spin rr 2.5*(1-prog) drill circle ir 0.8+rand*0.35 return lerp",
             Boomerang="Boomerang\nTarget: Disc home 7*scY around player, on click boomerang to Formation Target +42 extra\nControls: Click to set boomerangTarget\nLook: parts idle as a flat spinning disc beside you; on click it flings out past the Target and curves home like a boomerang\nMath: u=clamp((t-start)/1.45) D=|target-origin| center=origin+dir*s*(D+min*0.48) side -D*0.16 tilt 76->14 spin 22 ringR 0.45+ring*0.32",
             Text="Text\nTarget: Vertical wall 6 studs in front of Player facing outwards (world up, not Formation Target) - 5x7 font A-Z0-9 !?+-= Uppercase, spacing 2.2/4.2 adapts to avg part size (avg*0.78+0.22), long parts auto-assigned to stick letters (I/L/T) longest run first, parts rotated Z to match stroke 0/90/45/135 (C less closed: middle rows open)\nControls: Type in top bar (live, filtered [^%-A-Z0-9 !?+=])\nLook: parts spell your typed text as a floating letter wall in front of you, longest parts auto-placed on long strokes (I/L/T), each rotated to match its stroke angle\nMath: points buildTextPointsData angle via 8-neighbor h/v/diag runLen, textScale= (0.78*avg+0.22)*(formRadius/7*0.38+0.62)*(maxSc*0.38+0.62)*1.1*0.92, pos=origin+right*X+up*(Y-midY)+jitter",
             Scythe="Scythe\nTarget: Idle arc over head (hilt low-left, middle overhead, blade diving right), swing at Formation Target\nControls: Click to swing through and back 2.4s (no cooldown) fling 2000000+700000 strike-scale\nLook: the scythe arcs over your head like a rainbow — hilt down-left, blade hooking down-right; on click it sweeps sideways through the Target and back, grinding with drill pulses\nMath: heart-frame, yaw-only frame (immune to look up/down), idle origin left H*0.6 + up 2, base yaw +90 blade-right, idle pitch-lean 52, swing roll-90 flat fan -85->+85->back ping-pong, pulses 18/1.8M+30/900k per 0.15s churn 3e6",
@@ -10660,6 +10949,17 @@ function buildPartsPanel(Cont, mPanels)
                     local disp = string.lower(mn == "Stickman" and "billy" or mn)
                     mb.Visible = (string.find(disp, q, 1, true) ~= nil)
                         or (string.find(cat, q, 1, true) ~= nil)
+                end
+            end
+        end)
+        searchBox.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                for _, mn in ipairs(MODES) do
+                    local mb2 = modeBtns[mn]
+                    if mb2 and mb2.Visible then
+                        setActiveMode(mn)
+                        break
+                    end
                 end
             end
         end)
@@ -11257,8 +11557,6 @@ mkSlider(modSF,"Form Offset Y",-20,20,formOffsetY,14,function(v) formOffsetY=v e
 
         mkDiv(toolP,33)
         mkSec("MOVEMENT", toolP, 34)
-        mkL({Size=UDim2.new(1,0,0,14),Text="fly: WASD move - E/Q up/down - no fall damage while on",
-            TextColor3=PAL.T3,TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=35},toolP)
         local flyBtn=mkToggleBtn({Size=UDim2.new(1,0,0,28),BackgroundColor3=PAL.B_DEF,
             Text="Fly: OFF",TextColor3=PAL.T1,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=36},toolP,
             function() return flyOn end)
@@ -12017,6 +12315,20 @@ reg(UserInputService.InputBegan:Connect(function(inp, gameProcessed)
             buttonKeybinds[keybindSettingButton].conn:Disconnect()
             buttonKeybinds[keybindSettingButton] = nil
         end
+        local clash = nil
+        pcall(function()
+            for btn, rec in pairs(buttonKeybinds) do
+                if btn ~= keybindSettingButton and rec and rec.key == key then
+                    clash = rec.originalText or btn.Text
+                end
+            end
+        end)
+        if clash then
+            resetButtonAppearance(keybindSettingButton)
+            keybindSettingButton = nil
+            toast("[" .. key.Name .. "] already on " .. tostring(clash))
+            return
+        end
         bindKeyToButton(keybindSettingButton, key)
         local function fireButtonLogic(button)
             if button and _G.modeButtons then
@@ -12708,6 +13020,12 @@ reg(Mouse.Button1Down:Connect(function()
         end
     end
 
+    if activeMode=="Stickman" and stickGunActive then
+        if #selectedParts > 0 then
+            pcall(stickGunFire, currentMouseHit)
+        end
+        return
+    end
     if activeMode=="Stickman" then
         stickGrabActive = true
     end
@@ -13193,11 +13511,15 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                 if isSelected(hit) then return end
                 if isLocalPlayerPart(hit) then return end
                 pcall(function()
-                    p.AssemblyAngularVelocity = Vector3.new(
-                        (math.random() - 0.5) * 9e10,
-                        (math.random() - 0.5) * 9e10,
-                        (math.random() - 0.5) * 9e10
-                    )
+                    local si = table.find(selectedParts, p) or 0
+                    local r1 = (si % 2 == 0) and 1 or -1
+                    local r2 = (si % 3 == 0) and -1 or 1
+                    local r3 = (si % 5 == 0) and -1 or 1
+                    p.AssemblyAngularVelocity = Vector3.new(r1 * 9e10, r2 * 9e10, r3 * 9e10)
+                    local sdiff = hit.Position - p.Position
+                    local sdir = sdiff.Magnitude > 0.001 and sdiff.Unit or Vector3.new(0, 1, 0)
+                    hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + sdir * 1000000 + Vector3.new(0, 400000, 0)
+                    p.AssemblyLinearVelocity = p.AssemblyLinearVelocity + sdir * 350000 + Vector3.new(0, 120000, 0)
                 end)
             end)
         end
@@ -13212,10 +13534,17 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
             stickBeamConns = {}
             local total = #selectedParts
             for idx, p in ipairs(selectedParts) do
-                local u = idx / total
+                local u = (idx - 1) / math.max(total - 1, 1)
+                if not stickFaceSet[p] then
+                    if stickBodyCount > 1 then
+                        u = ((stickBodyRank[p] or 1) - 1) / (stickBodyCount - 1)
+                    elseif stickBodyCount == 1 then
+                        u = 0
+                    end
+                end
                 local isArm = u >= 0.37 and u < 0.73
                 local armMatch = stickArmIsLeft and u < 0.55 or (not stickArmIsLeft and u >= 0.55)
-                if isArm and armMatch then
+                if isArm and armMatch and not stickFaceSet[p] then
                     stickBeamConns[p] = p.Touched:Connect(function(hit)
                         if not hit or not hit.Parent or hit.Anchored then return end
                         if isVelImmune(hit) then return end
@@ -13223,20 +13552,20 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                         if isSelected(hit) then return end
                         if isLocalPlayerPart(hit) then return end
                         pcall(function()
-                            p.AssemblyAngularVelocity = Vector3.new(
-                                (math.random() - 0.5) * 9e12,
-                                (math.random() - 0.5) * 9e12,
-                                (math.random() - 0.5) * 9e12
-                            )
+                            local bi = table.find(selectedParts, p) or 0
+                            local q1 = (bi % 2 == 0) and 1 or -1
+                            local q2 = (bi % 3 == 0) and -1 or 1
+                            local q3 = (bi % 5 == 0) and -1 or 1
+                            p.AssemblyAngularVelocity = Vector3.new(q1 * 9e12, q2 * 9e12, q3 * 9e12)
                             local ddiff = hit.Position - p.Position
                             local dir = ddiff.Magnitude > 0.001 and ddiff.Unit or Vector3.new(0, 1, 0)
-                            local flingPower = 2000000
-                            hit.AssemblyLinearVelocity = dir * flingPower + Vector3.new(0, 600000, 0)
-                            p.AssemblyLinearVelocity = dir * 350000 + Vector3.new(0, 120000, 0)
+                            local flingPower = 3000000
+                            hit.AssemblyLinearVelocity = dir * flingPower + Vector3.new(0, 900000, 0)
+                            p.AssemblyLinearVelocity = dir * 500000 + Vector3.new(0, 150000, 0)
                             for i = 1, 5 do
                                 task.delay(i * 0.02, function()
                                     if hit and hit.Parent then
-                                        hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir * (flingPower * 0.5) + Vector3.new(0, 200000, 0)
+                                        hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir * (flingPower * 0.75) + Vector3.new(0, 300000, 0)
                                     end
                                 end)
                             end
@@ -13267,6 +13596,14 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
     end
     if inp.KeyCode==Enum.KeyCode.Q and activeMode=="Stickman" then
         stickFaceMode = (stickFaceMode + 1) % 5
+    end
+    if inp.KeyCode==Enum.KeyCode.X and activeMode=="Stickman" then
+        stickGunActive = true
+    end
+end))
+reg(UserInputService.InputEnded:Connect(function(inp)
+    if inp.KeyCode==Enum.KeyCode.X then
+        stickGunActive = false
     end
 end))
 
@@ -13408,13 +13745,25 @@ reg(RunService.Heartbeat:Connect(function()
         local part = rotDrag.part
         if not part.Parent or not isSelected(part) then
             endRotDrag()
-        elseif math.abs(rotDrag.yaw) + math.abs(rotDrag.pitch) + math.abs(rotDrag.roll) > 0.0001 then
+        else
             pcall(function()
 pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                 pcall(reclaimAssembly, part)
                 local rr2 = getAssemblyRoot(part)
                 if rr2 ~= part then pcall(reclaimAssembly, rr2) end
                 pcall(linkNoCollide, part)
+                local freshOwned = true
+                pcall(function() freshOwned = canDrivePart(part) end)
+                if not freshOwned then
+                    pcall(function()
+                        local ov = part.AssemblyLinearVelocity
+                        part.AssemblyLinearVelocity = Vector3.new(50000, 50000, 50000)
+                        part.AssemblyLinearVelocity = ov
+                    end)
+                end
+            end)
+            if math.abs(rotDrag.yaw) + math.abs(rotDrag.pitch) + math.abs(rotDrag.roll) > 0.0001 then
+            pcall(function()
                 local yawRad = math.rad(rotDrag.yaw)
                 local pitchRad = math.rad(rotDrag.pitch)
                 local rollRad = math.rad(rotDrag.roll)
@@ -13432,9 +13781,6 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                     local okD, ownedD = pcall(canDrivePart, part)
                     if okD and ownedD then
                         part.CFrame = wantCF
-                    else
-                        rotDrag.wantRot = (part.CFrame - pos)
-                        wantCF = part.CFrame
                     end
                 end
                 part.AssemblyAngularVelocity = Vector3.zero
@@ -13460,6 +13806,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
             rotDrag.yaw = 0
             rotDrag.pitch = 0
             rotDrag.roll = 0
+            end
         end
     end
 
@@ -13601,4 +13948,4 @@ wait(2)
 print("catalyst: salami edition")
 wait(1)
 warn("CATALYST ON TOP!!!!")
---i am the scary lion
+-- i am the scary lion!
