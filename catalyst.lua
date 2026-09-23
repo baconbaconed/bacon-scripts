@@ -1527,14 +1527,27 @@ sizeFilterSize = Vector3.new(4, 4, 4)
 function sizeFilterPass(part)
     if not sizeFilterOn then return true end
     if not (part and part.Parent and part:IsA("BasePart")) then return false end
-    local okS, sz = pcall(function() return part.Size end)
-    if not (okS and sz) then return false end
     local f = sizeFilterSize
     if typeof(f) ~= "Vector3" then return true end
+    local sx, sy, sz, n = 0, 0, 0, 0
+    local okM, mates = pcall(function() return part:GetConnectedParts(true) end)
+    if okM and type(mates) == "table" then
+        for _, m in ipairs(mates) do
+            if n >= 500 then break end
+            local okS, s = pcall(function() return m.Size end)
+            if okS and s then sx, sy, sz, n = sx + s.X, sy + s.Y, sz + s.Z, n + 1 end
+        end
+    end
+    if n == 0 then
+        local okS, s = pcall(function() return part.Size end)
+        if not (okS and s) then return false end
+        sx, sy, sz, n = s.X, s.Y, s.Z, 1
+    end
+    local ax, ay, az = sx / n, sy / n, sz / n
     if sizeFilterBigger then
-        return sz.X >= f.X and sz.Y >= f.Y and sz.Z >= f.Z
+        return ax >= f.X and ay >= f.Y and az >= f.Z
     else
-        return sz.X <= f.X and sz.Y <= f.Y and sz.Z <= f.Z
+        return ax <= f.X and ay <= f.Y and az <= f.Z
     end
 end
 flyOn = false
@@ -3610,6 +3623,13 @@ local function clearModeState(prevMode, nextMode)
     if prevMode == "Sniper" and nextMode ~= "Sniper" then
         for p, c in pairs(sniperTouchConns) do pcall(function() c:Disconnect() end) end
         sniperTouchConns = {}
+        for _, p in ipairs(selectedParts) do
+            pcall(function()
+                if p and p.Parent and partCollisionState[p] ~= nil then
+                    p.CanCollide = partCollisionState[p]
+                end
+            end)
+        end
     end
     if prevMode == "Boomerang" and nextMode ~= "Boomerang" then
         boomerangActive = false
@@ -6382,7 +6402,7 @@ local function getTarget(index, total, part, t)
                 pz = mouthZBase + tiltFZ * 0.7
             end
         elseif stickCrawlActive then
-            local spyBody = 2.0
+            local spyBody = 7.0
             if stickFaceSet[part] then
                 local fi = index or 0
                 px = (((fi % 7) - 3) * 0.35) / math.max(scX, 0.001)
@@ -6403,14 +6423,34 @@ local function getTarget(index, total, part, t)
                 local footGY = getGroundYAt(footXZ.X, footXZ.Z, originS.Y, part)
                 if footGY == nil then footGY = originS.Y - 3 end
                 local spreadR = spreadBase + math.max(0, hipW.Y - footGY) * 0.35
-                footXZ = originS + legD * spreadR
-                local footW = Vector3.new(footXZ.X, footGY + 0.3, footXZ.Z)
-                local kneeW = hipW:Lerp(footW, 0.5) + Vector3.new(0, spreadR * 0.3 + 1.5, 0)
+                local footW = Vector3.new(originS.X + legD.X * spreadR, footGY + 0.3, originS.Z + legD.Z * spreadR)
+                local footN = Vector3.yAxis
+                local toFoot = footW - hipW
+                if toFoot.Magnitude > 0.01 then
+                    _groundRayParams.FilterDescendantsInstances = getMouseExcludeList()
+                    local hitW = nil
+                    pcall(function()
+                        hitW = workspace:Raycast(hipW, toFoot.Unit * (toFoot.Magnitude + 1.5), _groundRayParams)
+                    end)
+                    if hitW and hitW.Position and hitW.Normal.Magnitude > 0.01 then
+                        footN = hitW.Normal.Unit
+                        footW = hitW.Position + footN * 0.4
+                    end
+                end
+                local kneeD = footW - hipW
+                local kneeL = kneeD.Magnitude
+                local kneeH = hipW
+                if kneeL > 0.01 then
+                    local kneeOut = Vector3.new(kneeD.X, 0, kneeD.Z)
+                    if kneeOut.Magnitude < 0.01 then kneeOut = legD else kneeOut = kneeOut.Unit end
+                    kneeH = hipW + Vector3.new(0, kneeL * 0.45, 0) + kneeOut * (kneeL * 0.3)
+                end
+                local kneeW = kneeH + footN * (spreadR * 0.1)
                 local stepPh = t * 9 + leg * math.pi
                 local stepAmp = math.clamp((walkF - 0.05) / 0.95, 0, 1)
                 local stride = spreadR * 0.18 * stepAmp
                 local liftAmp = (spreadR * 0.12 + 0.6) * stepAmp
-                footW = footW + legD * (math.sin(stepPh) * stride) + Vector3.new(0, math.max(0, math.sin(stepPh + math.pi * 0.5)) ^ 1.5 * liftAmp, 0)
+                footW = footW + legD * (math.sin(stepPh) * stride) + footN * (math.max(0, math.sin(stepPh + math.pi * 0.5)) ^ 1.5 * liftAmp)
                 local posW = nil
                 if seg < 0.5 then
                     posW = hipW:Lerp(kneeW, seg * 2)
@@ -7111,14 +7151,22 @@ local function getTarget(index, total, part, t)
             local dv    = boomerangTarget - boomerangOrigin
             local D     = dv.Magnitude
             local dirU  = D > 0.01 and dv.Unit or Vector3.new(0, 0, -1)
-            local sideU = Vector3.yAxis:Cross(dirU)
-            local s     = math.sin(u * math.pi)
-            centerB = boomerangOrigin
-                + dirU * (s * (D + math.min(D * 0.48, 42)))
-                + sideU * (math.sin(u * math.pi * 2) * -D * 0.16)
-                + Vector3.new(0, math.sin(u * math.pi) * 6, 0)
-            travelD = dirU * (u < 0.5 and 1 or -1)
-            tiltB   = 76
+            local dirH  = Vector3.new(dirU.X, 0, dirU.Z)
+            if dirH.Magnitude < 0.01 then dirH = Vector3.new(0, 0, -1) else dirH = dirH.Unit end
+            local sideU = Vector3.yAxis:Cross(dirH)
+            if sideU.Magnitude < 0.01 then sideU = Vector3.new(1, 0, 0) else sideU = sideU.Unit end
+            local hook  = D * 0.2
+            if u < 0.5 then
+                local e = u * 2
+                e = e * e * (3 - 2 * e)
+                centerB = boomerangOrigin:Lerp(boomerangTarget, e) + Vector3.new(0, math.sin(e * math.pi) * 4, 0)
+            else
+                local e = (u - 0.5) * 2
+                e = e * e * (3 - 2 * e)
+                centerB = boomerangTarget:Lerp(boomerangOrigin, e) + sideU * (math.sin(e * math.pi) * hook) + Vector3.new(0, math.sin(e * math.pi) * 4, 0)
+            end
+            travelD = (u < 0.5 and dirH or -dirH)
+            tiltB   = 14
         else
             centerB = homeC + Vector3.new(
                 math.sin(t * 0.9) * 1.2,
@@ -7545,7 +7593,7 @@ local function ensureBlackholeConns()
                         local dir = hit.Position - p.Position
                         dir = dir.Magnitude > 0.001 and dir.Unit or Vector3.new(0, 1, 0)
                         hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*200000 + Vector3.new(0, 70000, 0) + Vector3.new((math.random()-0.5)*12000, 0, (math.random()-0.5)*12000)
-                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*30000, (math.random()-0.5)*30000, (math.random()-0.5)*30000)
+                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*1000000, (math.random()-0.5)*1000000, (math.random()-0.5)*1000000)
                     end)
                 end)
             end
@@ -7577,7 +7625,7 @@ function minigunLaunch(p, tgt)
             local d = hit.Position - p.Position
             d = d.Magnitude > 0.001 and d.Unit or Vector3.new(0, 1, 0)
             hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + d*180000 + Vector3.new(0, 60000, 0)
-            hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*30000, (math.random()-0.5)*30000, (math.random()-0.5)*30000)
+            hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*1000000, (math.random()-0.5)*1000000, (math.random()-0.5)*1000000)
         end)
     end)
 end
@@ -7649,13 +7697,13 @@ function stickGunFire(tgt)
                 local d = hit.Position - p.Position
                 d = d.Magnitude > 0.001 and d.Unit or Vector3.new(0, 1, 0)
                 hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + d * 2000000 + Vector3.new(0, 700000, 0) + Vector3.new((math.random() - 0.5) * 120000, 0, (math.random() - 0.5) * 120000)
-                hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random() - 0.5) * 300000, (math.random() - 0.5) * 300000, (math.random() - 0.5) * 300000)
+                hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random() - 0.5) * 2500000, (math.random() - 0.5) * 2500000, (math.random() - 0.5) * 2500000)
             end)
             pcall(function()
                 local pd = hit.Position - p.Position
                 pd = pd.Magnitude > 0.001 and pd.Unit or Vector3.new(0, 1, 0)
                 p.AssemblyLinearVelocity = pd * 350000 + Vector3.new(0, 120000, 0)
-                p.AssemblyAngularVelocity = Vector3.new((math.random() - 0.5) * 9e9, (math.random() - 0.5) * 9e9, (math.random() - 0.5) * 9e9)
+                p.AssemblyAngularVelocity = Vector3.new((math.random() - 0.5) * 9e18, (math.random() - 0.5) * 9e18, (math.random() - 0.5) * 9e18)
             end)
         end)
     end
@@ -7863,13 +7911,60 @@ local function tickParts()
     if cRoot and cRoot.Parent then
         local hy = nil
         pcall(function() hy = cRoot.Position.Y end)
-        if hy and hy < -250 then
+        if hy and hy > -200 then
+            pcall(function()
+                local nowS = tick()
+                if (nowS - (voidSafeAt or 0)) > 0.5 then
+                    voidSafePos = cRoot.Position
+                    voidSafeAt = nowS
+                end
+            end)
+        end
+        if hy and hy < -240 then
             local gy = nil
             pcall(function() gy = getGroundYAt(cRoot.Position.X, cRoot.Position.Z, hy, cRoot) end)
-            if not gy then
+            if gy then
+                local nowV = tick()
+                local moved = true
+                pcall(function()
+                    if voidStuckPos then
+                        moved = (cRoot.Position - voidStuckPos).Magnitude >= 6
+                    end
+                end)
+                if moved then
+                    voidStuckPos = cRoot.Position
+                    voidStuckAt = nowV
+                end
+                local stuckLong = false
+                pcall(function()
+                    stuckLong = (not moved) and ((nowV - (voidStuckAt or nowV)) > 3)
+                end)
+                if stuckLong then
+                    local perched = false
+                    pcall(function()
+                        perched = (cRoot.Position.Y - gy) > 12
+                    end)
+                    if perched then
+                        pcall(function()
+                            local dest = voidSafePos and (voidSafePos + Vector3.new(0, 3, 0)) or Vector3.new(cRoot.Position.X, gy + 5, cRoot.Position.Z)
+                            local cf = cRoot.CFrame
+                            cRoot.CFrame = CFrame.new(dest) * (cf - cf.Position)
+                            cRoot.AssemblyLinearVelocity = Vector3.zero
+                            cRoot.AssemblyAngularVelocity = Vector3.zero
+                        end)
+                    end
+                    voidStuckPos = nil
+                    voidStuckAt = nil
+                end
+            else
+                voidStuckPos = nil
+                voidStuckAt = nil
                 pcall(function()
                     local dest = nil
-                    if #selectedParts > 0 then
+                    if voidSafePos then
+                        dest = voidSafePos + Vector3.new(0, 3, 0)
+                    end
+                    if not dest and #selectedParts > 0 then
                         local fc = getFormationCenterTarget()
                         if fc and fc.Y > -250 then
                             local fgy = getGroundYAt(fc.X, fc.Z, fc.Y, cRoot)
@@ -7890,6 +7985,9 @@ local function tickParts()
                     cRoot.AssemblyAngularVelocity = Vector3.zero
                 end)
             end
+        else
+            voidStuckPos = nil
+            voidStuckAt = nil
         end
     end
     if cRoot then
@@ -8070,9 +8168,9 @@ if false and stickMagnetActive then
                             local burstDir = hit.Position - part.Position
                             burstDir = burstDir.Magnitude > 0.001 and burstDir.Unit or Vector3.new(0, 1, 0)
                             part.AssemblyAngularVelocity = Vector3.new(
-                                (math.random() - 0.5) * 9e10,
-                                (math.random() - 0.5) * 9e10,
-                                (math.random() - 0.5) * 9e10
+                                (math.random() - 0.5) * 9e18,
+                                (math.random() - 0.5) * 9e18,
+                                (math.random() - 0.5) * 9e18
                             )
                             part.AssemblyLinearVelocity = part.AssemblyLinearVelocity + burstDir * 15000
                             hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + burstDir * 60000
@@ -8294,6 +8392,13 @@ if false and stickMagnetActive then
             sniperCaught = true
             for _, p in ipairs(selectedParts) do
                 pcall(function()
+                    if p and p.Parent and partCollisionState[p] ~= nil then
+                        p.CanCollide = partCollisionState[p]
+                    end
+                end)
+            end
+            for _, p in ipairs(selectedParts) do
+                pcall(function()
                     local ap = getNetAP(p)
                     if ap then
                         ap.Enabled = true
@@ -8415,9 +8520,9 @@ if false and stickMagnetActive then
                     if p and p.Parent and not p.Anchored then
                         pcall(function()
                             p.AssemblyAngularVelocity = Vector3.new(
-                                (math.random()-0.5)*3e6,
-                                (math.random()-0.5)*3e6,
-                                (math.random()-0.5)*3e6)
+                                (math.random()-0.5)*9e18,
+                                (math.random()-0.5)*9e18,
+                                (math.random()-0.5)*9e18)
                         end)
                     end
                 end
@@ -8442,7 +8547,7 @@ if false and stickMagnetActive then
                         local s1 = (bIdx % 2 == 0) and 1 or -1
                         local s2 = (bIdx % 3 == 0) and -1 or 1
                         local s3 = (bIdx % 5 == 0) and -1 or 1
-                        bp.AssemblyAngularVelocity = Vector3.new(s1 * 9e9, s2 * 9e9, s3 * 9e9)
+                        bp.AssemblyAngularVelocity = Vector3.new(s1 * 9e18, s2 * 9e18, s3 * 9e18)
                     end)
                 end
             end
@@ -8782,7 +8887,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                                 dir = dir.Magnitude > 0.001 and dir.Unit or Vector3.new(0, 1, 0)
                                 local k = math.max(flingForce, 1) / 1500
                                 hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*(2000000*k) + Vector3.new(0, 700000*k, 0) + Vector3.new((math.random()-0.5)*120000, 0, (math.random()-0.5)*120000)
-                                hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*250000, (math.random()-0.5)*250000, (math.random()-0.5)*250000)
+                                hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*1000000, (math.random()-0.5)*1000000, (math.random()-0.5)*1000000)
                             end)
                         end)
                     end
@@ -8818,7 +8923,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         local s1 = (i % 2 == 0) and 1 or -1
                         local s2 = (i % 3 == 0) and -1 or 1
                         local s3 = (i % 5 == 0) and -1 or 1
-                        part.AssemblyAngularVelocity = Vector3.new(s1 * 9e9, s2 * 9e9, s3 * 9e9)
+                        part.AssemblyAngularVelocity = Vector3.new(s1 * 9e18, s2 * 9e18, s3 * 9e18)
                     else
                         if dv2TouchConns[part] then
                             pcall(function() dv2TouchConns[part]:Disconnect() end)
@@ -8886,9 +8991,9 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         pcall(sethiddenproperty, part, "NetworkIsSleeping", false)
                         if railgunPhase == "exploding" then
                             part.AssemblyAngularVelocity = Vector3.new(
-                                (math.random() - 0.5) * 9e9,
-                                (math.random() - 0.5) * 9e9,
-                                (math.random() - 0.5) * 9e9
+                                (math.random() - 0.5) * 9e18,
+                                (math.random() - 0.5) * 9e18,
+                                (math.random() - 0.5) * 9e18
                             )
                         else
                             part.AssemblyAngularVelocity = Vector3.new(
@@ -8970,9 +9075,9 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         partTargets[part].responsiveness = getMoveResponsiveness(50)
                         syncAlignTarget(part, partTargets[part])
                         part.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 1.5e6,
-                            (math.random() - 0.5) * 1.5e6,
-                            (math.random() - 0.5) * 1.5e6)
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18)
                     end)
                 elseif gunFlying and gunFlying[part] then
                     pcall(function()
@@ -8983,9 +9088,9 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         partTargets[part].responsiveness = getMoveResponsiveness(50)
                         syncAlignTarget(part, partTargets[part])
                         part.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 1.5e6,
-                            (math.random() - 0.5) * 1.5e6,
-                            (math.random() - 0.5) * 1.5e6)
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18)
                     end)
                 elseif isStrike and (strikeState == "descend" or strikeState == "drill") then
                     pcall(function()
@@ -8996,9 +9101,9 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                         partTargets[part].responsiveness = getMoveResponsiveness(50)
                         syncAlignTarget(part, partTargets[part])
                         part.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 3e6,
-                            (math.random() - 0.5) * 3e6,
-                            (math.random() - 0.5) * 3e6)
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18)
                     end)
                 elseif isBarr then
                     pcall(function()
@@ -9027,9 +9132,9 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                                 if isLocalPlayerPart(hit) then return end
                                 pcall(function()
                                     part.AssemblyAngularVelocity = Vector3.new(
-                                        (math.random() - 0.5) * 9e9,
-                                        (math.random() - 0.5) * 9e9,
-                                        (math.random() - 0.5) * 9e9
+                                        (math.random() - 0.5) * 9e18,
+                                        (math.random() - 0.5) * 9e18,
+                                        (math.random() - 0.5) * 9e18
                                     )
 
                                     local burstDir = (hit.Position - part.Position)
@@ -9039,6 +9144,7 @@ pcall(sethiddenproperty, LP, "SimulationRadius", math.huge)
                                             (math.random() - 0.5) * 8000,
                                             (math.random() - 0.5) * 8000
                                         )
+                                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random() - 0.5) * 2500000, (math.random() - 0.5) * 2500000, (math.random() - 0.5) * 2500000)
                                     else
                                         part.AssemblyLinearVelocity = Vector3.new(
                                             (math.random() - 0.5) * 8000,
@@ -10848,7 +10954,7 @@ function buildPartsPanel(Cont, mPanels)
             Wave="Wave\nTarget: Formation Target - sine wave line along X\nControls: Move Target\nLook: parts line up along X and ride two overlapping sine waves (tall vertical wave set by waveAmp, shallow depth wave), both traveling over time\nMath: x=(ratio-.5)*total*1.3*scX wY=sin(ratio*5pi+t*5)*waveAmp*scY wZ=cos(ratio*3pi+t*3)*1.2*scZ",
             Halo="Halo\nTarget: Around Player (not Formation Target) at 7*scY above root\nControls: Auto orbit around you\nLook: flat halo ring directly overhead plus a smaller tilted ring inside tumbling on 3 axes with a traveling bulge\nMath: outer flat a=angle+t*0.7 r=max(total*0.4,formRadius) y=7*scY inner 0.45x pulse r*(1+0.25sin) base tilt + flip t*0.9 roll t*0.35 yaw t*0.5",
             Drone="Drone\nTarget: Formation Target - jittery cloud + drift around Target\nControls: Move Target\nLook: parts hover in a loose buzzing cloud around the Target, each jittering on its own rhythm plus a slow shared drift\nMath: pos=Target+off*1.8*sc + drift sin/cos*2 + up 4*scY",
-            DroneV2="DroneV2\nTarget: Auto nearest player/NPC within flingRange\nControls: Auto seek, Fling Force slider scales hits\nLook: parts drill inside the locked target spinning at 9e9, sawing up and down from below the feet to the top of the torso, touch detonates scaled fling into them\nMath: tri wave -4..+2 over 1.1s staggered per part, radial 1.2 ring, touch dir*2M*k+up 700k*k k=flingForce/1500",
+            DroneV2="DroneV2\nTarget: Auto nearest player/NPC within flingRange\nControls: Auto seek, Fling Force slider scales hits\nLook: parts drill inside the locked target spinning at 9e18, sawing up and down from below the feet to the top of the torso, touch detonates scaled fling into them\nMath: tri wave -4..+2 over 1.1s staggered per part, radial 1.2 ring, touch dir*2M*k+up 700k*k k=flingForce/1500",
             Shield="Shield\nTarget: Around Player - Fibonacci sphere\nControls: Auto around you\nLook: parts spread perfectly evenly over a sphere shell around you (sunflower-seed math, no clumping), shell slowly turning with a gentle bob\nMath: phi=(1+sqrt5)/2 theta=2pi*i/phi+t*0.5 cosY=-0.2+(i/total)*1.2 r=(formRadius+0.5)*scR y+=sin(t*2+i)*0.3",
             Comet="Comet\nTarget: Your movement history (trail behind you)\nControls: Move character\nLook: parts line up along the path you already walked, newest positions near you trailing off into older ones\nMath: cometHistory push if dist>0.45-0.8 histIdx = #history - ratio*trailLen",
             Wall="Wall\nTarget: In front of Player (wallDist in look dir, not Formation Target)\nControls: Face direction, wallDist/wallGap sliders pack by size via _wallSlots()\nLook: parts pack into a tight wall standing where you face (distance set by wallDist), auto-arranged in columns by each part's size with wallGap spacing\nMath: center=rp+look*wallDist*maxSc right*slot.r + up*slot.u",
@@ -10873,7 +10979,7 @@ function buildPartsPanel(Cont, mPanels)
             Minigun="Minigun\nRotary barrels fire streams at Formation Target\nControls: Auto cycles barrels, MG Fire Rate shots/sec, MG Spread cone\nLook: parts arrange as spinning gun barrels on a ring that take turns spitting streams at the Target, feed lines trailing behind each muzzle\nMath: B=2-5 barrels on rotating ring, feed lines behind muzzle, 0.22s flights, touch 180k on contact",
             Satellite="Satellite\nTarget: High orbit 14*scY around player, on click fire cluster to Formation Target\nControls: Click to set satTarget (mouse)\nLook: parts idle in a high ring far above you; on click a cluster detaches, flies to the Target and detonates, then comes home\nMath: idle ring 3.5*scX min 2 high 14*scY, fire vel 4000+ burst 350000, touch 25k, TTL 3s",
             Seek="Seek\nTarget: Nearest NPC within 200 else Formation Target\nControls: Auto chase\nLook: parts pile onto the nearest NPC within 200 studs and ride it around; with no NPC nearby they cluster at the Target\nMath: getNearestNPC 200 if found -> npcRoot+offset*0.5 else Target+offset",
-            Stickman="Stickman/Billy\nFull stick figure with face, walk, arms, beam, dance, crawl\nTarget: Around Player\nControls:\n Move = walk (walkPhase+=dt*spd*0.35*sgn)\n J = switch arm\n T = TPose\n P = slap 0.5s burst reaching mouse\n C = beam hold\n Y = wave 1.9s\n U = dance (arm flail)\n Z = spider toggle (head core, 8 legs)\n Q = face mode 0-4\n X hold = spiral aim, click = fast fire + 2.4s grind\n Mouse = aim arm\nLook: parts assemble into a walking stick figure (head band, torso, arms, legs by index order) that strides with your movement, aims an arm at your mouse, and can T-pose, slap, beam, wave, dance, or spider-crawl; C stretches the aimed arm into a spinning fling lance shoulder-to-mouse that detonates on contact\nMath:\n walkPhase+=dt*spd*0.35*sgn\n u head 0.10-0.22 torso 0.22-0.37 arms 0.37-0.73 legs 0.73-1\n head/face tilt to mouse, legs sin/cos walk, face 10 parts eyes/brows/mouth, beam k=(u-lo)/(hi-lo) lerp shoulder->target spin 9e9 touch 3M+self 500k",
+            Stickman="Stickman/Billy\nFull stick figure with face, walk, arms, beam, dance, crawl\nTarget: Around Player\nControls:\n Move = walk (walkPhase+=dt*spd*0.35*sgn)\n J = switch arm\n T = TPose\n P = slap 0.5s burst reaching mouse\n C = beam hold\n Y = wave 1.9s\n U = dance (arm flail)\n Z = spider toggle (head core, 8 legs)\n Q = face mode 0-4\n X hold = spiral aim, click = fast fire + 2.4s grind\n Mouse = aim arm\nLook: parts assemble into a walking stick figure (head band, torso, arms, legs by index order) that strides with your movement, aims an arm at your mouse, and can T-pose, slap, beam, wave, dance, or spider-crawl; C stretches the aimed arm into a spinning fling lance shoulder-to-mouse that detonates on contact\nMath:\n walkPhase+=dt*spd*0.35*sgn\n u head 0.10-0.22 torso 0.22-0.37 arms 0.37-0.73 legs 0.73-1\n head/face tilt to mouse, legs sin/cos walk, face 10 parts eyes/brows/mouth, beam k=(u-lo)/(hi-lo) lerp shoulder->target spin 9e18 touch 3M+self 500k",
             Slinky="Slinky\nTarget: Mouse trail history (like Comet but spaced by formRadius)\nControls: Move mouse to leave slinkyHistory\nLook: parts string out along your recent mouse trail like a slinky, spaced by formRadius - wiggle the mouse to see it snake\nMath: step=index*(formRadius*0.35+1.5) idx=#history-step pos=history[idx]+off*0.35",
             Fountain="Fountain\nTarget: Formation Target - parabolic jets up from Target\nControls: Move Target\nLook: parts loop endlessly upward in fountain jets from the Target, arcing over and falling back, staggered so the flow never gaps\nMath: jet=(t*4.4+ratio*1.8)%1 h=sin(jet*pi)*formRadius*2.8 +1.5*scY off*formRadius*0.35",
             Bounce="Bounce\nTarget: Lerp between Formation Target and player 7*scY\nControls: Auto\nLook: parts shuttle back and forth between the Target and a point above you, each on a delayed phase so they stream both ways\nMath: phase=t*2.8+idx*0.12 alpha=phase<1?phase:2-phase pos=Target:Lerp(rp+7*scY,alpha)",
@@ -10899,9 +11005,9 @@ function buildPartsPanel(Cont, mPanels)
             Sniper="Sniper\nTarget: Ring 8*scY in front of face, sequential fire to Formation Target\nControls: Click to set sniperTargetPos (hold to charge Railgun-style, but Sniper fires on click)\nLook: parts idle as a spinning crosshair + outer ring in front of your face; on click they converge onto the Target one after another, churning, then burst and fly home\nMath: ringR=5*scR ca=(idx/total)*2pi+t*2.4 slotP=center+right*cos+up*sin delay=idx/total*0.35 prog lerp slot->target 0.3 explode 1.2",
             Bridge="Bridge\nTarget: Formation Target ground - two-click bridge\nControls: Click A then B to build (arch), third click reset\nLook: click two ground points and parts lay themselves into an arched bridge between them (extra parts widen it side-by-side), third click starts over\nMath: dir=(B-A).Unit sideU=-dir.Z,0,dir.X arch=sin(u*pi)*min(D*0.08,3.5) y=g+arch+1.4 overflow fans across width",
             Strike="Strike\nTarget: Idle atom around player (10% nucleus +4 shells), on click descend to Formation Target\nControls: Click to set strikeTarget\nLook: parts idle as a mini-atom above you; on click the whole thing plunges onto the Target, drills in spinning circles, then floats home\nMath: idle atom shells min 2, descend lerp 70->0 prog^2 + spin rr 2.5*(1-prog) drill circle ir 0.8+rand*0.35 return lerp",
-            Boomerang="Boomerang\nTarget: Disc home 7*scY around player, on click boomerang to Formation Target +42 extra\nControls: Click to set boomerangTarget\nLook: parts idle as a flat spinning disc beside you; on click it flings out past the Target and curves home like a boomerang\nMath: u=clamp((t-start)/1.45) D=|target-origin| center=origin+dir*s*(D+min*0.48) side -D*0.16 tilt 76->14 spin 22 ringR 0.45+ring*0.32",
+            Boomerang="Boomerang\nTarget: Disc home 7*scY around player, on click boomerang to Formation Target +42 extra\nControls: Click to set boomerangTarget\nLook: parts idle as a flat spinning disc beside you; on click it flings through the Target and hooks home like a boomerang\nMath: u 2-phase smoothstep origin->target->origin through target, return hook D*0.2 side, up arc 4, tilt 14 flat, spin 22 ringR 0.45+ring*0.32",
             Text="Text\nTarget: Vertical wall 6 studs in front of Player facing outwards (world up, not Formation Target) - 5x7 font A-Z0-9 !?+-= Uppercase, spacing 2.2/4.2 adapts to avg part size (avg*0.78+0.22), long parts auto-assigned to stick letters (I/L/T) longest run first, parts rotated Z to match stroke 0/90/45/135 (C less closed: middle rows open)\nControls: Type in top bar (live, filtered [^%-A-Z0-9 !?+=])\nLook: parts spell your typed text as a floating letter wall in front of you, longest parts auto-placed on long strokes (I/L/T), each rotated to match its stroke angle\nMath: points buildTextPointsData angle via 8-neighbor h/v/diag runLen, textScale= (0.78*avg+0.22)*(formRadius/7*0.38+0.62)*(maxSc*0.38+0.62)*1.1*0.92, pos=origin+right*X+up*(Y-midY)+jitter",
-            Scythe="Scythe\nTarget: Idle arc over head (hilt low-left, middle overhead, blade diving right), swing at Formation Target\nControls: Click to swing through and back 2.4s (no cooldown) fling 2000000+700000 strike-scale\nLook: the scythe arcs over your head like a rainbow — hilt down-left, blade hooking down-right; on click it sweeps sideways through the Target and back, grinding with drill pulses\nMath: heart-frame, yaw-only frame (immune to look up/down), idle origin left H*0.6 + up 2, base yaw +90 blade-right, idle pitch-lean 52, swing roll-90 flat fan -85->+85->back ping-pong, pulses 18/1.8M+30/900k per 0.15s churn 3e6",
+            Scythe="Scythe\nTarget: Idle arc over head (hilt low-left, middle overhead, blade diving right), swing at Formation Target\nControls: Click to swing through and back 2.4s (no cooldown) fling 2000000+700000 strike-scale\nLook: the scythe arcs over your head like a rainbow — hilt down-left, blade hooking down-right; on click it sweeps sideways through the Target and back, grinding with drill pulses\nMath: heart-frame, yaw-only frame (immune to look up/down), idle origin left H*0.6 + up 2, base yaw +90 blade-right, idle pitch-lean 52, swing roll-90 flat fan -85->+85->back ping-pong, pulses 18/1.8M+30/900k per 0.15s churn 9e18",
             Pentagram="Pentagram\nTarget: In front of Player 5*scY facing your look (not Formation Target) - 5-point star {5/2}\nControls: Move with your look\nLook: parts trace a glowing 5-pointed star polygon in front of you that turns with your look, gently pulsing\nMath: r=formRadius*1.6 verts 5 order 1,3,5,2,4 perEdge ceil(total/5) tEdge lerp pulse 1+sin*0.06 right*X+up*Y",
             Chained="Chained\nTarget: Idle 2 horizontal chain rings at hands (±right*1.45*scR+up*0.45*scY) + crown 7.8*scY above head r 0.85*scR+1.9, firing to Formation Target\nControls: Hold click to shoot both chains from hands to Target as tangled helix 3.4 turns helixR 0.42*scR, fling 200000+70000 velimmune filtered\nLook: parts idle as hand rings + a crown above your head; holding click lashes two tangled chain helixes from your hands to the Target\nMath: crown rPulse 1+sin*0.06 spike every 4th 1.4*scY, rings center hand±right*radius a=ratio*2pi+t*1.5 wobbleR 1+sin*0.05 linkLift ±0.16*scY, firing helix perp/binorm cos/sin*helixR + sag 0.6*scY",
             Knot="Knot\nTarget: Formation Target - spinning trefoil knot\nControls: Move Target\nLook: parts flow along a (2,3) torus knot tumbling above the Target\nMath: a=angle+t*0.4 x=sin+2sin2a y=cos-2cos2a z=-sin3a r=formRadius*2 lift 3*scY",
@@ -12827,16 +12933,16 @@ reg(Mouse.Button1Down:Connect(function()
                             local dir = hit.Position - p.Position
                             dir = dir.Magnitude > 0.001 and dir.Unit or Vector3.new(0, 1, 0)
                             hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*250000 + Vector3.new(0, 80000, 0)
-                            hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*100000, (math.random()-0.5)*100000, (math.random()-0.5)*100000)
+                            hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*1000000, (math.random()-0.5)*1000000, (math.random()-0.5)*1000000)
                         end)
                         pcall(function()
                             local pd = hit.Position - p.Position
                             pd = pd.Magnitude > 0.001 and pd.Unit or Vector3.new(0, 1, 0)
                             p.AssemblyLinearVelocity = pd * 350000 + Vector3.new(0, 120000, 0)
                             p.AssemblyAngularVelocity = Vector3.new(
-                                (math.random() - 0.5) * 9e9,
-                                (math.random() - 0.5) * 9e9,
-                                (math.random() - 0.5) * 9e9)
+                                (math.random() - 0.5) * 9e18,
+                                (math.random() - 0.5) * 9e18,
+                                (math.random() - 0.5) * 9e18)
                         end)
                         homingDone[p] = true
                     end)
@@ -13057,6 +13163,9 @@ reg(Mouse.Button1Down:Connect(function()
                         p.AssemblyLinearVelocity = netHoldVelocity()
                         p.AssemblyAngularVelocity = Vector3.zero
                     end)
+                    pcall(function()
+                        p.CanCollide = false
+                    end)
                 end
             end
             for _, p in ipairs(selectedParts) do
@@ -13073,18 +13182,18 @@ reg(Mouse.Button1Down:Connect(function()
                         hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity
                             + d2 * 550000 + Vector3.new(0, 180000, 0)
                         hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new(
-                            (math.random() - 0.5) * 750000,
-                            (math.random() - 0.5) * 750000 + 350000,
-                            (math.random() - 0.5) * 750000)
+                            (math.random() - 0.5) * 2500000,
+                            (math.random() - 0.5) * 2500000 + 1000000,
+                            (math.random() - 0.5) * 2500000)
                     end)
                     pcall(function()
                         local pd = hit.Position - p.Position
                         pd = pd.Magnitude > 0.001 and pd.Unit or Vector3.new(0, 1, 0)
                         p.AssemblyLinearVelocity = pd * 350000 + Vector3.new(0, 120000, 0)
                         p.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 9e9,
-                            (math.random() - 0.5) * 9e9,
-                            (math.random() - 0.5) * 9e9)
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18)
                     end)
                 end)
             end
@@ -13111,7 +13220,10 @@ reg(Mouse.Button1Down:Connect(function()
                         local d3 = hit.Position - p.Position
                         d3 = d3.Magnitude > 0.001 and d3.Unit or Vector3.new(0, 1, 0)
                         hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + d3 * 80000 + Vector3.new(0, 20000, 0)
-                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*20000, (math.random()-0.5)*20000, (math.random()-0.5)*20000)
+                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*1000000, (math.random()-0.5)*1000000, (math.random()-0.5)*1000000)
+                    end)
+                    pcall(function()
+                        p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*9e18, (math.random()-0.5)*9e18, (math.random()-0.5)*9e18)
                     end)
                 end)
             end
@@ -13216,8 +13328,8 @@ dv2TouchConns = dv2TouchConns or {}
                     local dir = hit.Position - p.Position
                     dir = dir.Magnitude > 0.001 and dir.Unit or Vector3.new(0, 1, 0)
                     hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*2000000 + Vector3.new(0, 700000, 0) + Vector3.new((math.random()-0.5)*120000, 0, (math.random()-0.5)*120000)
-                    hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*300000, (math.random()-0.5)*300000, (math.random()-0.5)*300000)
-                    p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*150000, (math.random()-0.5)*150000, (math.random()-0.5)*150000)
+                    hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*2500000, (math.random()-0.5)*2500000, (math.random()-0.5)*2500000)
+                    p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*9e18, (math.random()-0.5)*9e18, (math.random()-0.5)*9e18)
                 end)
             end)
         end
@@ -13260,12 +13372,13 @@ dv2TouchConns = dv2TouchConns or {}
                         local burstDir = hit.Position - part.Position
                         burstDir = burstDir.Magnitude > 0.001 and burstDir.Unit or Vector3.new(0, 1, 0)
                         part.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 9e10,
-                            (math.random() - 0.5) * 9e10,
-                            (math.random() - 0.5) * 9e10
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18
                         )
                         part.AssemblyLinearVelocity = burstDir * 40000
                         hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + burstDir * 60000
+                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*1000000, (math.random()-0.5)*1000000, (math.random()-0.5)*1000000)
                     end)
                 end)
             end
@@ -13311,9 +13424,9 @@ dv2TouchConns = dv2TouchConns or {}
                     if isLocalPlayerPart(hit) then return end
                     pcall(function()
                         part.AssemblyAngularVelocity = Vector3.new(
-                            (math.random() - 0.5) * 9e10,
-                            (math.random() - 0.5) * 9e10,
-                            (math.random() - 0.5) * 9e10
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18,
+                            (math.random() - 0.5) * 9e18
                         )
                         local hitVel = hit.AssemblyLinearVelocity
                         local bdiff = hit.Position - part.Position
@@ -13325,6 +13438,7 @@ dv2TouchConns = dv2TouchConns or {}
                         )
                         if hitVel then
                             hit.AssemblyLinearVelocity = hitVel + burstDir * 25000
+                            hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random() - 0.5) * 1000000, (math.random() - 0.5) * 1000000, (math.random() - 0.5) * 1000000)
                         end
                     end)
                 end)
@@ -13353,9 +13467,9 @@ dv2TouchConns = dv2TouchConns or {}
                     local dir = hit.Position - p.Position
                     dir = dir.Magnitude>0.001 and dir.Unit or Vector3.new(0,1,0) -- boom boom 
                     hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*2000000 + Vector3.new(0, 700000, 0) + Vector3.new((math.random()-0.5)*120000,0,(math.random()-0.5)*120000)
-                    hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*300000, (math.random()-0.5)*300000, (math.random()-0.5)*300000)
+                    hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*2500000, (math.random()-0.5)*2500000, (math.random()-0.5)*2500000)
                     p.AssemblyLinearVelocity = dir * 350000 + Vector3.new(0, 80000, 0)
-                    p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*9e9, (math.random()-0.5)*9e9, (math.random()-0.5)*9e9)
+                    p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*9e18, (math.random()-0.5)*9e18, (math.random()-0.5)*9e18)
                 end)
             end)
         end
@@ -13385,8 +13499,8 @@ dv2TouchConns = dv2TouchConns or {}
                         local dir = hit.Position - p.Position
                         dir = dir.Magnitude>0.001 and dir.Unit or Vector3.new(0,1,0)
                         hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + dir*200000 + Vector3.new(0, 70000, 0) + Vector3.new((math.random()-0.5)*10000,0,(math.random()-0.5)*10000)
-                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*120000, (math.random()-0.5)*120000, (math.random()-0.5)*120000)
-                        p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*20000, (math.random()-0.5)*20000, (math.random()-0.5)*20000)
+                        hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*1000000, (math.random()-0.5)*1000000, (math.random()-0.5)*1000000)
+                        p.AssemblyAngularVelocity = Vector3.new((math.random()-0.5)*9e18, (math.random()-0.5)*9e18, (math.random()-0.5)*9e18)
                     end)
                 end)
             end
@@ -13515,10 +13629,11 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                     local r1 = (si % 2 == 0) and 1 or -1
                     local r2 = (si % 3 == 0) and -1 or 1
                     local r3 = (si % 5 == 0) and -1 or 1
-                    p.AssemblyAngularVelocity = Vector3.new(r1 * 9e10, r2 * 9e10, r3 * 9e10)
+                    p.AssemblyAngularVelocity = Vector3.new(r1 * 9e18, r2 * 9e18, r3 * 9e18)
                     local sdiff = hit.Position - p.Position
                     local sdir = sdiff.Magnitude > 0.001 and sdiff.Unit or Vector3.new(0, 1, 0)
                     hit.AssemblyLinearVelocity = hit.AssemblyLinearVelocity + sdir * 1000000 + Vector3.new(0, 400000, 0)
+                    hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*2500000, (math.random()-0.5)*2500000, (math.random()-0.5)*2500000)
                     p.AssemblyLinearVelocity = p.AssemblyLinearVelocity + sdir * 350000 + Vector3.new(0, 120000, 0)
                 end)
             end)
@@ -13556,11 +13671,12 @@ reg(UserInputService.InputBegan:Connect(function(inp,gpe)
                             local q1 = (bi % 2 == 0) and 1 or -1
                             local q2 = (bi % 3 == 0) and -1 or 1
                             local q3 = (bi % 5 == 0) and -1 or 1
-                            p.AssemblyAngularVelocity = Vector3.new(q1 * 9e12, q2 * 9e12, q3 * 9e12)
+                            p.AssemblyAngularVelocity = Vector3.new(q1 * 9e18, q2 * 9e18, q3 * 9e18)
                             local ddiff = hit.Position - p.Position
                             local dir = ddiff.Magnitude > 0.001 and ddiff.Unit or Vector3.new(0, 1, 0)
                             local flingPower = 3000000
                             hit.AssemblyLinearVelocity = dir * flingPower + Vector3.new(0, 900000, 0)
+                            hit.AssemblyAngularVelocity = hit.AssemblyAngularVelocity + Vector3.new((math.random()-0.5)*2500000, (math.random()-0.5)*2500000, (math.random()-0.5)*2500000)
                             p.AssemblyLinearVelocity = dir * 500000 + Vector3.new(0, 150000, 0)
                             for i = 1, 5 do
                                 task.delay(i * 0.02, function()
