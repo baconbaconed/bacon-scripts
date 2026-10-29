@@ -18384,7 +18384,7 @@ reg(RunService.Heartbeat:Connect(function()
             endRotDrag()
         else
             pcall(function()
-                pcall(reclaimAssembly, part)
+                pcall(reclaimAssembly, part) -- if you ever find my body throw it in the lake :P
                 local rr2 = getAssemblyRoot(part)
                 if rr2 ~= part then pcall(reclaimAssembly, rr2) end
                 pcall(linkNoCollide, part)
